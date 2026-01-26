@@ -1,0 +1,107 @@
+---
+title: "Detect from URL"
+api: "POST /v1/detect/url"
+description: "Detect AI-generated content in an image from a URL"
+---
+
+## Request
+
+<ParamField body="url" type="string" required>
+  URL of the image to analyze. Must be publicly accessible.
+</ParamField>
+
+<ParamField body="models" type="string[]">
+  Specific models to use for detection.
+</ParamField>
+
+<ParamField body="threshold" type="number" default="0.5">
+  Classification threshold (0-1).
+</ParamField>
+
+<ParamField body="includeRaw" type="boolean" default="false">
+  Include raw model outputs in response.
+</ParamField>
+
+<ParamField body="skipCache" type="boolean" default="false">
+  Bypass cache and force fresh detection.
+</ParamField>
+
+## Response
+
+Same as [POST /v1/detect](/api-reference/detect).
+
+<RequestExample>
+
+```bash cURL
+curl -X POST https://api.tryveri.com/v1/detect/url \
+  -H "X-API-Key: your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://example.com/image.jpg"
+  }'
+```
+
+```python Python
+from veri import VeriClient
+
+client = VeriClient(api_key="your-api-key")
+
+result = client.detect_url("https://example.com/image.jpg")
+
+print(f"Is fake: {result.is_fake}")
+print(f"Confidence: {result.confidence}")
+```
+
+```typescript TypeScript
+import { VeriClient } from '@veri/sdk';
+
+const client = new VeriClient({ apiKey: 'your-api-key' });
+
+const result = await client.detectUrl('https://example.com/image.jpg');
+
+console.log(`Is fake: ${result.isFake}`);
+console.log(`Confidence: ${result.confidence}`);
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200
+{
+  "id": "det_abc123xyz",
+  "isFake": true,
+  "confidence": 0.87,
+  "modelScores": [
+    {
+      "model": "veri_face",
+      "score": 0.87,
+      "latencyMs": 145,
+      "raw": null
+    }
+  ],
+  "modelAgreement": 1,
+  "totalModels": 1,
+  "cached": false,
+  "processingTimeMs": 350,
+  "imageHash": "a1b2c3d4e5f6...",
+  "timestamp": "2024-01-15T10:30:00Z"
+}
+```
+
+```json 400
+{
+  "error": "Unable to fetch image from URL",
+  "code": "URL_FETCH_FAILED",
+  "requestId": "req_xyz789"
+}
+```
+
+</ResponseExample>
+
+## Notes
+
+- The image URL must be publicly accessible (no authentication required)
+- Maximum image size is 10 MB
+- Supported formats: JPEG, PNG, WebP, GIF
+- URL fetch timeout is 10 seconds

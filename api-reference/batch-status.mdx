@@ -1,0 +1,120 @@
+---
+title: "Get Batch Status"
+api: "GET /v1/batch/{id}"
+description: "Get the status of a batch detection job"
+---
+
+## Path Parameters
+
+<ParamField path="id" type="string" required>
+  The batch job ID returned from the submit endpoint.
+</ParamField>
+
+## Response
+
+<ResponseField name="jobId" type="string">
+  Unique batch job ID.
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Job status: `pending`, `processing`, `completed`, or `failed`.
+</ResponseField>
+
+<ResponseField name="totalImages" type="number">
+  Total number of images in the batch.
+</ResponseField>
+
+<ResponseField name="processedImages" type="number">
+  Number of images processed so far.
+</ResponseField>
+
+<ResponseField name="successCount" type="number">
+  Number of successful detections.
+</ResponseField>
+
+<ResponseField name="failureCount" type="number">
+  Number of failed detections.
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  ISO 8601 timestamp of job creation.
+</ResponseField>
+
+<ResponseField name="completedAt" type="string">
+  ISO 8601 timestamp of job completion (if complete).
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Error message (if job failed).
+</ResponseField>
+
+<RequestExample>
+
+```bash cURL
+curl https://api.tryveri.com/v1/batch/batch_xyz789abc \
+  -H "X-API-Key: your-api-key"
+```
+
+```python Python
+from veri import VeriClient
+
+client = VeriClient(api_key="your-api-key")
+
+status = client.get_batch_status("batch_xyz789abc")
+
+print(f"Status: {status.status}")
+print(f"Progress: {status.processed_images}/{status.total_images}")
+```
+
+```typescript TypeScript
+import { VeriClient } from '@veri/sdk';
+
+const client = new VeriClient({ apiKey: 'your-api-key' });
+
+const status = await client.getBatchStatus('batch_xyz789abc');
+
+console.log(`Status: ${status.status}`);
+console.log(`Progress: ${status.processedImages}/${status.totalImages}`);
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 - Processing
+{
+  "jobId": "batch_xyz789abc",
+  "status": "processing",
+  "totalImages": 10,
+  "processedImages": 7,
+  "successCount": 6,
+  "failureCount": 1,
+  "createdAt": "2024-01-15T10:30:00Z",
+  "completedAt": null,
+  "error": null
+}
+```
+
+```json 200 - Completed
+{
+  "jobId": "batch_xyz789abc",
+  "status": "completed",
+  "totalImages": 10,
+  "processedImages": 10,
+  "successCount": 9,
+  "failureCount": 1,
+  "createdAt": "2024-01-15T10:30:00Z",
+  "completedAt": "2024-01-15T10:32:15Z",
+  "error": null
+}
+```
+
+```json 404
+{
+  "error": "Batch job not found",
+  "code": "NOT_FOUND",
+  "requestId": "req_xyz789"
+}
+```
+
+</ResponseExample>

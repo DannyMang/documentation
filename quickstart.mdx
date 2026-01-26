@@ -1,80 +1,137 @@
 ---
 title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+description: "Start detecting AI-generated images in minutes"
 ---
 
-## Get started in three steps
+## Prerequisites
 
-Get your documentation site running locally and make your first customization.
+Before you begin, you'll need:
+- A Veri API key (get one at [dashboard.tryveri.com](https://dashboard.tryveri.com))
+- Python 3.10+ or Node.js 18+
 
-### Step 1: Set up your local environment
+## Installation
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+<CodeGroup>
 
-### Step 2: Deploy your changes
+```bash Python
+pip install veri-sdk
+```
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+```bash TypeScript
+npm install @veri/sdk
+```
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+</CodeGroup>
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+## Your First Detection
 
-### Step 3: Go live
+<Steps>
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+<Step title="Initialize the client">
+Create a client with your API key:
 
-## Next steps
+<CodeGroup>
 
-Now that you have your docs running, explore these key features:
+```python Python
+from veri import VeriClient
+
+client = VeriClient(api_key="your-api-key")
+```
+
+```typescript TypeScript
+import { VeriClient } from '@veri/sdk';
+
+const client = new VeriClient({ apiKey: 'your-api-key' });
+```
+
+</CodeGroup>
+</Step>
+
+<Step title="Detect an image">
+Pass an image to the detect method:
+
+<CodeGroup>
+
+```python Python
+# From a file
+result = client.detect(open("suspect_image.jpg", "rb"))
+
+# From bytes
+with open("suspect_image.jpg", "rb") as f:
+    result = client.detect(f.read())
+
+# From a URL
+result = client.detect_url("https://example.com/image.jpg")
+```
+
+```typescript TypeScript
+// From a buffer
+const result = await client.detect(imageBuffer);
+
+// From a URL
+const result = await client.detectUrl('https://example.com/image.jpg');
+```
+
+</CodeGroup>
+</Step>
+
+<Step title="Interpret the results">
+The detection result contains:
+
+<CodeGroup>
+
+```python Python
+print(f"Detection ID: {result.id}")
+print(f"Is AI-generated: {result.is_fake}")
+print(f"Confidence: {result.confidence:.1%}")
+print(f"Processing time: {result.processing_time_ms}ms")
+
+# Model-specific scores
+for score in result.model_scores:
+    print(f"  {score.model}: {score.score:.1%}")
+```
+
+```typescript TypeScript
+console.log(`Detection ID: ${result.id}`);
+console.log(`Is AI-generated: ${result.isFake}`);
+console.log(`Confidence: ${(result.confidence * 100).toFixed(1)}%`);
+console.log(`Processing time: ${result.processingTimeMs}ms`);
+
+// Model-specific scores
+result.modelScores.forEach(score => {
+  console.log(`  ${score.model}: ${(score.score * 100).toFixed(1)}%`);
+});
+```
+
+</CodeGroup>
+</Step>
+
+</Steps>
+
+## Understanding Results
+
+| Field | Description |
+|-------|-------------|
+| `is_fake` / `isFake` | `true` if the image is likely AI-generated |
+| `confidence` | Overall confidence score (0-1) |
+| `model_scores` / `modelScores` | Individual scores from each detection model |
+| `cached` | Whether the result came from cache |
+| `processing_time_ms` / `processingTimeMs` | Total inference time |
+
+<Note>
+A `confidence` of 0.5 is the default threshold. Scores above 0.5 indicate the image is likely AI-generated.
+</Note>
+
+## Next Steps
 
 <CardGroup cols={2}>
 
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
+<Card title="Batch Processing" icon="layer-group" href="/concepts/batch-processing">
+  Process multiple images efficiently.
 </Card>
 
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
+<Card title="API Reference" icon="code" href="/api-reference/introduction">
+  Explore all API endpoints.
 </Card>
 
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

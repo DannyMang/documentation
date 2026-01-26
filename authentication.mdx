@@ -1,0 +1,108 @@
+---
+title: "Authentication"
+description: "How to authenticate with the Veri API"
+---
+
+## API Keys
+
+All requests to the Veri API require authentication via an API key. You can create and manage API keys in your [dashboard](https://dashboard.tryveri.com).
+
+## Using Your API Key
+
+Include your API key in the `X-API-Key` header:
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.tryveri.com/v1/detect \
+  -H "X-API-Key: your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"image": "base64-encoded-image"}'
+```
+
+```python Python
+from veri import VeriClient
+
+# The SDK handles authentication automatically
+client = VeriClient(api_key="your-api-key")
+```
+
+```typescript TypeScript
+import { VeriClient } from '@veri/sdk';
+
+// The SDK handles authentication automatically
+const client = new VeriClient({ apiKey: 'your-api-key' });
+```
+
+</CodeGroup>
+
+## Environment Variables
+
+We recommend storing your API key in an environment variable:
+
+```bash
+export VERI_API_KEY="your-api-key"
+```
+
+Then load it in your code:
+
+<CodeGroup>
+
+```python Python
+import os
+from veri import VeriClient
+
+client = VeriClient(api_key=os.environ["VERI_API_KEY"])
+```
+
+```typescript TypeScript
+import { VeriClient } from '@veri/sdk';
+
+const client = new VeriClient({
+  apiKey: process.env.VERI_API_KEY
+});
+```
+
+</CodeGroup>
+
+## Security Best Practices
+
+<Warning>
+Never commit API keys to version control or expose them in client-side code.
+</Warning>
+
+- **Use environment variables** - Store keys in `.env` files (excluded from git)
+- **Rotate regularly** - Create new keys periodically and revoke old ones
+- **Separate environments** - Use different keys for development and production
+- **Monitor usage** - Check your dashboard for unexpected API activity
+
+## Rate Limits
+
+API requests are rate-limited based on your plan:
+
+| Plan | Rate Limit | Monthly Quota |
+|------|------------|---------------|
+| Free | 10 req/sec | 1,000 requests |
+| Pro | 100 req/sec | 50,000 requests |
+| Enterprise | Custom | Custom |
+
+When you exceed the rate limit, you'll receive a `429 Too Many Requests` response with a `Retry-After` header.
+
+## Error Responses
+
+Authentication errors return a `401 Unauthorized` response:
+
+```json
+{
+  "error": "Invalid API key",
+  "code": "INVALID_API_KEY"
+}
+```
+
+Common authentication errors:
+
+| Code | Description |
+|------|-------------|
+| `INVALID_API_KEY` | The API key is invalid or doesn't exist |
+| `EXPIRED_API_KEY` | The API key has been revoked |
+| `MISSING_API_KEY` | No API key was provided |

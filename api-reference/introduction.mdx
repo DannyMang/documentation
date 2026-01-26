@@ -1,33 +1,108 @@
 ---
-title: 'Introduction'
-description: 'Example section for showcasing API endpoints'
+title: "API Reference"
+description: "Complete reference for the Veri REST API"
 ---
 
-<Note>
-  If you're not looking to build API reference documentation, you can delete
-  this section by removing the api-reference folder.
-</Note>
+## Base URL
 
-## Welcome
+All API requests should be made to:
 
-There are two ways to build API documentation: [OpenAPI](https://mintlify.com/docs/api-playground/openapi/setup) and [MDX components](https://mintlify.com/docs/api-playground/mdx/configuration). For the starter kit, we are using the following OpenAPI specification.
-
-<Card
-  title="Plant Store Endpoints"
-  icon="leaf"
-  href="https://github.com/mintlify/starter/blob/main/api-reference/openapi.json"
->
-  View the OpenAPI specification file
-</Card>
+```
+https://api.tryveri.com/v1
+```
 
 ## Authentication
 
-All API endpoints are authenticated using Bearer tokens and picked up from the specification file.
+Authenticate using an API key in the `X-API-Key` header:
 
+```bash
+curl -X POST https://api.tryveri.com/v1/detect \
+  -H "X-API-Key: your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"image": "base64-encoded-image"}'
+```
+
+## Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/v1/detect` | Detect AI-generated content in an image |
+| `POST` | `/v1/detect/url` | Detect from an image URL |
+| `POST` | `/v1/batch` | Submit batch detection job |
+| `GET` | `/v1/batch` | List batch jobs |
+| `GET` | `/v1/batch/{id}` | Get batch job status |
+| `GET` | `/v1/batch/{id}/results` | Get batch job results |
+| `GET` | `/v1/models` | List available models |
+| `GET` | `/v1/config` | Get customer configuration |
+| `PUT` | `/v1/config` | Update customer configuration |
+
+## Request Format
+
+All POST requests should include:
+- `Content-Type: application/json` header
+- JSON body with required parameters
+
+## Response Format
+
+All responses are JSON with this structure:
+
+**Success (2xx)**
 ```json
-"security": [
-  {
-    "bearerAuth": []
-  }
-]
+{
+  "id": "det_abc123",
+  "isFake": true,
+  "confidence": 0.87,
+  ...
+}
+```
+
+**Error (4xx/5xx)**
+```json
+{
+  "error": "Error message",
+  "code": "ERROR_CODE",
+  "requestId": "req_xyz789"
+}
+```
+
+## Error Codes
+
+| Status | Code | Description |
+|--------|------|-------------|
+| 400 | `INVALID_REQUEST` | Malformed request body |
+| 400 | `INVALID_IMAGE` | Image could not be processed |
+| 401 | `INVALID_API_KEY` | Invalid or missing API key |
+| 402 | `INSUFFICIENT_CREDITS` | Not enough credits |
+| 404 | `NOT_FOUND` | Resource not found |
+| 429 | `RATE_LIMITED` | Too many requests |
+| 500 | `INTERNAL_ERROR` | Server error |
+
+## Rate Limits
+
+| Plan | Rate | Burst |
+|------|------|-------|
+| Free | 10/sec | 20 |
+| Pro | 100/sec | 200 |
+| Enterprise | Custom | Custom |
+
+Rate limit headers are included in responses:
+- `X-RateLimit-Limit` - Requests allowed per second
+- `X-RateLimit-Remaining` - Requests remaining in current window
+- `Retry-After` - Seconds to wait (on 429 responses)
+
+## Pagination
+
+List endpoints support pagination:
+
+```bash
+GET /v1/batch?limit=20&cursor=abc123
+```
+
+Response includes pagination info:
+```json
+{
+  "data": [...],
+  "hasMore": true,
+  "nextCursor": "def456"
+}
 ```

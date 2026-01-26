@@ -1,0 +1,123 @@
+---
+title: "Detection"
+description: "How Veri detects AI-generated images"
+---
+
+## How It Works
+
+Veri uses machine learning models trained to identify artifacts and patterns characteristic of AI-generated images. Our detection pipeline:
+
+1. **Preprocessing** - Normalizes the image for consistent analysis
+2. **Model Inference** - Runs the image through our detection model(s)
+3. **Score Aggregation** - Combines model outputs into a final confidence score
+4. **Classification** - Determines if the image is AI-generated based on threshold
+
+## Detection Models
+
+### veri_face
+
+Our primary model optimized for detecting AI-generated faces. It excels at identifying:
+
+- GAN-generated faces (StyleGAN, PGGAN)
+- Diffusion model outputs (Stable Diffusion, Midjourney, DALL-E)
+- Face swaps and deepfakes
+- AI-enhanced/modified faces
+
+| Metric | Value |
+|--------|-------|
+| Average latency | ~150ms |
+| Recommended use | Portrait images, profile photos |
+
+## Confidence Scores
+
+The `confidence` field represents how certain the model is that an image is AI-generated:
+
+| Score Range | Interpretation |
+|-------------|----------------|
+| 0.0 - 0.3 | Likely authentic |
+| 0.3 - 0.5 | Uncertain |
+| 0.5 - 0.7 | Possibly AI-generated |
+| 0.7 - 1.0 | Likely AI-generated |
+
+<Note>
+The default classification threshold is 0.5. Images with confidence >= 0.5 are classified as `is_fake: true`.
+</Note>
+
+## Customizing Detection
+
+### Adjusting the Threshold
+
+Lower thresholds catch more AI images but may have more false positives:
+
+```python
+from veri import VeriClient, DetectionOptions
+
+client = VeriClient(api_key="your-api-key")
+
+# More sensitive (catch more AI images, more false positives)
+result = client.detect(image, options=DetectionOptions(threshold=0.3))
+
+# More conservative (fewer false positives, may miss some AI images)
+result = client.detect(image, options=DetectionOptions(threshold=0.7))
+```
+
+### Selecting Models
+
+Specify which models to use for detection:
+
+```python
+result = client.detect(
+    image,
+    options=DetectionOptions(models=["veri_face"])
+)
+```
+
+### Including Raw Outputs
+
+Get raw model outputs for advanced analysis:
+
+```python
+result = client.detect(
+    image,
+    options=DetectionOptions(include_raw=True)
+)
+
+for score in result.model_scores:
+    print(f"Model: {score.model}")
+    print(f"Score: {score.score}")
+    print(f"Raw output: {score.raw}")
+```
+
+## Best Practices
+
+### Image Quality
+
+For best results:
+- Use original, uncompressed images when possible
+- Minimum resolution: 224x224 pixels
+- Supported formats: JPEG, PNG, WebP, GIF (first frame)
+
+### Rate Your Confidence
+
+Consider the detection context:
+
+```python
+result = client.detect(image)
+
+if result.confidence >= 0.8:
+    print("High confidence: Very likely AI-generated")
+elif result.confidence >= 0.5:
+    print("Medium confidence: Possibly AI-generated, review recommended")
+else:
+    print("Low confidence: Likely authentic")
+```
+
+### Handle Edge Cases
+
+Some images are harder to classify:
+- Heavily edited photos
+- Artistic filters applied
+- Very low resolution images
+- Partial faces or unusual angles
+
+For these, consider using a higher threshold or manual review.

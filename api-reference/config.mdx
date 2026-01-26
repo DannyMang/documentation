@@ -1,0 +1,191 @@
+---
+title: "Customer Configuration"
+description: "Get and update your account configuration"
+---
+
+## Get Configuration
+
+<Card title="GET /v1/config" icon="gear">
+  Retrieve your current account configuration.
+</Card>
+
+### Response
+
+<ResponseField name="customerId" type="string">
+  Your unique customer ID.
+</ResponseField>
+
+<ResponseField name="defaultModels" type="string[]">
+  Models used when none are specified in requests.
+</ResponseField>
+
+<ResponseField name="defaultThreshold" type="number">
+  Default classification threshold.
+</ResponseField>
+
+<ResponseField name="webhookUrl" type="string">
+  URL for webhook notifications (if configured).
+</ResponseField>
+
+<ResponseField name="cacheEnabled" type="boolean">
+  Whether result caching is enabled.
+</ResponseField>
+
+<ResponseField name="plan" type="string">
+  Your current plan: `free`, `pro`, or `enterprise`.
+</ResponseField>
+
+<ResponseField name="credits" type="number">
+  Current credit balance.
+</ResponseField>
+
+<RequestExample>
+
+```bash cURL
+curl https://api.tryveri.com/v1/config \
+  -H "X-API-Key: your-api-key"
+```
+
+```python Python
+import requests
+
+response = requests.get(
+    "https://api.tryveri.com/v1/config",
+    headers={"X-API-Key": "your-api-key"}
+)
+config = response.json()
+
+print(f"Plan: {config['plan']}")
+print(f"Credits: {config['credits']}")
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200
+{
+  "customerId": "cust_abc123",
+  "defaultModels": ["veri_face"],
+  "defaultThreshold": 0.5,
+  "webhookUrl": null,
+  "cacheEnabled": true,
+  "plan": "pro",
+  "credits": 4850
+}
+```
+
+</ResponseExample>
+
+---
+
+## Update Configuration
+
+<Card title="PUT /v1/config" icon="pen">
+  Update your account configuration.
+</Card>
+
+### Request Body
+
+<ParamField body="defaultModels" type="string[]">
+  Set default models for detection requests.
+</ParamField>
+
+<ParamField body="defaultThreshold" type="number">
+  Set default classification threshold (0-1).
+</ParamField>
+
+<ParamField body="webhookUrl" type="string">
+  Set webhook URL for notifications. Set to `null` to disable.
+</ParamField>
+
+<ParamField body="cacheEnabled" type="boolean">
+  Enable or disable result caching.
+</ParamField>
+
+<RequestExample>
+
+```bash cURL
+curl -X PUT https://api.tryveri.com/v1/config \
+  -H "X-API-Key: your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "defaultThreshold": 0.7,
+    "webhookUrl": "https://your-app.com/webhooks/veri"
+  }'
+```
+
+```python Python
+import requests
+
+response = requests.put(
+    "https://api.tryveri.com/v1/config",
+    headers={
+        "X-API-Key": "your-api-key",
+        "Content-Type": "application/json"
+    },
+    json={
+        "defaultThreshold": 0.7,
+        "webhookUrl": "https://your-app.com/webhooks/veri"
+    }
+)
+config = response.json()
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200
+{
+  "customerId": "cust_abc123",
+  "defaultModels": ["veri_face"],
+  "defaultThreshold": 0.7,
+  "webhookUrl": "https://your-app.com/webhooks/veri",
+  "cacheEnabled": true,
+  "plan": "pro",
+  "credits": 4850
+}
+```
+
+```json 400
+{
+  "error": "Invalid threshold value",
+  "code": "INVALID_CONFIG",
+  "requestId": "req_xyz789"
+}
+```
+
+</ResponseExample>
+
+## Webhooks
+
+When configured, webhooks are sent for:
+- Batch job completion
+- Credit balance alerts
+
+### Webhook Payload
+
+```json
+{
+  "event": "batch.completed",
+  "timestamp": "2024-01-15T10:32:15Z",
+  "data": {
+    "jobId": "batch_xyz789abc",
+    "status": "completed",
+    "totalImages": 10,
+    "successCount": 9,
+    "failureCount": 1
+  }
+}
+```
+
+### Verifying Webhooks
+
+Webhooks include a signature header for verification:
+
+```
+X-Veri-Signature: sha256=abc123...
+```
+
+Verify by computing HMAC-SHA256 of the request body with your webhook secret.

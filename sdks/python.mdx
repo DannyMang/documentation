@@ -1,0 +1,218 @@
+---
+title: "Python SDK"
+description: "Official Python SDK for the Veri API"
+---
+
+## Installation
+
+```bash
+pip install veri-sdk
+```
+
+Requires Python 3.10 or later.
+
+## Quick Start
+
+```python
+from veri import VeriClient
+
+# Initialize the client
+client = VeriClient(api_key="your-api-key")
+
+# Detect an image
+result = client.detect(open("image.jpg", "rb"))
+print(f"Is fake: {result.is_fake} ({result.confidence:.1%})")
+```
+
+## Client Options
+
+```python
+from veri import VeriClient
+
+client = VeriClient(
+    api_key="your-api-key",
+    base_url="https://api.tryveri.com/v1",  # Custom base URL
+    timeout=30.0,  # Request timeout in seconds
+    max_retries=3,  # Number of retry attempts
+)
+```
+
+## Detection Methods
+
+### `detect(image, options=None)`
+
+Detect whether an image is AI-generated.
+
+```python
+from pathlib import Path
+from veri import VeriClient, DetectionOptions
+
+client = VeriClient(api_key="your-api-key")
+
+# From file path
+result = client.detect(Path("image.jpg"))
+
+# From bytes
+with open("image.jpg", "rb") as f:
+    result = client.detect(f.read())
+
+# From file object
+result = client.detect(open("image.jpg", "rb"))
+
+# From base64 string
+result = client.detect(base64_encoded_string)
+
+# With options
+result = client.detect(
+    image_bytes,
+    options=DetectionOptions(
+        models=["veri_face"],
+        threshold=0.7,
+        include_raw=True,
+    )
+)
+```
+
+### `detect_url(url, options=None)`
+
+Detect an image from a URL.
+
+```python
+result = client.detect_url("https://example.com/image.jpg")
+```
+
+## Batch Processing
+
+### `detect_batch(images)`
+
+Submit multiple images for async processing.
+
+```python
+# Submit a batch
+job = client.detect_batch([image1_bytes, image2_bytes, image3_bytes])
+print(f"Job ID: {job.job_id}")
+
+# Check status
+status = client.get_batch_status(job.job_id)
+print(f"Status: {status.status} ({status.processed_images}/{status.total_images})")
+
+# Get results when complete
+results = client.get_batch_results(job.job_id)
+```
+
+### `wait_for_batch(job_id, poll_interval=2.0, max_wait=300.0)`
+
+Wait for a batch job to complete.
+
+```python
+# Submit and wait for results
+job = client.detect_batch(images)
+results = client.wait_for_batch(
+    job.job_id,
+    poll_interval=2.0,  # Check every 2 seconds
+    max_wait=300.0,     # Timeout after 5 minutes
+)
+```
+
+## Async Client
+
+For async applications, use `AsyncVeriClient`:
+
+```python
+import asyncio
+from veri import AsyncVeriClient
+
+async def main():
+    async with AsyncVeriClient(api_key="your-api-key") as client:
+        result = await client.detect(image_bytes)
+        print(f"Is fake: {result.is_fake}")
+
+asyncio.run(main())
+```
+
+All methods have async equivalents:
+
+```python
+async with AsyncVeriClient(api_key="your-api-key") as client:
+    # Single detection
+    result = await client.detect(image)
+
+    # URL detection
+    result = await client.detect_url("https://example.com/image.jpg")
+
+    # Batch processing
+    job = await client.detect_batch(images)
+    status = await client.get_batch_status(job.job_id)
+    results = await client.get_batch_results(job.job_id)
+```
+
+## Error Handling
+
+```python
+from veri import (
+    VeriClient,
+    VeriAPIError,
+    VeriValidationError,
+    VeriRateLimitError,
+    VeriTimeoutError,
+    VeriInsufficientCreditsError,
+)
+
+client = VeriClient(api_key="your-api-key")
+
+try:
+    result = client.detect(image)
+except VeriValidationError as e:
+    print(f"Invalid input: {e.message} (field: {e.field})")
+except VeriRateLimitError as e:
+    print(f"Rate limited. Retry after {e.retry_after} seconds")
+except VeriInsufficientCreditsError as e:
+    print("Not enough credits")
+except VeriTimeoutError as e:
+    print(f"Request timed out after {e.timeout_ms}ms")
+except VeriAPIError as e:
+    print(f"API error: {e.message} (code: {e.code}, status: {e.status_code})")
+```
+
+## Type Definitions
+
+### DetectionResult
+
+```python
+class DetectionResult:
+    id: str                        # Unique detection ID
+    is_fake: bool                  # Whether image is AI-generated
+    confidence: float              # Overall confidence (0-1)
+    model_scores: list[ModelScore] # Individual model scores
+    model_agreement: int           # Models that agree on result
+    total_models: int              # Total models used
+    cached: bool                   # Whether result was cached
+    processing_time_ms: int        # Total processing time
+    image_hash: str                # SHA-256 hash of image
+    timestamp: datetime            # Detection timestamp
+```
+
+### DetectionOptions
+
+```python
+class DetectionOptions:
+    models: list[str] | None   # Specific models to use
+    include_raw: bool          # Include raw model outputs
+    threshold: float           # Classification threshold (default 0.5)
+    skip_cache: bool           # Bypass cache
+```
+
+### BatchJobStatus
+
+```python
+class BatchJobStatus:
+    job_id: str                # Job ID
+    status: str                # "pending", "processing", "completed", "failed"
+    total_images: int          # Total images in batch
+    processed_images: int      # Images processed so far
+    success_count: int         # Successful detections
+    failure_count: int         # Failed detections
+    created_at: datetime       # Job creation time
+    completed_at: datetime     # Job completion time (if complete)
+    error: str | None          # Error message (if failed)
+```

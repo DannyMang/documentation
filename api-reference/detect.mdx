@@ -1,0 +1,167 @@
+---
+title: "Detect Image"
+api: "POST /v1/detect"
+description: "Detect AI-generated content in an image"
+---
+
+## Request
+
+<ParamField body="image" type="string" required>
+  Base64-encoded image data. Supports JPEG, PNG, WebP, and GIF formats.
+</ParamField>
+
+<ParamField body="models" type="string[]">
+  Specific models to use for detection. Defaults to all available models.
+</ParamField>
+
+<ParamField body="threshold" type="number" default="0.5">
+  Classification threshold (0-1). Images with confidence >= threshold are classified as AI-generated.
+</ParamField>
+
+<ParamField body="includeRaw" type="boolean" default="false">
+  Include raw model outputs in response.
+</ParamField>
+
+<ParamField body="skipCache" type="boolean" default="false">
+  Bypass cache and force fresh detection.
+</ParamField>
+
+## Response
+
+<ResponseField name="id" type="string">
+  Unique detection ID.
+</ResponseField>
+
+<ResponseField name="isFake" type="boolean">
+  `true` if the image is classified as AI-generated.
+</ResponseField>
+
+<ResponseField name="confidence" type="number">
+  Overall confidence score (0-1).
+</ResponseField>
+
+<ResponseField name="modelScores" type="array">
+  Individual model scores.
+  <Expandable title="ModelScore properties">
+    <ResponseField name="model" type="string">
+      Model identifier.
+    </ResponseField>
+    <ResponseField name="score" type="number">
+      Model confidence score (0-1).
+    </ResponseField>
+    <ResponseField name="latencyMs" type="number">
+      Inference latency in milliseconds.
+    </ResponseField>
+    <ResponseField name="raw" type="object">
+      Raw model output (if `includeRaw` was true).
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="modelAgreement" type="number">
+  Number of models that agree on the classification.
+</ResponseField>
+
+<ResponseField name="totalModels" type="number">
+  Total number of models used.
+</ResponseField>
+
+<ResponseField name="cached" type="boolean">
+  `true` if result was returned from cache.
+</ResponseField>
+
+<ResponseField name="processingTimeMs" type="number">
+  Total processing time in milliseconds.
+</ResponseField>
+
+<ResponseField name="imageHash" type="string">
+  SHA-256 hash of the image.
+</ResponseField>
+
+<ResponseField name="timestamp" type="string">
+  ISO 8601 timestamp of detection.
+</ResponseField>
+
+<RequestExample>
+
+```bash cURL
+curl -X POST https://api.tryveri.com/v1/detect \
+  -H "X-API-Key: your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "image": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+    "threshold": 0.5
+  }'
+```
+
+```python Python
+from veri import VeriClient, DetectionOptions
+
+client = VeriClient(api_key="your-api-key")
+
+with open("image.jpg", "rb") as f:
+    result = client.detect(
+        f.read(),
+        options=DetectionOptions(threshold=0.5)
+    )
+
+print(f"Is fake: {result.is_fake}")
+print(f"Confidence: {result.confidence}")
+```
+
+```typescript TypeScript
+import { VeriClient } from '@veri/sdk';
+
+const client = new VeriClient({ apiKey: 'your-api-key' });
+
+const result = await client.detect(imageBuffer, {
+  threshold: 0.5
+});
+
+console.log(`Is fake: ${result.isFake}`);
+console.log(`Confidence: ${result.confidence}`);
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200
+{
+  "id": "det_abc123xyz",
+  "isFake": true,
+  "confidence": 0.87,
+  "modelScores": [
+    {
+      "model": "veri_face",
+      "score": 0.87,
+      "latencyMs": 145,
+      "raw": null
+    }
+  ],
+  "modelAgreement": 1,
+  "totalModels": 1,
+  "cached": false,
+  "processingTimeMs": 180,
+  "imageHash": "a1b2c3d4e5f6...",
+  "timestamp": "2024-01-15T10:30:00Z"
+}
+```
+
+```json 400
+{
+  "error": "Invalid image format",
+  "code": "INVALID_IMAGE",
+  "requestId": "req_xyz789"
+}
+```
+
+```json 401
+{
+  "error": "Invalid API key",
+  "code": "INVALID_API_KEY",
+  "requestId": "req_xyz789"
+}
+```
+
+</ResponseExample>

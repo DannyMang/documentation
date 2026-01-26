@@ -1,0 +1,105 @@
+---
+title: "List Models"
+api: "GET /v1/models"
+description: "List available detection models"
+---
+
+<Note>
+This endpoint does not require authentication.
+</Note>
+
+## Response
+
+<ResponseField name="models" type="array">
+  Array of available models.
+  <Expandable title="Model properties">
+    <ResponseField name="id" type="string">
+      Model identifier (use this in API requests).
+    </ResponseField>
+    <ResponseField name="name" type="string">
+      Human-readable model name.
+    </ResponseField>
+    <ResponseField name="description" type="string">
+      Brief description of the model.
+    </ResponseField>
+    <ResponseField name="approach" type="string">
+      Detection approach: `reconstruction`, `frequency`, `spatial`, or `hybrid`.
+    </ResponseField>
+    <ResponseField name="available" type="boolean">
+      Whether the model is currently available.
+    </ResponseField>
+    <ResponseField name="avgLatencyMs" type="number">
+      Average inference latency in milliseconds.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<RequestExample>
+
+```bash cURL
+curl https://api.tryveri.com/v1/models
+```
+
+```python Python
+import requests
+
+response = requests.get("https://api.tryveri.com/v1/models")
+models = response.json()["models"]
+
+for model in models:
+    print(f"{model['id']}: {model['name']}")
+    print(f"  {model['description']}")
+    print(f"  Latency: ~{model['avgLatencyMs']}ms")
+```
+
+```typescript TypeScript
+const response = await fetch('https://api.tryveri.com/v1/models');
+const { models } = await response.json();
+
+models.forEach(model => {
+  console.log(`${model.id}: ${model.name}`);
+  console.log(`  ${model.description}`);
+  console.log(`  Latency: ~${model.avgLatencyMs}ms`);
+});
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200
+{
+  "models": [
+    {
+      "id": "veri_face",
+      "name": "Veri Face Detector",
+      "description": "Optimized for detecting AI-generated faces and portraits",
+      "approach": "hybrid",
+      "available": true,
+      "avgLatencyMs": 150
+    }
+  ]
+}
+```
+
+</ResponseExample>
+
+## Model Details
+
+### veri_face
+
+Our primary detection model optimized for AI-generated faces.
+
+| Property | Value |
+|----------|-------|
+| Approach | Hybrid (spatial + frequency analysis) |
+| Best for | Portrait images, profile photos |
+| Avg latency | ~150ms |
+| Input size | 224x224 (auto-resized) |
+
+**Supported AI generators:**
+- StyleGAN, PGGAN, ProGAN
+- Stable Diffusion, SDXL
+- Midjourney
+- DALL-E 2, DALL-E 3
+- Face swaps (DeepFaceLab, etc.)

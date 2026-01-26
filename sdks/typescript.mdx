@@ -1,0 +1,199 @@
+---
+title: "TypeScript SDK"
+description: "Official TypeScript/JavaScript SDK for the Veri API"
+---
+
+## Installation
+
+```bash
+npm install @veri/sdk
+```
+
+Requires Node.js 18 or later.
+
+## Quick Start
+
+```typescript
+import { VeriClient } from '@veri/sdk';
+
+const client = new VeriClient({ apiKey: 'your-api-key' });
+
+const result = await client.detect(imageBuffer);
+console.log(`Is fake: ${result.isFake} (${(result.confidence * 100).toFixed(1)}%)`);
+```
+
+## Client Options
+
+```typescript
+import { VeriClient } from '@veri/sdk';
+
+const client = new VeriClient({
+  apiKey: 'your-api-key',
+  baseUrl: 'https://api.tryveri.com/v1',  // Custom base URL
+  timeout: 30000,  // Request timeout in ms
+  maxRetries: 3,   // Number of retry attempts
+});
+```
+
+## Detection Methods
+
+### `detect(image, options?)`
+
+Detect whether an image is AI-generated.
+
+```typescript
+// From Buffer
+const result = await client.detect(imageBuffer);
+
+// From base64 string
+const result = await client.detect(base64String);
+
+// With options
+const result = await client.detect(imageBuffer, {
+  models: ['veri_face'],
+  threshold: 0.7,
+  includeRaw: true,
+});
+```
+
+### `detectUrl(url, options?)`
+
+Detect an image from a URL.
+
+```typescript
+const result = await client.detectUrl('https://example.com/image.jpg');
+```
+
+## Batch Processing
+
+### `detectBatch(images)`
+
+Submit multiple images for async processing.
+
+```typescript
+// Submit a batch
+const job = await client.detectBatch([image1, image2, image3]);
+console.log(`Job ID: ${job.jobId}`);
+
+// Check status
+const status = await client.getBatchStatus(job.jobId);
+console.log(`Status: ${status.status} (${status.processedImages}/${status.totalImages})`);
+
+// Get results when complete
+const results = await client.getBatchResults(job.jobId);
+```
+
+## Error Handling
+
+```typescript
+import {
+  VeriClient,
+  VeriAPIError,
+  VeriValidationError,
+  VeriRateLimitError,
+  VeriTimeoutError,
+  VeriInsufficientCreditsError,
+} from '@veri/sdk';
+
+const client = new VeriClient({ apiKey: 'your-api-key' });
+
+try {
+  const result = await client.detect(image);
+} catch (error) {
+  if (error instanceof VeriValidationError) {
+    console.log(`Invalid input: ${error.message} (field: ${error.field})`);
+  } else if (error instanceof VeriRateLimitError) {
+    console.log(`Rate limited. Retry after ${error.retryAfter} seconds`);
+  } else if (error instanceof VeriInsufficientCreditsError) {
+    console.log('Not enough credits');
+  } else if (error instanceof VeriTimeoutError) {
+    console.log(`Request timed out after ${error.timeoutMs}ms`);
+  } else if (error instanceof VeriAPIError) {
+    console.log(`API error: ${error.message} (code: ${error.code})`);
+  }
+}
+```
+
+## Type Definitions
+
+### DetectionResult
+
+```typescript
+interface DetectionResult {
+  id: string;                    // Unique detection ID
+  isFake: boolean;               // Whether image is AI-generated
+  confidence: number;            // Overall confidence (0-1)
+  modelScores: ModelScore[];     // Individual model scores
+  modelAgreement: number;        // Models that agree on result
+  totalModels: number;           // Total models used
+  cached: boolean;               // Whether result was cached
+  processingTimeMs: number;      // Total processing time
+  imageHash: string;             // SHA-256 hash of image
+  timestamp: string;             // ISO timestamp
+}
+```
+
+### DetectionOptions
+
+```typescript
+interface DetectionOptions {
+  models?: string[];      // Specific models to use
+  includeRaw?: boolean;   // Include raw model outputs
+  threshold?: number;     // Classification threshold (default 0.5)
+  skipCache?: boolean;    // Bypass cache
+}
+```
+
+### BatchJobStatus
+
+```typescript
+interface BatchJobStatus {
+  jobId: string;              // Job ID
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  totalImages: number;        // Total images in batch
+  processedImages: number;    // Images processed so far
+  successCount: number;       // Successful detections
+  failureCount: number;       // Failed detections
+  createdAt: string;          // ISO timestamp
+  completedAt?: string;       // ISO timestamp (if complete)
+  error?: string;             // Error message (if failed)
+}
+```
+
+## Using with Frameworks
+
+### Next.js
+
+```typescript
+// app/api/detect/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { VeriClient } from '@veri/sdk';
+
+const client = new VeriClient({ apiKey: process.env.VERI_API_KEY! });
+
+export async function POST(request: NextRequest) {
+  const formData = await request.formData();
+  const file = formData.get('image') as File;
+  const buffer = Buffer.from(await file.arrayBuffer());
+
+  const result = await client.detect(buffer);
+  return NextResponse.json(result);
+}
+```
+
+### Express
+
+```typescript
+import express from 'express';
+import multer from 'multer';
+import { VeriClient } from '@veri/sdk';
+
+const app = express();
+const upload = multer();
+const client = new VeriClient({ apiKey: process.env.VERI_API_KEY! });
+
+app.post('/detect', upload.single('image'), async (req, res) => {
+  const result = await client.detect(req.file!.buffer);
+  res.json(result);
+});
+```

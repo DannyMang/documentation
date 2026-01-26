@@ -1,0 +1,135 @@
+---
+title: "Submit Batch Job"
+api: "POST /v1/batch"
+description: "Submit a batch of images for asynchronous detection"
+---
+
+## Request
+
+<ParamField body="images" type="string[]" required>
+  Array of base64-encoded images. Maximum 100 images per batch.
+</ParamField>
+
+<ParamField body="models" type="string[]">
+  Specific models to use for detection.
+</ParamField>
+
+<ParamField body="threshold" type="number" default="0.5">
+  Classification threshold (0-1).
+</ParamField>
+
+<ParamField body="webhook" type="string">
+  URL to receive a webhook when the job completes.
+</ParamField>
+
+## Response
+
+<ResponseField name="jobId" type="string">
+  Unique batch job ID.
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Job status: `pending`, `processing`, `completed`, or `failed`.
+</ResponseField>
+
+<ResponseField name="totalImages" type="number">
+  Total number of images in the batch.
+</ResponseField>
+
+<ResponseField name="processedImages" type="number">
+  Number of images processed so far.
+</ResponseField>
+
+<ResponseField name="successCount" type="number">
+  Number of successful detections.
+</ResponseField>
+
+<ResponseField name="failureCount" type="number">
+  Number of failed detections.
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  ISO 8601 timestamp of job creation.
+</ResponseField>
+
+<ResponseField name="completedAt" type="string">
+  ISO 8601 timestamp of job completion (if complete).
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  Error message (if job failed).
+</ResponseField>
+
+<RequestExample>
+
+```bash cURL
+curl -X POST https://api.tryveri.com/v1/batch \
+  -H "X-API-Key: your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "images": [
+      "iVBORw0KGgoAAAANSUhEUg...",
+      "iVBORw0KGgoAAAANSUhEUg...",
+      "iVBORw0KGgoAAAANSUhEUg..."
+    ],
+    "threshold": 0.5
+  }'
+```
+
+```python Python
+from veri import VeriClient
+
+client = VeriClient(api_key="your-api-key")
+
+images = [open(f"image{i}.jpg", "rb").read() for i in range(3)]
+job = client.detect_batch(images)
+
+print(f"Job ID: {job.job_id}")
+print(f"Status: {job.status}")
+```
+
+```typescript TypeScript
+import { VeriClient } from '@veri/sdk';
+
+const client = new VeriClient({ apiKey: 'your-api-key' });
+
+const job = await client.detectBatch([image1, image2, image3]);
+
+console.log(`Job ID: ${job.jobId}`);
+console.log(`Status: ${job.status}`);
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 202
+{
+  "jobId": "batch_xyz789abc",
+  "status": "pending",
+  "totalImages": 3,
+  "processedImages": 0,
+  "successCount": 0,
+  "failureCount": 0,
+  "createdAt": "2024-01-15T10:30:00Z",
+  "completedAt": null,
+  "error": null
+}
+```
+
+```json 400
+{
+  "error": "Maximum 100 images per batch",
+  "code": "BATCH_TOO_LARGE",
+  "requestId": "req_xyz789"
+}
+```
+
+</ResponseExample>
+
+## Notes
+
+- Maximum 100 images per batch
+- Maximum 10 MB per image
+- Jobs are retained for 24 hours
+- Use [GET /v1/batch/{id}](/api-reference/batch-status) to check status

@@ -1,97 +1,94 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "Veri AI"
+description: "AI-powered deepfake detection API"
 ---
 
-## Setting up
+## Detect AI-Generated Images
 
-Get your documentation site up and running in minutes.
+Veri is a powerful API for detecting AI-generated and manipulated images. Using state-of-the-art machine learning models, Veri can identify deepfakes, AI-generated faces, and synthetic media with high accuracy.
 
 <Card
-  title="Start here"
+  title="Get Started"
   icon="rocket"
   href="/quickstart"
   horizontal
 >
-  Follow our three step quickstart guide.
+  Start detecting deepfakes in minutes with our SDKs.
 </Card>
 
-## Make it yours
+## Key Features
 
-Design a docs site that looks great and empowers your users.
+<CardGroup cols={2}>
 
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
-  </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
-  </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
-  </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
-  </Card>
-</Columns>
-
-## Create beautiful pages
-
-Everything you need to create world-class documentation.
-
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
-
-## Need inspiration?
-
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
+<Card title="High Accuracy" icon="bullseye-arrow">
+  Our veri_face model achieves industry-leading detection rates on AI-generated faces.
 </Card>
+
+<Card title="Fast Inference" icon="bolt">
+  Get results in under 200ms with our optimized SageMaker infrastructure.
+</Card>
+
+<Card title="Batch Processing" icon="layer-group">
+  Process up to 100 images per batch for high-volume use cases.
+</Card>
+
+<Card title="Caching" icon="database">
+  Automatic result caching reduces costs and improves response times.
+</Card>
+
+</CardGroup>
+
+## Quick Example
+
+<CodeGroup>
+
+```python Python
+from veri import VeriClient
+
+client = VeriClient(api_key="your-api-key")
+result = client.detect(open("image.jpg", "rb"))
+
+print(f"Is AI-generated: {result.is_fake}")
+print(f"Confidence: {result.confidence:.1%}")
+```
+
+```typescript TypeScript
+import { VeriClient } from '@veri/sdk';
+
+const client = new VeriClient({ apiKey: 'your-api-key' });
+const result = await client.detect(imageBuffer);
+
+console.log(`Is AI-generated: ${result.isFake}`);
+console.log(`Confidence: ${(result.confidence * 100).toFixed(1)}%`);
+```
+
+```bash cURL
+curl -X POST https://api.tryveri.com/v1/detect \
+  -H "X-API-Key: your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{"image": "base64-encoded-image"}'
+```
+
+</CodeGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+
+<Card title="Quickstart" icon="play" href="/quickstart">
+  Get up and running in 5 minutes.
+</Card>
+
+<Card title="API Reference" icon="code" href="/api-reference/introduction">
+  Explore the full API documentation.
+</Card>
+
+<Card title="Python SDK" icon="python" href="/sdks/python">
+  Install and use the Python SDK.
+</Card>
+
+<Card title="TypeScript SDK" icon="js" href="/sdks/typescript">
+  Install and use the TypeScript SDK.
+</Card>
+
+</CardGroup>
