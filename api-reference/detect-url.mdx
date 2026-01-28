@@ -20,7 +20,7 @@ description: "Detect AI-generated content in an image from a URL"
 
 ## Response
 
-Same as [POST /v1/detect](/api-reference/detect).
+Same as [POST /v1/detect](/api-reference/detect), including the same [5-tier classification](/api-reference/detect#classification-thresholds).
 
 <RequestExample>
 
@@ -63,15 +63,15 @@ console.log(`Confidence: ${result.confidence}`);
 
 ```json 200
 {
-  "prediction": "ai",
-  "confidence": 0.87,
-  "ensemble_score": 0.87,
-  "verdict": "ai_generated",
+  "prediction": "likely_ai",
+  "confidence": 0.64,
+  "ensemble_score": 0.82,
+  "verdict": "likely_ai",
   "models_succeeded": 1,
   "models_total": 1,
   "model_results": {
     "veri_face": {
-      "score": 0.87,
+      "score": 0.82,
       "status": "success",
       "latency_ms": 145,
       "error": null
