@@ -28,10 +28,7 @@ curl -X POST https://api.tryveri.com/v1/detect \
 |--------|----------|-------------|
 | `POST` | `/v1/detect` | Detect AI-generated content in an image |
 | `POST` | `/v1/detect/url` | Detect from an image URL |
-| `POST` | `/v1/batch` | Submit batch detection job |
-| `GET` | `/v1/batch` | List batch jobs |
-| `GET` | `/v1/batch/{id}` | Get batch job status |
-| `GET` | `/v1/batch/{id}/results` | Get batch job results |
+| `GET` | `/v1/user/profile` | Get authenticated user's profile |
 | `GET` | `/v1/models` | List available models |
 | `GET` | `/v1/config` | Get customer configuration |
 | `PUT` | `/v1/config` | Update customer configuration |
@@ -49,9 +46,9 @@ All responses are JSON with this structure:
 **Success (2xx)**
 ```json
 {
-  "id": "det_abc123",
-  "isFake": true,
+  "prediction": "ai",
   "confidence": 0.87,
+  "isFake": true,
   ...
 }
 ```
@@ -89,20 +86,3 @@ Rate limit headers are included in responses:
 - `X-RateLimit-Limit` - Requests allowed per second
 - `X-RateLimit-Remaining` - Requests remaining in current window
 - `Retry-After` - Seconds to wait (on 429 responses)
-
-## Pagination
-
-List endpoints support pagination:
-
-```bash
-GET /v1/batch?limit=20&cursor=abc123
-```
-
-Response includes pagination info:
-```json
-{
-  "data": [...],
-  "hasMore": true,
-  "nextCursor": "def456"
-}
-```

@@ -21,6 +21,7 @@ client = VeriClient(api_key="your-api-key")
 
 # Detect an image
 result = client.detect(open("image.jpg", "rb"))
+print(f"Prediction: {result.prediction}")
 print(f"Is fake: {result.is_fake} ({result.confidence:.1%})")
 ```
 
@@ -68,7 +69,6 @@ result = client.detect(
     options=DetectionOptions(
         models=["veri_face"],
         threshold=0.7,
-        include_raw=True,
     )
 )
 ```
@@ -81,37 +81,14 @@ Detect an image from a URL.
 result = client.detect_url("https://example.com/image.jpg")
 ```
 
-## Batch Processing
+### `get_profile()`
 
-### `detect_batch(images)`
-
-Submit multiple images for async processing.
+Get the authenticated user's profile.
 
 ```python
-# Submit a batch
-job = client.detect_batch([image1_bytes, image2_bytes, image3_bytes])
-print(f"Job ID: {job.job_id}")
-
-# Check status
-status = client.get_batch_status(job.job_id)
-print(f"Status: {status.status} ({status.processed_images}/{status.total_images})")
-
-# Get results when complete
-results = client.get_batch_results(job.job_id)
-```
-
-### `wait_for_batch(job_id, poll_interval=2.0, max_wait=300.0)`
-
-Wait for a batch job to complete.
-
-```python
-# Submit and wait for results
-job = client.detect_batch(images)
-results = client.wait_for_batch(
-    job.job_id,
-    poll_interval=2.0,  # Check every 2 seconds
-    max_wait=300.0,     # Timeout after 5 minutes
-)
+profile = client.get_profile()
+print(f"User ID: {profile['userId']}")
+print(f"Credits: {profile['credits']}")
 ```
 
 ## Async Client
@@ -140,10 +117,8 @@ async with AsyncVeriClient(api_key="your-api-key") as client:
     # URL detection
     result = await client.detect_url("https://example.com/image.jpg")
 
-    # Batch processing
-    job = await client.detect_batch(images)
-    status = await client.get_batch_status(job.job_id)
-    results = await client.get_batch_results(job.job_id)
+    # Get profile
+    profile = await client.get_profile()
 ```
 
 ## Error Handling
@@ -180,16 +155,19 @@ except VeriAPIError as e:
 
 ```python
 class DetectionResult:
-    id: str                        # Unique detection ID
-    is_fake: bool                  # Whether image is AI-generated
-    confidence: float              # Overall confidence (0-1)
-    model_scores: list[ModelScore] # Individual model scores
-    model_agreement: int           # Models that agree on result
-    total_models: int              # Total models used
-    cached: bool                   # Whether result was cached
-    processing_time_ms: int        # Total processing time
-    image_hash: str                # SHA-256 hash of image
-    timestamp: datetime            # Detection timestamp
+    prediction: str              # "ai", "real", or "uncertain"
+    confidence: float            # Overall confidence (0-1)
+    ensemble_score: float | None # Weighted ensemble score
+    verdict: str                 # "ai_generated", "uncertain", or "likely_real"
+    models_succeeded: int        # Models that returned results
+    models_total: int            # Total models invoked
+    model_results: dict          # Per-model results keyed by model name
+    detection_latency_ms: int    # Detection latency in ms
+    is_fake: bool | None         # True=AI, False=real, None=uncertain
+    processing_time_ms: int      # Total processing time in ms
+    image_hash: str              # SHA-256 hash of image
+    cached: bool                 # Whether result was from cache
+    timestamp: str               # ISO 8601 timestamp
 ```
 
 ### DetectionOptions
@@ -197,22 +175,5 @@ class DetectionResult:
 ```python
 class DetectionOptions:
     models: list[str] | None   # Specific models to use
-    include_raw: bool          # Include raw model outputs
     threshold: float           # Classification threshold (default 0.5)
-    skip_cache: bool           # Bypass cache
-```
-
-### BatchJobStatus
-
-```python
-class BatchJobStatus:
-    job_id: str                # Job ID
-    status: str                # "pending", "processing", "completed", "failed"
-    total_images: int          # Total images in batch
-    processed_images: int      # Images processed so far
-    success_count: int         # Successful detections
-    failure_count: int         # Failed detections
-    created_at: datetime       # Job creation time
-    completed_at: datetime     # Job completion time (if complete)
-    error: str | None          # Error message (if failed)
 ```

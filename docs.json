@@ -32,7 +32,6 @@
             "group": "Concepts",
             "pages": [
               "concepts/detection",
-              "concepts/batch-processing",
               "concepts/caching"
             ]
           }
@@ -52,14 +51,6 @@
             "pages": [
               "api-reference/detect",
               "api-reference/detect-url"
-            ]
-          },
-          {
-            "group": "Batch Processing",
-            "pages": [
-              "api-reference/batch-submit",
-              "api-reference/batch-status",
-              "api-reference/batch-results"
             ]
           },
           {

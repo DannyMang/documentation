@@ -5,22 +5,17 @@ description: "How result caching works in Veri"
 
 ## Overview
 
-Veri automatically caches detection results to improve performance and reduce costs. When you submit an image that has been analyzed before, you'll receive the cached result instantly.
+Veri computes a SHA-256 hash of every image submitted for detection. The `imageHash` and `cached` fields are included in every response to support future caching infrastructure.
 
-## How It Works
+<Note>
+Caching is not yet active. The `cached` field is currently always `false`. When caching is enabled, previously analyzed images will return instantly without consuming credits.
+</Note>
+
+## How It Will Work
 
 1. When you submit an image, Veri computes a SHA-256 hash of the image data
-2. If a result exists for that hash, it's returned immediately
-3. If not, the image is processed and the result is cached
-
-```mermaid
-flowchart TD
-    A[Submit Image] --> B{Hash in cache?}
-    B -->|Yes| C[Return cached result]
-    B -->|No| D[Run detection]
-    D --> E[Cache result]
-    E --> F[Return result]
-```
+2. If a cached result exists for that hash, it will be returned immediately
+3. If not, the image is processed and the result is stored
 
 ## Identifying Cached Results
 
@@ -36,77 +31,21 @@ else:
     print("Fresh detection")
 ```
 
-## Cache Duration
-
-Results are cached for **24 hours** by default. After this period, the same image will be re-analyzed.
-
-## Bypassing the Cache
-
-To force a fresh detection, use the `skip_cache` option:
-
-<CodeGroup>
-
-```python Python
-from veri import DetectionOptions
-
-result = client.detect(
-    image,
-    options=DetectionOptions(skip_cache=True)
-)
-# Result will always be fresh, but still gets cached
-```
-
-```typescript TypeScript
-const result = await client.detect(image, {
-  skipCache: true
-});
-// Result will always be fresh, but still gets cached
-```
-
-</CodeGroup>
-
-<Warning>
-Bypassing the cache consumes a credit even if the image was previously analyzed. Use this option sparingly.
-</Warning>
-
-## When to Bypass Cache
-
-Consider skipping the cache when:
-
-- You need the latest model results after an update
-- Testing or debugging detection accuracy
-- The image may have been modified since last check
-- You want to verify a previous result
-
-## Cache and Credits
-
-| Scenario | Credit Used |
-|----------|-------------|
-| Fresh detection | Yes |
-| Cached result | No |
-| `skip_cache: true` | Yes |
-| Batch processing | Per unique image |
-
 ## Image Hashing
 
-The cache key is based on the raw image bytes. This means:
+The image hash is based on the raw image bytes. This means:
 
-- **Same image, different format** → Different hash → Both cached separately
-- **Resized image** → Different hash → Cached separately
-- **Identical bytes** → Same hash → Uses cache
+- **Same image, different format** → Different hash → Analyzed separately
+- **Resized image** → Different hash → Analyzed separately
+- **Identical bytes** → Same hash → Will use cache when available
 
 ```python
-# These are cached separately (different bytes)
+# These would be hashed separately (different bytes)
 result1 = client.detect(image_as_jpeg)
 result2 = client.detect(image_as_png)
-
-# These use the same cache entry (same bytes)
-result3 = client.detect(image_as_jpeg)  # Cached!
 ```
 
 ## Best Practices
 
-1. **Use original images** - Don't re-encode before sending to maximize cache hits
+1. **Use original images** - Don't re-encode before sending to maximize future cache hits
 2. **Store the image hash** - Use `result.image_hash` to track what you've analyzed
-3. **Batch unique images** - In batch jobs, duplicate images are only processed once
-4. **Monitor cache hits** - Track the `cached` field to understand your cache efficiency

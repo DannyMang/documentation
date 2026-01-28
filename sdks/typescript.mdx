@@ -19,6 +19,7 @@ import { VeriClient } from '@veri/sdk';
 const client = new VeriClient({ apiKey: 'your-api-key' });
 
 const result = await client.detect(imageBuffer);
+console.log(`Prediction: ${result.prediction}`);
 console.log(`Is fake: ${result.isFake} (${(result.confidence * 100).toFixed(1)}%)`);
 ```
 
@@ -52,7 +53,6 @@ const result = await client.detect(base64String);
 const result = await client.detect(imageBuffer, {
   models: ['veri_face'],
   threshold: 0.7,
-  includeRaw: true,
 });
 ```
 
@@ -64,23 +64,14 @@ Detect an image from a URL.
 const result = await client.detectUrl('https://example.com/image.jpg');
 ```
 
-## Batch Processing
+### `getProfile()`
 
-### `detectBatch(images)`
-
-Submit multiple images for async processing.
+Get the authenticated user's profile.
 
 ```typescript
-// Submit a batch
-const job = await client.detectBatch([image1, image2, image3]);
-console.log(`Job ID: ${job.jobId}`);
-
-// Check status
-const status = await client.getBatchStatus(job.jobId);
-console.log(`Status: ${status.status} (${status.processedImages}/${status.totalImages})`);
-
-// Get results when complete
-const results = await client.getBatchResults(job.jobId);
+const profile = await client.getProfile();
+console.log(`User ID: ${profile.userId}`);
+console.log(`Credits: ${profile.credits}`);
 ```
 
 ## Error Handling
@@ -120,16 +111,19 @@ try {
 
 ```typescript
 interface DetectionResult {
-  id: string;                    // Unique detection ID
-  isFake: boolean;               // Whether image is AI-generated
-  confidence: number;            // Overall confidence (0-1)
-  modelScores: ModelScore[];     // Individual model scores
-  modelAgreement: number;        // Models that agree on result
-  totalModels: number;           // Total models used
-  cached: boolean;               // Whether result was cached
-  processingTimeMs: number;      // Total processing time
-  imageHash: string;             // SHA-256 hash of image
-  timestamp: string;             // ISO timestamp
+  prediction: string;                         // "ai", "real", or "uncertain"
+  confidence: number;                         // Overall confidence (0-1)
+  ensemble_score: number | null;              // Weighted ensemble score
+  verdict: string;                            // "ai_generated", "uncertain", or "likely_real"
+  models_succeeded: number;                   // Models that returned results
+  models_total: number;                       // Total models invoked
+  model_results: Record<string, ModelResult>; // Per-model results
+  detection_latency_ms: number;               // Detection latency in ms
+  isFake: boolean | null;                     // true=AI, false=real, null=uncertain
+  processingTimeMs: number;                   // Total processing time in ms
+  imageHash: string;                          // SHA-256 hash of image
+  cached: boolean;                            // Whether result was cached
+  timestamp: string;                          // ISO 8601 timestamp
 }
 ```
 
@@ -138,25 +132,7 @@ interface DetectionResult {
 ```typescript
 interface DetectionOptions {
   models?: string[];      // Specific models to use
-  includeRaw?: boolean;   // Include raw model outputs
   threshold?: number;     // Classification threshold (default 0.5)
-  skipCache?: boolean;    // Bypass cache
-}
-```
-
-### BatchJobStatus
-
-```typescript
-interface BatchJobStatus {
-  jobId: string;              // Job ID
-  status: 'pending' | 'processing' | 'completed' | 'failed';
-  totalImages: number;        // Total images in batch
-  processedImages: number;    // Images processed so far
-  successCount: number;       // Successful detections
-  failureCount: number;       // Failed detections
-  createdAt: string;          // ISO timestamp
-  completedAt?: string;       // ISO timestamp (if complete)
-  error?: string;             // Error message (if failed)
 }
 ```
 
