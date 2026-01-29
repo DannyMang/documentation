@@ -1,11 +1,15 @@
 {
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
-  "name": "Veri AI Documentation",
+  "name": "Veri Documentation",
   "colors": {
-    "primary": "#6366F1",
-    "light": "#818CF8",
-    "dark": "#4F46E5"
+    "primary": "#468F7D",
+    "light": "#BDE689",
+    "dark": "#200D0D",
+    "background": {
+      "light": "#FEFEFE",
+      "dark": "#200D0D"
+    }
   },
   "favicon": "/favicon.svg",
   "navigation": {
@@ -66,11 +70,6 @@
     "global": {
       "anchors": [
         {
-          "anchor": "API Status",
-          "href": "https://status.tryveri.com",
-          "icon": "signal"
-        },
-        {
           "anchor": "GitHub",
           "href": "https://github.com/ashworks1706/veri",
           "icon": "github"
@@ -86,17 +85,17 @@
     "links": [
       {
         "label": "Support",
-        "href": "mailto:support@tryveri.com"
+        "href": "mailto:daniel@veri.studio"
       }
     ],
     "primary": {
       "type": "button",
       "label": "Dashboard",
-      "href": "https://dashboard.tryveri.com"
+      "href": "https://veri.studio/dashboard"
     }
   },
   "api": {
-    "baseUrl": "https://api.tryveri.com",
+    "baseUrl": "https://api.veri.studio",
     "auth": {
       "method": "key",
       "name": "X-API-Key"
@@ -104,8 +103,7 @@
   },
   "footer": {
     "socials": {
-      "github": "https://github.com/ashworks1706/veri",
-      "x": "https://x.com/tryveri"
+      "github": "https://github.com/ashworks1706/veri"
     }
   }
 }
