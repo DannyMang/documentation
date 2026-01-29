@@ -1,21 +1,17 @@
 ---
 title: "Detect Image"
-api: "POST /v1/detect"
+api: "POST /api/detect"
 description: "Detect AI-generated content in an image"
 ---
 
 ## Request
 
 <ParamField body="image" type="string" required>
-  Base64-encoded image data. Supports JPEG, PNG, WebP, and GIF formats.
+  Base64-encoded image data. Supports JPEG, PNG, WebP, and GIF formats. Maximum size: 10MB.
 </ParamField>
 
-<ParamField body="models" type="string[]">
-  Specific models to use for detection. Defaults to all available models.
-</ParamField>
-
-<ParamField body="threshold" type="number" default="0.5">
-  Classification threshold (0-1). Images with confidence >= threshold are classified as AI-generated.
+<ParamField body="model" type="string">
+  Specific model to use for detection. Defaults to `veri_v0`. Available models: `veri_v0`, `veri_v1`, `veri_audio_v0`.
 </ParamField>
 
 ## Response
@@ -101,25 +97,22 @@ The `ensemble_score` (model probability) is mapped to predictions using 5 tiers:
 <RequestExample>
 
 ```bash cURL
-curl -X POST https://api.tryveri.com/v1/detect \
+curl -X POST https://api.veri.studio/api/detect \
   -H "X-API-Key: your-api-key" \
   -H "Content-Type: application/json" \
   -d '{
     "image": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
-    "threshold": 0.5
+    "model": "veri_v0"
   }'
 ```
 
 ```python Python
-from veri import VeriClient, DetectionOptions
+from veri import VeriClient
 
 client = VeriClient(api_key="your-api-key")
 
 with open("image.jpg", "rb") as f:
-    result = client.detect(
-        f.read(),
-        options=DetectionOptions(threshold=0.5)
-    )
+    result = client.detect(f.read())
 
 print(f"Prediction: {result.prediction}")
 print(f"Is fake: {result.is_fake}")
@@ -131,9 +124,7 @@ import { VeriClient } from '@veri/sdk';
 
 const client = new VeriClient({ apiKey: 'your-api-key' });
 
-const result = await client.detect(imageBuffer, {
-  threshold: 0.5
-});
+const result = await client.detect(imageBuffer);
 
 console.log(`Prediction: ${result.prediction}`);
 console.log(`Is fake: ${result.isFake}`);

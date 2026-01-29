@@ -1,6 +1,6 @@
 ---
 title: "Detect from URL"
-api: "POST /v1/detect/url"
+api: "POST /api/detect/url"
 description: "Detect AI-generated content in an image from a URL"
 ---
 
@@ -10,12 +10,8 @@ description: "Detect AI-generated content in an image from a URL"
   URL of the image to analyze. Must be publicly accessible.
 </ParamField>
 
-<ParamField body="models" type="string[]">
-  Specific models to use for detection.
-</ParamField>
-
-<ParamField body="threshold" type="number" default="0.5">
-  Classification threshold (0-1).
+<ParamField body="model" type="string">
+  Specific model to use for detection. Defaults to `veri_v0`.
 </ParamField>
 
 ## Response
@@ -25,7 +21,7 @@ Same as [POST /v1/detect](/api-reference/detect), including the same [5-tier cla
 <RequestExample>
 
 ```bash cURL
-curl -X POST https://api.tryveri.com/v1/detect/url \
+curl -X POST https://api.veri.studio/api/detect/url \
   -H "X-API-Key: your-api-key" \
   -H "Content-Type: application/json" \
   -d '{
