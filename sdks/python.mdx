@@ -13,167 +13,179 @@ Requires Python 3.10 or later.
 
 ## Quick Start
 
-```python
-from veri import VeriClient
-
-# Initialize the client
-client = VeriClient(api_key="your-api-key")
-
-# Detect an image
-result = client.detect(open("image.jpg", "rb"))
-print(f"Prediction: {result.prediction}")
-print(f"Is fake: {result.is_fake} ({result.confidence:.1%})")
+```bash
+# Login via CLI (stores credentials at ~/.veri/credentials.json)
+veri login --key vk_your_api_key
 ```
 
-## Client Options
+```python
+from veri_sdk import Client
+
+# Auto-reads credentials from ~/.veri/credentials.json
+client = Client()
+
+# Or pass explicitly
+client = Client(api_key="vk_your_api_key", base_url="https://api.veri.studio")
+```
+
+## Resources
+
+The SDK covers all control-plane resources:
+
+- `client.datasets` — upload, connect, validate, list, get
+- `client.reward_functions` — upload, list, get
+- `client.training_jobs` — create, list, get, cancel, wait
+
+## Datasets
+
+### Upload a dataset
 
 ```python
-from veri import VeriClient
+dataset = client.datasets.upload("math_prompts.jsonl")
+print(f"ID: {dataset.id}")
+print(f"Source: {dataset.source_type}")
+```
 
-client = VeriClient(
-    api_key="your-api-key",
-    base_url="https://api.tryveri.com/v1",  # Custom base URL
-    timeout=30.0,  # Request timeout in seconds
-    max_retries=3,  # Number of retry attempts
+### Connect an external dataset
+
+```python
+dataset = client.datasets.connect(
+    name="gsm8k-train",
+    source_type="hf",
+    hf_dataset="gsm8k",
+    hf_config={
+        "split": "train",
+        "column_mapping": {
+            "question": "prompt",
+            "answer": "label",
+        },
+    },
 )
+print(dataset.id)
 ```
 
-## Detection Methods
+Supported `source_type` values are `s3`, `gs`, `az`, `hf`, `postgres`, `mysql`, `snowflake`, and `bigquery`.
 
-### `detect(image, options=None)`
-
-Detect whether an image is AI-generated.
+### Validate a connection
 
 ```python
-from pathlib import Path
-from veri import VeriClient, DetectionOptions
-
-client = VeriClient(api_key="your-api-key")
-
-# From file path
-result = client.detect(Path("image.jpg"))
-
-# From bytes
-with open("image.jpg", "rb") as f:
-    result = client.detect(f.read())
-
-# From file object
-result = client.detect(open("image.jpg", "rb"))
-
-# From base64 string
-result = client.detect(base64_encoded_string)
-
-# With options
-result = client.detect(
-    image_bytes,
-    options=DetectionOptions(
-        models=["veri_face"],
-        threshold=0.7,
-    )
+result = client.datasets.validate(
+    source_type="s3",
+    source_uri="s3://my-bucket/prompts.jsonl",
 )
+print(result["valid"], result.get("num_rows"))
 ```
 
-### `detect_url(url, options=None)`
-
-Detect an image from a URL.
+### List datasets
 
 ```python
-result = client.detect_url("https://example.com/image.jpg")
+datasets = client.datasets.list(limit=10, offset=0)
+for ds in datasets:
+    print(f"{ds.id}: {ds.name} ({ds.source_type})")
 ```
 
-### `get_profile()`
+## Reward Functions
 
-Get the authenticated user's profile.
+### Upload a reward function
 
 ```python
-profile = client.get_profile()
-print(f"User ID: {profile['userId']}")
-print(f"Credits: {profile['credits']}")
+reward = client.reward_functions.upload("reward.py", format="trl")
+print(f"ID: {reward.id}")
+print(f"Format: {reward.format}")
 ```
 
-## Async Client
+Use `format="miles"` for files that implement `async def reward(args, sample, **kwargs) -> float`.
 
-For async applications, use `AsyncVeriClient`:
+### List reward functions
 
 ```python
-import asyncio
-from veri import AsyncVeriClient
-
-async def main():
-    async with AsyncVeriClient(api_key="your-api-key") as client:
-        result = await client.detect(image_bytes)
-        print(f"Is fake: {result.is_fake}")
-
-asyncio.run(main())
+rewards = client.reward_functions.list(limit=10, offset=0)
+for rf in rewards:
+    print(f"{rf.id}: {rf.name} ({rf.format})")
 ```
 
-All methods have async equivalents:
+### Get a reward function
 
 ```python
-async with AsyncVeriClient(api_key="your-api-key") as client:
-    # Single detection
-    result = await client.detect(image)
-
-    # URL detection
-    result = await client.detect_url("https://example.com/image.jpg")
-
-    # Get profile
-    profile = await client.get_profile()
+reward = client.reward_functions.get("rf_def456")
+print(f"Name: {reward.name}")
 ```
+
+## Training Jobs
+
+### Create a job
+
+```python
+job = client.training_jobs.create(
+    base_model="Qwen/Qwen3-4B",
+    dataset_id="ds_abc123",
+    reward_function_id="rf_def456",
+    output_name="qwen3-4b-math",
+    hyperparameters={
+        "learning_rate": 1e-6,
+        "num_epochs": 1,
+        "rollouts_per_prompt": 8,
+        "max_response_length": 2048,
+        "global_batch_size": 64,
+    },
+    gpu_type="A100-80GB",
+    gpu_count=1,
+    checkpoint_destination={"type": "veri"},
+)
+print(f"Job ID: {job.id}")
+print(f"Status: {job.status}")
+```
+
+### Get job status
+
+```python
+job = client.training_jobs.get("job_xyz789")
+print(f"Status: {job.status}")
+```
+
+### List jobs
+
+```python
+# All jobs
+jobs = client.training_jobs.list()
+
+# Filter by status
+running_jobs = client.training_jobs.list(status="running")
+```
+
+### Wait for completion
+
+```python
+job.wait()  # blocks until completed or failed
+print(f"Final status: {job.status}")
+```
+
+### Cancel a job
+
+```python
+client.training_jobs.cancel("job_xyz789")
+```
+
+### Download a completed checkpoint
+
+```python
+job = client.training_jobs.get("job_xyz789")
+print(job.download_url)
+
+if job.download_url:
+    path = job.download(output_dir="downloads")
+    print(path)
+```
+
+The current SDK file does not yet include helper methods for the cost and billing endpoints. Use raw HTTP calls or add wrappers if you need them immediately.
 
 ## Error Handling
 
 ```python
-from veri import (
-    VeriClient,
-    VeriAPIError,
-    VeriValidationError,
-    VeriRateLimitError,
-    VeriTimeoutError,
-    VeriInsufficientCreditsError,
-)
-
-client = VeriClient(api_key="your-api-key")
-
 try:
-    result = client.detect(image)
-except VeriValidationError as e:
-    print(f"Invalid input: {e.message} (field: {e.field})")
-except VeriRateLimitError as e:
-    print(f"Rate limited. Retry after {e.retry_after} seconds")
-except VeriInsufficientCreditsError as e:
-    print("Not enough credits")
-except VeriTimeoutError as e:
-    print(f"Request timed out after {e.timeout_ms}ms")
-except VeriAPIError as e:
-    print(f"API error: {e.message} (code: {e.code}, status: {e.status_code})")
+    job = client.training_jobs.create(...)
+except Exception as e:
+    print(f"Request failed: {e}")
 ```
 
-## Type Definitions
-
-### DetectionResult
-
-```python
-class DetectionResult:
-    prediction: str              # "ai", "real", or "uncertain"
-    confidence: float            # Overall confidence (0-1)
-    ensemble_score: float | None # Weighted ensemble score
-    verdict: str                 # "ai_generated", "uncertain", or "likely_real"
-    models_succeeded: int        # Models that returned results
-    models_total: int            # Total models invoked
-    model_results: dict          # Per-model results keyed by model name
-    detection_latency_ms: int    # Detection latency in ms
-    is_fake: bool | None         # True=AI, False=real, None=uncertain
-    processing_time_ms: int      # Total processing time in ms
-    image_hash: str              # SHA-256 hash of image
-    cached: bool                 # Whether result was from cache
-    timestamp: str               # ISO 8601 timestamp
-```
-
-### DetectionOptions
-
-```python
-class DetectionOptions:
-    models: list[str] | None   # Specific models to use
-    threshold: float           # Classification threshold (default 0.5)
-```
+The current SDK relies on `httpx` response errors rather than a custom Veri exception hierarchy.

@@ -1,0 +1,69 @@
+---
+title: "CLI Commands"
+description: "Command reference for the Veri CLI"
+---
+
+## Overview
+
+The current CLI command surface is intentionally small and focused.
+
+## `veri login`
+
+Log in and store credentials locally.
+
+```bash
+veri login
+```
+
+By default this:
+
+- opens the dashboard API keys page in your browser
+- prompts you to paste a key
+- stores credentials locally
+
+Pass the key directly:
+
+```bash
+veri login --key vk_...
+```
+
+Override the API base URL:
+
+```bash
+veri login --url http://localhost:8000
+```
+
+## `veri whoami`
+
+Show the currently stored credential metadata:
+
+```bash
+veri whoami
+```
+
+Typical output:
+
+```text
+API URL:    https://api.veri.studio
+API Key:    vk_a1b2c3d4...ef56
+Stored at:  /Users/you/.veri/credentials.json
+```
+
+## `veri logout`
+
+Remove the local credentials file:
+
+```bash
+veri logout
+```
+
+## Notes
+
+- `login` expects keys that start with `vk_`
+- `login` performs a lightweight verification attempt against `/health`
+- the CLI is currently focused on auth and bootstrapping, not full job management
+
+## Related Pages
+
+- [CLI](/cli)
+- [CLI Authentication](/cli-authentication)

@@ -1,0 +1,62 @@
+---
+title: "Supervised Fine-Tuning"
+description: "Current status of supervised fine-tuning in Veri"
+---
+
+## Overview
+
+Supervised fine-tuning (SFT) is a natural workflow for many teams, especially when you already have clean input/output examples and want to improve instruction following directly.
+
+Right now, Veri's implemented training path is centered on GRPO and reward-based fine-tuning.
+
+<Warning>
+SFT is on the roadmap, but it is not part of the currently implemented training path yet.
+</Warning>
+
+## What Veri Supports Today
+
+Today, Veri supports:
+
+- reward-based fine-tuning with GRPO
+- custom reward functions
+- flexible dataset ingestion
+- explicit checkpoint destinations
+- cost, billing, and job lifecycle tracking
+
+If your immediate goal is to improve formatting, correctness, or structured outputs, GRPO may still work well even if you originally thought of the task as SFT.
+
+## When SFT Will Be a Better Fit
+
+SFT will be the better choice when you have:
+
+- high-quality prompt/response pairs
+- a clear desired answer for each example
+- less need for nuanced reward shaping
+- a task where direct imitation is simpler than scoring
+
+## What to Do in the Meantime
+
+If you want to move now:
+
+1. Start with the [Quickstart](/quickstart).
+2. Turn your examples into a dataset with fields that your reward function can inspect.
+3. Write a reward that scores closeness to the behavior you want.
+4. Keep the scope narrow and iterate on the reward signal.
+
+## Roadmap Status
+
+The project tracker already calls out:
+
+- SFT training as a planned additional method
+- DPO as another future method
+- LoRA fine-tuning as a later addition once upstream support improves
+
+So the honest current position is:
+
+**Veri is already useful for fine-tuning, but the implemented path today is GRPO rather than classic SFT.**
+
+## Best Next Steps
+
+- [GRPO Training](/concepts/grpo-training)
+- [Reward Functions](/concepts/reward-functions)
+- [Datasets](/concepts/datasets)

@@ -1,0 +1,44 @@
+---
+title: "Latest Release Notes"
+description: "Most recent platform updates in Veri"
+---
+
+## Latest
+
+### Multi-source datasets, checkpoint destinations, and end-to-end validation
+
+Recent work added:
+
+- multi-source dataset support across uploads, cloud storage, Hugging Face, and databases
+- explicit checkpoint destinations for Veri-managed storage or external buckets
+- end-to-end API validation across the upload-to-training flow
+
+## Supporting Updates
+
+### Billing and credits
+
+- Stripe customer balance now acts as the credit ledger
+- webhook handling adds credits after successful checkout
+- job completion can deduct credits automatically
+- billing UI now shows real balances and payment methods
+
+### Ownership and auth hardening
+
+- user ownership checks were tightened across datasets, rewards, and jobs
+- legacy `NULL user_id` records were locked down
+- auth middleware was restructured for the current proxy path and future per-user API keys
+
+### Dashboard and proxy improvements
+
+- dashboard job responses were cleaned up
+- proxy behavior for streaming and control-plane access was improved
+
+## Current Focus Areas
+
+The repository still calls out these active next steps:
+
+- better Modal error capture and OOM hints
+- a polished successful end-to-end training run
+- log streaming improvements
+- public per-user API keys
+- broader observability integration

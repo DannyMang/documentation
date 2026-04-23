@@ -1,0 +1,77 @@
+---
+title: "Function Calling"
+description: "Fine-tune models for structured outputs and tool-oriented behavior"
+---
+
+## Overview
+
+Function calling is a strong fit for Veri's current fine-tuning approach. If you want a model to emit predictable structured outputs, choose tools more reliably, or follow a strict schema, you can shape that behavior with datasets plus reward functions.
+
+Veri does this today through reward-based fine-tuning with GRPO.
+
+## Good Fits
+
+Use this workflow when you want the model to:
+
+- return valid JSON
+- emit function names and arguments in a strict format
+- prefer tool usage over free-form answers
+- follow schema and formatting rules consistently
+
+## Recommended Setup
+
+### 1. Build a structured dataset
+
+Your dataset should include prompts plus the fields needed to evaluate correctness, such as:
+
+```json
+{"prompt": "Book me a flight to New York tomorrow", "expected_tool": "book_flight"}
+{"prompt": "What's the weather in SF?", "expected_tool": "get_weather"}
+```
+
+### 2. Reward the behavior you want
+
+Common reward signals for function-calling use cases include:
+
+- correct function name selected
+- valid argument schema
+- valid JSON or XML formatting
+- no extra text outside the structured response
+
+### 3. Keep the task narrow at first
+
+Start with one or two tools and a small schema. Once the model reliably follows the format, expand the tool surface.
+
+## Example Reward Ideas
+
+- `+1.0` for the correct tool
+- `+0.5` for valid structured syntax
+- `-1.0` for malformed output
+- `-0.5` for answering directly when a tool should be called
+
+That kind of shaping usually works better than a single binary reward.
+
+## What Veri Supports Today
+
+- single-turn fine-tuning workflows
+- custom reward functions
+- flexible dataset inputs
+- downloadable Hugging Face checkpoints
+
+## Current Limits
+
+The current specs call out a few important constraints:
+
+- multi-turn agentic RL is not the focus of the PoC
+- hosted serving is not part of the current product
+- function-calling quality still depends heavily on dataset quality and reward design
+
+So the best fit today is:
+
+**fine-tune for structured one-turn tool selection and schema-following behavior, then deploy the resulting checkpoint in your own serving stack**
+
+## Where to Go Next
+
+- [Datasets](/concepts/datasets)
+- [Reward Functions](/concepts/reward-functions)
+- [Quickstart](/quickstart)

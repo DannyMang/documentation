@@ -3,106 +3,98 @@ title: "Authentication"
 description: "How to authenticate with the Veri API"
 ---
 
-## API Keys
+## Auth Methods
 
-All requests to the Veri API require authentication via an API key. You can create and manage API keys in your [dashboard](https://dashboard.tryveri.com).
+Veri supports two authentication paths:
 
-## Using Your API Key
+### 1. Per-User API Keys (SDK / curl)
 
-Include your API key in the `X-API-Key` header:
+Create an API key in the dashboard or via the API. Keys start with `vk_` and are used as Bearer tokens:
 
-<CodeGroup>
-
-```bash cURL
-curl -X POST https://api.tryveri.com/v1/detect \
-  -H "X-API-Key: your-api-key" \
-  -H "Content-Type: application/json" \
-  -d '{"image": "base64-encoded-image"}'
+```bash
+curl https://api.veri.studio/v1/training_jobs \
+  -H "Authorization: Bearer vk_your_api_key_here"
 ```
 
-```python Python
-from veri import VeriClient
+With the Python SDK:
 
-# The SDK handles authentication automatically
-client = VeriClient(api_key="your-api-key")
+```python
+from veri_sdk import Client
+
+client = Client(api_key="vk_your_api_key_here")
 ```
 
-```typescript TypeScript
-import { VeriClient } from '@veri/sdk';
+Or log in via CLI and the SDK reads credentials automatically:
 
-// The SDK handles authentication automatically
-const client = new VeriClient({ apiKey: 'your-api-key' });
+```bash
+veri login --key vk_your_api_key_here
 ```
 
-</CodeGroup>
+```python
+from veri_sdk import Client
+client = Client()  # reads from ~/.veri/credentials.json
+```
+
+### 2. Trusted Proxy (Web Dashboard)
+
+When you use the web dashboard, WorkOS handles sign-in and the Next.js proxy attaches your user identity automatically via the `X-Veri-User-Id` header. You don't need an API key for dashboard usage.
+
+For local development or internal testing:
+
+```bash
+curl http://localhost:8000/v1/training_jobs \
+  -H "Authorization: Bearer $VERI_API_KEY" \
+  -H "X-Veri-User-Id: user_123"
+```
+
+## API Key Format
+
+Keys follow the format `vk_<40 hex characters>` (43 chars total):
+
+```
+vk_a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2
+```
+
+- The `vk_` prefix is required — the auth middleware uses it to route to API key authentication
+- Only the SHA-256 hash is stored server-side
+- The plaintext key is shown once at creation — save it immediately
+- Keys can be revoked instantly via the API or dashboard
+
+## User Identity & Data Scoping
+
+Every resource you create (datasets, reward functions, training jobs) is scoped to your user account. You can only see and manage your own resources.
+
+Records with no owner (`user_id = NULL`) are inaccessible to all users.
 
 ## Environment Variables
 
-We recommend storing your API key in an environment variable:
-
 ```bash
-export VERI_API_KEY="your-api-key"
+export VERI_API_KEY="vk_your_api_key_here"
 ```
-
-Then load it in your code:
-
-<CodeGroup>
-
-```python Python
-import os
-from veri import VeriClient
-
-client = VeriClient(api_key=os.environ["VERI_API_KEY"])
-```
-
-```typescript TypeScript
-import { VeriClient } from '@veri/sdk';
-
-const client = new VeriClient({
-  apiKey: process.env.VERI_API_KEY
-});
-```
-
-</CodeGroup>
 
 ## Security Best Practices
 
 <Warning>
-Never commit API keys to version control or expose them in client-side code.
+Never commit API keys, Stripe credentials, or database connection strings to version control.
 </Warning>
 
-- **Use environment variables** - Store keys in `.env` files (excluded from git)
-- **Rotate regularly** - Create new keys periodically and revoke old ones
-- **Separate environments** - Use different keys for development and production
-- **Monitor usage** - Check your dashboard for unexpected API activity
-
-## Rate Limits
-
-API requests are rate-limited based on your plan:
-
-| Plan | Rate Limit | Monthly Quota |
-|------|------------|---------------|
-| Free | 10 req/sec | 1,000 requests |
-| Pro | 100 req/sec | 50,000 requests |
-| Enterprise | Custom | Custom |
-
-When you exceed the rate limit, you'll receive a `429 Too Many Requests` response with a `Retry-After` header.
+- **Use environment variables** — Store tokens in `.env` files excluded from git.
+- **Keep the control plane private** — The internal service key should only be used by trusted callers.
+- **Rotate keys** — Refresh credentials if they are ever shared in logs or chat.
 
 ## Error Responses
 
-Authentication errors return a `401 Unauthorized` response:
+Authentication errors return `401 Unauthorized`:
 
 ```json
 {
-  "error": "Invalid API key",
-  "code": "INVALID_API_KEY"
+  "detail": "Invalid API key"
 }
 ```
 
-Common authentication errors:
-
-| Code | Description |
-|------|-------------|
-| `INVALID_API_KEY` | The API key is invalid or doesn't exist |
-| `EXPIRED_API_KEY` | The API key has been revoked |
-| `MISSING_API_KEY` | No API key was provided |
+| Scenario | Response |
+|---|---|
+| No Authorization header | 401 — "Invalid API key" |
+| Invalid or expired key | 401 — "Invalid API key" |
+| Revoked `vk_` key | 401 — "Invalid or revoked API key" |
+| Service key without X-Veri-User-Id | 401 — "Missing X-Veri-User-Id header" |

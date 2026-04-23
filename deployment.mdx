@@ -1,0 +1,129 @@
+---
+title: "Deployment"
+description: "How deployment works after fine-tuning with Veri"
+---
+
+## Overview
+
+Veri makes fine-tuning and checkpoint delivery simple. Today, deployment means training with Veri, receiving a Hugging Face-compatible checkpoint, and serving that model in your own stack.
+
+<Note>
+Veri does not currently provide hosted inference endpoints. Managed model serving is planned for a later phase.
+</Note>
+
+## What Veri Handles
+
+When you submit a training job, Veri handles:
+
+- training job orchestration
+- GPU selection and backend routing
+- artifact storage during training
+- checkpoint packaging and delivery
+- billing and cost attribution
+
+When the run finishes, the final checkpoint is exposed as a Hugging Face-format artifact that you can download or write to your own bucket.
+
+## Deployment Flow
+
+<Steps>
+
+<Step title="Fine-tune your model">
+Submit a training job with your base model, dataset, reward function, and hyperparameters.
+</Step>
+
+<Step title="Choose where the checkpoint lands">
+Set `checkpoint_destination` to use Veri-managed storage or send the final checkpoint to your own `s3`, `gs`, or `az` bucket.
+</Step>
+
+<Step title="Wait for completion">
+Track status through the dashboard, poll the API, or stream logs while training runs.
+</Step>
+
+<Step title="Deploy the checkpoint">
+Use the final Hugging Face checkpoint in the serving stack you already run today, such as Transformers, vLLM, TGI, or SGLang.
+</Step>
+
+</Steps>
+
+## Checkpoint Destinations
+
+Veri supports these final checkpoint destinations:
+
+| Type | What happens |
+|---|---|
+| `veri` | Veri stores the final checkpoint and returns a download URL when the job completes. |
+| `s3` | Veri writes the final checkpoint to your S3 path. |
+| `gs` | Veri writes the final checkpoint to your Google Cloud Storage path. |
+| `az` | Veri writes the final checkpoint to your Azure Blob path. |
+
+Example:
+
+```json
+{
+  "checkpoint_destination": {
+    "type": "s3",
+    "uri": "s3://my-bucket/checkpoints/qwen3-4b-math/"
+  }
+}
+```
+
+## Output Format
+
+The deployment contract is a final Hugging Face-compatible checkpoint.
+
+That means:
+
+- the model can be loaded with standard Hugging Face tooling
+- the final artifact is the thing users deploy, not an internal training checkpoint
+- the current platform is optimized around full fine-tuned checkpoints, not multi-LoRA serving
+
+## Deployment Options Today
+
+### Veri-managed download
+
+If you use `checkpoint_destination.type = "veri"`, fetch the model URL after the job completes:
+
+```bash
+curl http://localhost:8000/v1/training_jobs/job_xyz789/model \
+  -H "Authorization: Bearer $VERI_INTERNAL_API_KEY" \
+  -H "X-Veri-User-Id: $VERI_USER_ID"
+```
+
+### Deploy from your own bucket
+
+If you choose `s3`, `gs`, or `az`, Veri writes the final checkpoint directly to your storage so your serving infrastructure can pull from there.
+
+This is the best fit if you already deploy models through your own CI/CD, registry, or cloud inference platform.
+
+## Recommended Serving Stacks
+
+Veri does not require a specific inference layer. Based on the current architecture and roadmap:
+
+- **Transformers** works well for direct loading and custom applications
+- **vLLM** is a good NVIDIA serving option
+- **SGLang** fits teams already using the RL training stack
+- **vLLM-ROCm** is the likely AMD serving path when hosted serving becomes a product area
+
+## Current Limits
+
+Deployment is intentionally simple right now:
+
+- no hosted Veri inference endpoint
+- no browser-based model serving UI
+- no built-in A/B testing or online traffic routing yet
+- no multi-LoRA deployment workflow yet
+
+Those are future product areas, but the current path is already enough for teams that want Veri to handle fine-tuning while they keep control over serving.
+
+## Roadmap
+
+The current specs point toward a later serving phase that includes:
+
+- model serving after training completes
+- vLLM for NVIDIA deployments
+- vLLM-ROCm for AMD deployments
+- A/B testing between base and fine-tuned models
+
+For now, the simplest mental model is:
+
+**Veri fine-tunes the model. You deploy the resulting checkpoint wherever you serve models today.**

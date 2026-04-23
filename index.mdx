@@ -1,94 +1,79 @@
 ---
-title: "Veri AI"
-description: "AI-powered deepfake detection API"
+title: "Build with Veri"
+description: "Fine-tune open-source models to be the best for your use-case "
 ---
 
-## Detect AI-Generated Images
+## Get started in minutes
 
-Veri is a powerful API for detecting AI-generated and manipulated images. Using state-of-the-art machine learning models, Veri can identify deepfakes, AI-generated faces, and synthetic media with high accuracy.
-
-<Card
-  title="Get Started"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Start detecting deepfakes in minutes with our SDKs.
-</Card>
-
-## Key Features
+Veri helps you fine-tune language models with your own datasets and reward functions. Choose any model we support, let us handle the infrastructure, and deploy your custom model seamlessly. 
 
 <CardGroup cols={2}>
-
-<Card title="High Accuracy" icon="bullseye-arrow">
-  Our veri_face model achieves industry-leading detection rates on AI-generated faces.
-</Card>
-
-<Card title="Fast Inference" icon="bolt">
-  Get results in under 200ms with our optimized SageMaker infrastructure.
-</Card>
-
-<Card title="Batch Processing" icon="layer-group">
-  Process up to 100 images per batch for high-volume use cases.
-</Card>
-
-<Card title="Caching" icon="database">
-  Automatic result caching reduces costs and improves response times.
-</Card>
-
+  <Card
+    title="Get Started"
+    icon="rocket"
+    href="/quickstart"
+  >
+    Submit your first training job in minutes.
+  </Card>
+  <Card
+    title="Easy Deployment"
+    icon="cloud"
+    href="/deployment"
+  >
+    Train with Veri, then deploy the final Hugging Face checkpoint wherever you already serve models.
+  </Card>
+  <Card
+    title="Try the Playground"
+    icon="play"
+    href="/playground"
+  >
+    Explore the current playground preview and see how Veri is shaping the product experience.
+  </Card>
+  <Card
+    title="Connect Your Dataset"
+    icon="database"
+    href="/concepts/datasets"
+  >
+    Upload JSONL directly or connect data from cloud storage, Hugging Face, and databases.
+  </Card>
+  <Card
+    title="Fine-Tune for Function Calling"
+    icon="code"
+    href="/function-calling"
+  >
+    Use structured datasets and reward functions to train models toward tool use and predictable outputs.
+  </Card>
+  <Card
+    title="Supervised Fine-Tuning"
+    icon="brain"
+    href="/supervised-finetuning"
+  >
+    See what Veri supports today and how SFT fits into the roadmap from here.
+  </Card>
 </CardGroup>
 
-## Quick Example
+## Resources & Help
 
-<CodeGroup>
-
-```python Python
-from veri import VeriClient
-
-client = VeriClient(api_key="your-api-key")
-result = client.detect(open("image.jpg", "rb"))
-
-print(f"Is AI-generated: {result.is_fake}")
-print(f"Confidence: {result.confidence:.1%}")
-```
-
-```typescript TypeScript
-import { VeriClient } from '@veri/sdk';
-
-const client = new VeriClient({ apiKey: 'your-api-key' });
-const result = await client.detect(imageBuffer);
-
-console.log(`Is AI-generated: ${result.isFake}`);
-console.log(`Confidence: ${(result.confidence * 100).toFixed(1)}%`);
-```
-
-```bash cURL
-curl -X POST https://api.tryveri.com/v1/detect \
-  -H "X-API-Key: your-api-key" \
-  -H "Content-Type: application/json" \
-  -d '{"image": "base64-encoded-image"}'
-```
-
-</CodeGroup>
-
-## Next Steps
-
-<CardGroup cols={2}>
-
-<Card title="Quickstart" icon="play" href="/quickstart">
-  Get up and running in 5 minutes.
-</Card>
-
-<Card title="API Reference" icon="code" href="/api-reference/introduction">
-  Explore the full API documentation.
-</Card>
-
-<Card title="Python SDK" icon="python" href="/sdks/python">
-  Install and use the Python SDK.
-</Card>
-
-<Card title="TypeScript SDK" icon="js" href="/sdks/typescript">
-  Install and use the TypeScript SDK.
-</Card>
-
+<CardGroup cols={3}>
+  <Card title="Which model should I use?" icon="compass" href="/recommended-models">
+    Find the best model for your use case.
+  </Card>
+  <Card title="Cookbook" icon="book-open" href="/cookbook">
+    Code examples and practical starting points for training workflows.
+  </Card>
+  <Card title="API Reference" icon="code" href="/api-reference/introduction">
+    Complete API documentation.
+  </Card>
+  <Card title="Discord Community" icon="discord" href="https://discord.gg/DBZSRzPAuR">
+    Ask questions and get help from developers.
+  </Card>
+  <Card title="Security & Compliance" icon="shield-check" href="/security-compliance">
+    We are currently in the SOC 2 process and documenting our security posture as we build.
+  </Card>
+  <Card title="System Status" icon="signal" href="https://veri.studio/status">
+    Check service uptime on our standalone status page.
+  </Card>
+  <Card title="Talk to Sales" icon="building" href="https://cal.com/veri.studio/30min">
+    Talk to our team.
+  </Card>
 </CardGroup>

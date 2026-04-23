@@ -5,84 +5,149 @@ description: "Complete reference for the Veri REST API"
 
 ## Base URL
 
-All API requests should be made to:
+Hosted API:
 
 ```
-https://api.tryveri.com/v1
+https://api.veri.studio/v1
+```
+
+Local development:
+
+```
+http://localhost:8000/v1
 ```
 
 ## Authentication
 
-Authenticate using an API key in the `X-API-Key` header:
+All API requests require a Bearer token. Two auth methods are supported:
+
+**Per-user API key** (recommended for SDK / curl):
 
 ```bash
-curl -X POST https://api.tryveri.com/v1/detect \
-  -H "X-API-Key: your-api-key" \
-  -H "Content-Type: application/json" \
-  -d '{"image": "base64-encoded-image"}'
+curl https://api.veri.studio/v1/training_jobs \
+  -H "Authorization: Bearer vk_your_api_key"
 ```
+
+**Trusted proxy** (used by the web dashboard internally):
+
+```bash
+curl http://localhost:8000/v1/training_jobs \
+  -H "Authorization: Bearer $VERI_SERVICE_KEY" \
+  -H "X-Veri-User-Id: user_123"
+```
+
+See [Authentication](/authentication) for details on creating API keys and auth flows.
 
 ## Endpoints
 
+### Datasets
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/v1/detect` | Detect AI-generated content in an image |
-| `POST` | `/v1/detect/url` | Detect from an image URL |
-| `GET` | `/v1/user/profile` | Get authenticated user's profile |
-| `GET` | `/v1/models` | List available models |
-| `GET` | `/v1/config` | Get customer configuration |
-| `PUT` | `/v1/config` | Update customer configuration |
+| `POST` | `/v1/datasets` | Upload a JSONL dataset |
+| `POST` | `/v1/datasets/connect` | Register an external dataset source |
+| `POST` | `/v1/datasets/connect/validate` | Validate a source connection |
+| `GET` | `/v1/datasets` | List datasets |
+| `GET` | `/v1/datasets/{id}` | Get dataset info |
+
+### Reward Functions
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/v1/reward_functions` | Upload a reward function |
+| `GET` | `/v1/reward_functions` | List reward functions |
+| `GET` | `/v1/reward_functions/{id}` | Get reward function info |
+
+### Training Jobs
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/v1/training_jobs` | Create a training job |
+| `GET` | `/v1/training_jobs` | List training jobs |
+| `GET` | `/v1/training_jobs/{id}` | Get job status |
+| `DELETE` | `/v1/training_jobs/{id}` | Cancel a job |
+| `GET` | `/v1/training_jobs/{id}/logs` | Stream job logs (SSE) |
+| `GET` | `/v1/training_jobs/{id}/model` | Get checkpoint download URL |
+
+### Cost
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/v1/cost/summary` | Get spend summary |
+| `GET` | `/v1/cost/by-provider` | Break down spend by provider |
+| `GET` | `/v1/cost/by-gpu` | Break down spend by GPU type |
+| `GET` | `/v1/cost/estimate` | Estimate cost from GPU shape and duration |
+| `GET` | `/v1/cost/monthly-projection` | Project monthly spend |
+| `GET` | `/v1/cost/compare` | Compare provider costs |
+| `GET` | `/v1/cost/rates` | Get current GPU rates |
+
+### Billing
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/v1/billing/balance` | Get Stripe-backed credit balance |
+| `GET` | `/v1/billing/transactions` | List balance transactions |
+| `POST` | `/v1/billing/check-balance` | Check whether a job can be covered by credits |
+
+### API Keys
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/v1/api_keys` | Create a new API key (plaintext returned once) |
+| `GET` | `/v1/api_keys` | List active API keys (prefix only) |
+| `DELETE` | `/v1/api_keys/{id}` | Revoke an API key |
 
 ## Request Format
 
-All POST requests should include:
-- `Content-Type: application/json` header
-- JSON body with required parameters
+- **JSON endpoints** (`POST /v1/training_jobs`): Use `Content-Type: application/json` with a JSON body.
+- **Upload endpoints** (`POST /v1/datasets`, `POST /v1/reward_functions`): Use `multipart/form-data`.
+- **Connector endpoints** (`POST /v1/datasets/connect`, `POST /v1/datasets/connect/validate`): Send JSON bodies.
 
 ## Response Format
 
-All responses are JSON with this structure:
+Responses are standard JSON. Single-resource endpoints return one object. List endpoints return paginated objects with `items`, `total`, `limit`, and `offset`.
 
 **Success (2xx)**
 ```json
 {
-  "prediction": "ai",
-  "confidence": 0.87,
-  "isFake": true,
-  ...
+  "id": "job_abc123",
+  "status": "queued",
+  "base_model": "Qwen/Qwen3-4B",
+  "output_name": "my-model",
+  "gpu_type": "A100-80GB",
+  "gpu_count": 1,
+  "created_at": "2026-04-14T12:00:00Z",
+  "updated_at": "2026-04-14T12:00:00Z"
 }
 ```
 
 **Error (4xx/5xx)**
 ```json
 {
-  "error": "Error message",
-  "code": "ERROR_CODE",
-  "requestId": "req_xyz789"
+  "detail": "Invalid API key"
 }
 ```
 
-## Error Codes
+## Common Status Codes
 
-| Status | Code | Description |
-|--------|------|-------------|
-| 400 | `INVALID_REQUEST` | Malformed request body |
-| 400 | `INVALID_IMAGE` | Image could not be processed |
-| 401 | `INVALID_API_KEY` | Invalid or missing API key |
-| 402 | `INSUFFICIENT_CREDITS` | Not enough credits |
-| 404 | `NOT_FOUND` | Resource not found |
-| 429 | `RATE_LIMITED` | Too many requests |
-| 500 | `INTERNAL_ERROR` | Server error |
+| Status | Meaning |
+|--------|---------|
+| 400 | Invalid request or unsupported state transition |
+| 401 | Missing or invalid auth headers |
+| 404 | Resource not found or not owned by the caller |
+| 422 | Request body failed schema validation |
+| 500 | Unexpected server error |
 
-## Rate Limits
+## Pagination
 
-| Plan | Rate | Burst |
-|------|------|-------|
-| Free | 10/sec | 20 |
-| Pro | 100/sec | 200 |
-| Enterprise | Custom | Custom |
+List endpoints support pagination with `limit` and `offset` query parameters:
 
-Rate limit headers are included in responses:
-- `X-RateLimit-Limit` - Requests allowed per second
-- `X-RateLimit-Remaining` - Requests remaining in current window
-- `Retry-After` - Seconds to wait (on 429 responses)
+```bash
+curl "https://api.veri.studio/v1/datasets?limit=10&offset=20" \
+  -H "Authorization: Bearer vk_your_api_key"
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `limit` | integer | 20 | Maximum number of items to return |
+| `offset` | integer | 0 | Number of items to skip |

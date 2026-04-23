@@ -1,0 +1,57 @@
+---
+title: "Recommended Models"
+description: "How to choose the right model for your Veri workflow"
+---
+
+## Overview
+
+The right model depends on what you are optimizing for: iteration speed, output quality, structured behavior, or deployment constraints.
+
+For most teams, the best starting point is the smallest model that can already do the task reasonably well before fine-tuning.
+
+## Quick Recommendations
+
+### Start small for fast iteration
+
+If you are validating a workflow, reward function, or dataset shape, start with a smaller instruct model first. That gives you:
+
+- cheaper experiments
+- faster feedback loops
+- easier debugging when outputs look wrong
+
+### Move up only when quality requires it
+
+Use larger models when you need:
+
+- stronger reasoning
+- better function selection
+- more reliable long-form outputs
+- more headroom after fine-tuning
+
+## Good Starting Questions
+
+Ask yourself:
+
+1. Do I need the cheapest iteration loop or the best possible quality?
+2. Is the task mostly formatting, tool use, reasoning, or domain adaptation?
+3. Do I need a model that is easy to serve in my current stack after training?
+4. How large a checkpoint can I realistically deploy?
+
+## Current Practical Advice
+
+- Start with a small or mid-sized instruct model for early experiments.
+- Use structured datasets when targeting function calling or tool use.
+- Keep the task narrow before expanding to broader behaviors.
+- Make sure the model you train is also one you are comfortable serving afterward.
+
+## Explore the Model Catalog
+
+The frontend model library is the best place to browse currently presented model options:
+
+[Open the model library](https://veri.studio/models)
+
+## Next Steps
+
+- [Quickstart](/quickstart)
+- [Datasets](/concepts/datasets)
+- [Reward Functions](/concepts/reward-functions)

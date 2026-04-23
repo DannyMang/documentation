@@ -1,0 +1,110 @@
+---
+title: "GRPO Training"
+description: "How Group Relative Policy Optimization works in Veri"
+---
+
+## What is GRPO?
+
+Group Relative Policy Optimization (GRPO) is the fine-tuning method Veri uses when training against reward signals. Unlike supervised fine-tuning (SFT), which learns from fixed examples, GRPO lets the model explore different responses and learn from rewards -- improving the behaviors you care about.
+
+GRPO was introduced by the DeepSeek team and is the algorithm behind models like DeepSeek-R1. It is a variant of policy optimization that avoids the need for a separate critic/value model, making it more memory-efficient than PPO.
+
+## How GRPO Works
+
+<Steps>
+
+<Step title="Generate completions">
+For each prompt in the dataset, the model generates multiple completions. In Veri's current schema this is controlled by `rollouts_per_prompt`.
+</Step>
+
+<Step title="Score with reward function">
+Your reward function scores every completion. This produces a set of scores for each prompt.
+</Step>
+
+<Step title="Compute relative advantages">
+Instead of using an absolute baseline (like a value network in PPO), GRPO computes advantages relative to the group. Completions that scored above the group mean get positive advantage; those below get negative advantage.
+</Step>
+
+<Step title="Update the policy">
+The model's weights are updated to increase the probability of high-advantage completions and decrease the probability of low-advantage ones, subject to a KL divergence constraint against the reference model.
+</Step>
+
+</Steps>
+
+## Why GRPO Over PPO?
+
+| | GRPO | PPO |
+|---|---|---|
+| **Critic model** | Not needed | Required (extra memory) |
+| **Memory efficiency** | Higher | Lower |
+| **Baseline** | Group-relative | Learned value function |
+| **Stability** | Comparable | Comparable |
+| **Implementation** | Simpler | More complex |
+
+GRPO achieves comparable results to PPO while using significantly less GPU memory, since it does not need to maintain a separate value model.
+
+## Hyperparameters
+
+When creating a training job, you can configure the following hyperparameters:
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `learning_rate` | `1e-6` | Learning rate for the optimizer. Lower values are more stable but slower. |
+| `num_epochs` | `1` | Number of passes through the dataset. |
+| `max_steps` | `null` | Optional explicit step cap. |
+| `rollouts_per_prompt` | `8` | Number of completions generated per prompt. Higher values improve group comparisons but use more compute. |
+| `kl_coef` | `0.001` | KL penalty coefficient against the reference model. |
+| `max_prompt_length` | `1024` | Prompt token cap. |
+| `max_response_length` | `2048` | Completion token cap. |
+| `global_batch_size` | `64` | Total batch size across the job. |
+| `seed` | `42` | Random seed. |
+
+### Tuning Tips
+
+<AccordionGroup>
+
+<Accordion title="Learning rate">
+Start with `1e-6` for most models. If training is unstable (reward oscillates), lower it. If reward barely moves, test a slightly higher value.
+</Accordion>
+
+<Accordion title="rollouts_per_prompt">
+More rollouts per prompt give a better estimate of the group advantage, but cost proportionally more compute. Start with 8 unless you are constrained by memory or time.
+</Accordion>
+
+<Accordion title="global_batch_size and max_response_length">
+These two settings are usually the first levers to pull when you hit OOM conditions. Recent end-to-end testing hit an A100 40GB memory ceiling, so conservative response lengths are still the safer default.
+</Accordion>
+
+<Accordion title="num_epochs">
+1-3 epochs is typical for reward-based fine-tuning. More epochs risk overfitting to the reward function.
+</Accordion>
+
+</AccordionGroup>
+
+## Infrastructure
+
+Veri currently routes jobs to Modal-backed NVIDIA GPUs:
+
+- **A100 (80GB)** -- Suitable for models up to ~13B parameters.
+- **H100 (80GB)** -- Faster training, recommended for larger models or faster iteration.
+
+GPU type and count are auto-recommended from model size if the request omits them. You can still override the selection explicitly in the `gpu` object on job creation.
+
+The request can also choose a `checkpoint_destination`, which lets the final checkpoint land in Veri-managed storage or your own S3, GCS, or Azure location.
+
+## Monitoring
+
+During training, you can:
+
+- **Stream logs** via the `GET /v1/training_jobs/{id}/logs` SSE endpoint to see real-time loss and reward metrics.
+- **View Grafana dashboards** linked from your Veri dashboard for detailed training curves, GPU utilization, and memory usage.
+
+## Output
+
+When training completes, Veri produces a model checkpoint in HuggingFace format. This includes:
+
+- Model weights (`pytorch_model.bin` or safetensors)
+- Tokenizer files
+- Model configuration
+
+The checkpoint can be loaded directly with HuggingFace Transformers for inference or further fine-tuning. While the API contract is in place, the current platform docs intentionally call out that the fully polished successful public training run is still being finalized.

@@ -1,6 +1,6 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
+  "theme": "sequoia",
   "name": "Veri Documentation",
   "colors": {
     "primary": "#468F7D",
@@ -18,21 +18,28 @@
             "pages": [
               "index",
               "quickstart",
-              "authentication"
+              "cli",
+              "authentication",
+              "deployment"
+            ]
+          },
+          {
+            "group": "Training",
+            "pages": [
+              "playground",
+              "function-calling",
+              "supervised-finetuning",
+              "concepts/reward-functions",
+              "concepts/datasets",
+              "concepts/grpo-training"
             ]
           },
           {
             "group": "SDKs",
             "pages": [
-              "sdks/python",
-              "sdks/typescript"
-            ]
-          },
-          {
-            "group": "Concepts",
-            "pages": [
-              "concepts/detection",
-              "concepts/caching"
+              "api-sdk",
+              "cli",
+              "sdks/python"
             ]
           }
         ]
@@ -47,31 +54,53 @@
             ]
           },
           {
-            "group": "Detection",
+            "group": "Datasets",
             "pages": [
-              "api-reference/detect",
-              "api-reference/detect-url"
+              "api-reference/datasets"
             ]
           },
           {
-            "group": "Configuration",
+            "group": "Reward Functions",
             "pages": [
-              "api-reference/models",
-              "api-reference/config"
+              "api-reference/reward-functions"
+            ]
+          },
+          {
+            "group": "Training Jobs",
+            "pages": [
+              "api-reference/training-jobs"
+            ]
+          },
+          {
+            "group": "Cost",
+            "pages": [
+              "api-reference/cost"
+            ]
+          },
+          {
+            "group": "API Keys",
+            "pages": [
+              "api-reference/api-keys"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Resources",
+        "groups": [
+          {
+            "group": "Guides",
+            "pages": [
+              "recommended-models",
+              "cookbook",
+              "security-compliance",
+              "changelog"
             ]
           }
         ]
       }
     ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "GitHub",
-          "href": "https://github.com/ashworks1706/veri",
-          "icon": "github"
-        }
-      ]
-    }
+    "global": {}
   },
   "logo": {
     "light": "/logo/light.svg",
@@ -93,8 +122,7 @@
   "api": {
     "baseUrl": "https://api.veri.studio",
     "auth": {
-      "method": "key",
-      "name": "X-API-Key"
+      "method": "bearer"
     }
   },
   "footer": {

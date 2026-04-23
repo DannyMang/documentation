@@ -1,0 +1,170 @@
+---
+title: "Reward Functions"
+description: "How to write reward functions for GRPO training"
+---
+
+## Overview
+
+A reward function is the core of fine-tuning with GRPO. It tells the training system what "good" model output looks like by assigning a numerical score to each completion. During training, the model learns to produce outputs that maximize these scores.
+
+Veri currently supports two reward file formats.
+
+## `trl` Format
+
+This is the current default in the control plane. Your file must contain `def reward(`:
+
+```python
+def reward(completions, answer=None, **kwargs):
+    """Return one score per completion."""
+    return [1.0 if answer and str(answer) in c else 0.0 for c in completions]
+```
+
+The function receives a batch of completions and returns a list of scores of the same length.
+
+## `miles` Format
+
+This format lines up with the Miles runner interface and must contain `async def reward(`:
+
+```python
+async def reward(args, sample, **kwargs) -> float:
+    text = sample.response
+    label = sample.label
+    if label and str(label) in text:
+        return 1.0
+    if "<answer>" in text and "</answer>" in text:
+        return 0.5
+    return 0.0
+```
+
+Use this format when you want a Miles-native reward function with access to the `sample` object.
+
+## Examples
+
+### Format Checking
+
+Reward completions that follow a specific format (e.g., step-by-step reasoning):
+
+```python
+import re
+
+def reward(completions, **kwargs):
+    scores = []
+    for completion in completions:
+        score = 0.0
+        # Reward structured thinking
+        if "<think>" in completion and "</think>" in completion:
+            score += 0.3
+        # Reward having a final answer
+        if re.search(r"\\boxed\{.+\}", completion):
+            score += 0.5
+        # Reward reasonable length
+        if 50 < len(completion) < 2000:
+            score += 0.2
+        scores.append(score)
+    return scores
+```
+
+### Correctness Verification
+
+Reward completions that produce the correct answer for math problems:
+
+```python
+import re
+
+def reward(completions, answer=None, **kwargs):
+    scores = []
+    for completion in completions:
+        match = re.search(r"\\boxed\{(.+?)\}", completion)
+        if match and answer and match.group(1).strip() == str(answer):
+            scores.append(1.0)
+        else:
+            scores.append(0.0)
+    return scores
+```
+
+### Code Quality
+
+Reward completions that contain valid Python code:
+
+```python
+import ast
+
+def reward(completions, **kwargs):
+    scores = []
+    for completion in completions:
+        # Extract code blocks
+        code = extract_code_block(completion)
+        if not code:
+            scores.append(0.0)
+            continue
+        # Check if the code parses
+        try:
+            ast.parse(code)
+            scores.append(1.0)
+        except SyntaxError:
+            scores.append(0.0)
+    return scores
+
+def extract_code_block(text: str) -> str:
+    if "```python" in text:
+        start = text.index("```python") + len("```python")
+        end = text.index("```", start)
+        return text[start:end].strip()
+    return ""
+```
+
+## Best Practices
+
+<AccordionGroup>
+
+<Accordion title="Keep scores bounded">
+Use a consistent scoring range like `[0.0, 1.0]`. Extreme outlier scores can destabilize training.
+</Accordion>
+
+<Accordion title="Combine multiple signals">
+A good reward function often checks several properties -- format, correctness, length, style. Use additive scoring to combine them.
+</Accordion>
+
+<Accordion title="Make rewards differentiable in behavior">
+Avoid pure binary (0 or 1) scoring when possible. Partial credit helps the model learn faster by providing a smoother reward signal.
+</Accordion>
+
+<Accordion title="Test locally before uploading">
+Run your reward function against sample completions locally to verify it produces sensible scores before uploading to Veri.
+</Accordion>
+
+<Accordion title="Match the format exactly">
+The control plane currently checks for `def reward(` in `trl` files and `async def reward(` in `miles` files before accepting the upload.
+</Accordion>
+
+<Accordion title="Available imports">
+Your reward function runs inside the training environment. Standard library modules are safe assumptions; additional package availability depends on the runner image.
+</Accordion>
+
+</AccordionGroup>
+
+## Uploading
+
+Upload your reward function via the API or SDK:
+
+<CodeGroup>
+
+```python Python SDK
+import veri
+
+client = veri.Client(api_key="your-internal-service-key", base_url="http://localhost:8000")
+client._http.headers["X-Veri-User-Id"] = "user_123"
+reward = client.reward_functions.upload("reward.py", format="trl")
+print(f"Reward function ID: {reward.id}")
+```
+
+```bash cURL
+curl -X POST http://localhost:8000/v1/reward_functions \
+  -H "Authorization: Bearer $VERI_INTERNAL_API_KEY" \
+  -H "X-Veri-User-Id: $VERI_USER_ID" \
+  -F "name=my_reward" \
+  -F "file=@reward.py" \
+  -F "format=trl"
+```
+
+</CodeGroup>

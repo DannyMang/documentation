@@ -1,0 +1,85 @@
+---
+title: "API / SDK"
+description: "Use Veri through the REST API, Python SDK, or CLI"
+---
+
+## Overview
+
+Veri can be used through three developer entry points:
+
+- the REST API
+- the Python SDK
+- the CLI
+
+They all map to the same core workflow: create datasets, upload reward functions, submit training jobs, poll status, and retrieve final checkpoints.
+
+## Choose Your Interface
+
+### REST API
+
+Use the REST API if you want full control over requests, integration with your own services, or language-agnostic access.
+
+Best for:
+
+- backend integrations
+- direct HTTP workflows
+- custom automation outside Python
+
+Start here:
+
+- [API Reference](/api-reference/introduction)
+- [Training Jobs API](/api-reference/training-jobs)
+
+### Python SDK
+
+Use the Python SDK if you want the fastest programmatic path in Python.
+
+The current SDK supports:
+
+- dataset upload, connect, validate, list, get
+- reward function upload, list, get
+- training job create, get, list, cancel
+- checkpoint download helpers
+- polling with `job.wait()`
+
+Start here:
+
+- [Python SDK](/sdks/python)
+
+### CLI
+
+Use the CLI if you want a lightweight local workflow for logging in, storing credentials, and bootstrapping SDK usage.
+
+The current CLI supports:
+
+- `veri login`
+- `veri whoami`
+- `veri logout`
+
+Start here:
+
+- [CLI](/cli)
+
+## Typical Flow
+
+```bash
+# 1. Log in locally
+veri login
+
+# 2. Use the SDK or raw API calls
+# 3. Submit a training job
+# 4. Poll job status
+# 5. Download or deploy the final checkpoint
+```
+
+## Current Notes
+
+- The API surface is moving faster than the polished public auth story.
+- The Python SDK already mirrors the main control-plane resources.
+- The CLI is intentionally minimal and focused on credential management.
+
+If you are unsure where to start, the best path today is:
+
+1. [CLI](/cli) for local setup
+2. [Python SDK](/sdks/python) for scripting
+3. [API Reference](/api-reference/introduction) for exact request shapes

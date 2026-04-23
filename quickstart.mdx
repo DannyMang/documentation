@@ -1,137 +1,205 @@
 ---
 title: "Quickstart"
-description: "Start detecting AI-generated images in minutes"
+description: "Submit your first fine-tuning job in minutes"
 ---
 
 ## Prerequisites
 
 Before you begin, you'll need:
-- A Veri API key (get one at [dashboard.tryveri.com](https://dashboard.tryveri.com))
-- Python 3.10+ or Node.js 18+
-
-## Installation
-
-<CodeGroup>
-
-```bash Python
-pip install veri-sdk
-```
-
-```bash TypeScript
-npm install @veri/sdk
-```
-
-</CodeGroup>
-
-## Your First Detection
-
-<Steps>
-
-<Step title="Initialize the client">
-Create a client with your API key:
-
-<CodeGroup>
-
-```python Python
-from veri import VeriClient
-
-client = VeriClient(api_key="your-api-key")
-```
-
-```typescript TypeScript
-import { VeriClient } from '@veri/sdk';
-
-const client = new VeriClient({ apiKey: 'your-api-key' });
-```
-
-</CodeGroup>
-</Step>
-
-<Step title="Detect an image">
-Pass an image to the detect method:
-
-<CodeGroup>
-
-```python Python
-# From a file
-result = client.detect(open("suspect_image.jpg", "rb"))
-
-# From bytes
-with open("suspect_image.jpg", "rb") as f:
-    result = client.detect(f.read())
-
-# From a URL
-result = client.detect_url("https://example.com/image.jpg")
-```
-
-```typescript TypeScript
-// From a buffer
-const result = await client.detect(imageBuffer);
-
-// From a URL
-const result = await client.detectUrl('https://example.com/image.jpg');
-```
-
-</CodeGroup>
-</Step>
-
-<Step title="Interpret the results">
-The detection result contains:
-
-<CodeGroup>
-
-```python Python
-print(f"Detection ID: {result.id}")
-print(f"Is AI-generated: {result.is_fake}")
-print(f"Confidence: {result.confidence:.1%}")
-print(f"Processing time: {result.processing_time_ms}ms")
-
-# Model-specific scores
-for score in result.model_scores:
-    print(f"  {score.model}: {score.score:.1%}")
-```
-
-```typescript TypeScript
-console.log(`Detection ID: ${result.id}`);
-console.log(`Is AI-generated: ${result.isFake}`);
-console.log(`Confidence: ${(result.confidence * 100).toFixed(1)}%`);
-console.log(`Processing time: ${result.processingTimeMs}ms`);
-
-// Model-specific scores
-result.modelScores.forEach(score => {
-  console.log(`  ${score.model}: ${(score.score * 100).toFixed(1)}%`);
-});
-```
-
-</CodeGroup>
-</Step>
-
-</Steps>
-
-## Understanding Results
-
-| Field | Description |
-|-------|-------------|
-| `is_fake` / `isFake` | `true` if the image is likely AI-generated |
-| `confidence` | Overall confidence score (0-1) |
-| `model_scores` / `modelScores` | Individual scores from each detection model |
-| `cached` | Whether the result came from cache |
-| `processing_time_ms` / `processingTimeMs` | Total inference time |
+- Access to the Veri web dashboard, or the internal service-key flow for local development
+- Python 3.10+
+- A dataset, either as JSONL or from a supported external source
+- A Python reward function in `trl` or `miles` format
 
 <Note>
-A `confidence` of 0.5 is the default threshold. Scores above 0.5 indicate the image is likely AI-generated.
+The current PoC is dashboard-first. Direct SDK and cURL usage against the control plane still depends on the trusted proxy auth path described in [Authentication](/authentication).
 </Note>
+
+## Recommended First Run
+
+The easiest way to exercise the product today is:
+
+1. Sign in through the web app.
+2. Upload or connect a dataset.
+3. Upload a reward function.
+4. Submit a fine-tuning job from the dashboard.
+5. Watch the job status, cost surfaces, and billing state update as the run progresses.
+
+## Local / Internal API Walkthrough
+
+These examples match the current control-plane request shapes.
+
+### Set local auth headers
+
+```bash
+export VERI_BASE_URL="http://localhost:8000"
+export VERI_INTERNAL_API_KEY="your-internal-service-key"
+export VERI_USER_ID="user_123"
+```
+
+### Upload a JSONL dataset
+
+Each row must include a `prompt` field. The value can be plain text or a chat-style message array.
+
+```json
+{"prompt": "What is 15 * 23?"}
+{"prompt": "Solve for x: 2x + 5 = 17", "expected_answer": "6"}
+```
+
+Upload it:
+
+```bash
+curl -X POST "$VERI_BASE_URL/v1/datasets?name=math_prompts" \
+  -H "Authorization: Bearer $VERI_INTERNAL_API_KEY" \
+  -H "X-Veri-User-Id: $VERI_USER_ID" \
+  -F "file=@math_prompts.jsonl"
+```
+
+### Or connect an external dataset
+
+For example, a Hugging Face dataset:
+
+```bash
+curl -X POST "$VERI_BASE_URL/v1/datasets/connect" \
+  -H "Authorization: Bearer $VERI_INTERNAL_API_KEY" \
+  -H "X-Veri-User-Id: $VERI_USER_ID" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "gsm8k-train",
+    "source_type": "hf",
+    "hf_dataset": "gsm8k",
+    "hf_config": {
+      "split": "train",
+      "column_mapping": {
+        "question": "prompt",
+        "answer": "label"
+      }
+    }
+  }'
+```
+
+You can validate a connection before creating it:
+
+```bash
+curl -X POST "$VERI_BASE_URL/v1/datasets/connect/validate" \
+  -H "Authorization: Bearer $VERI_INTERNAL_API_KEY" \
+  -H "X-Veri-User-Id: $VERI_USER_ID" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source_type": "s3",
+    "source_uri": "s3://my-bucket/prompts.jsonl"
+  }'
+```
+
+### Upload a reward function
+
+TRL-format reward functions are currently the default:
+
+```python
+def reward(completions, answer=None, **kwargs):
+    scores = []
+    for completion in completions:
+        if answer and str(answer) in completion:
+            scores.append(1.0)
+        elif "<answer>" in completion and "</answer>" in completion:
+            scores.append(0.5)
+        else:
+            scores.append(0.0)
+    return scores
+```
+
+Upload it:
+
+```bash
+curl -X POST "$VERI_BASE_URL/v1/reward_functions" \
+  -H "Authorization: Bearer $VERI_INTERNAL_API_KEY" \
+  -H "X-Veri-User-Id: $VERI_USER_ID" \
+  -F "name=math_reward" \
+  -F "format=trl" \
+  -F "file=@reward.py"
+```
+
+Use `format=miles` if your file defines `async def reward(args, sample, **kwargs) -> float`.
+
+### Submit a training job
+
+```json
+{
+  "base_model": "Qwen/Qwen3-4B",
+  "dataset_id": "ds_abc123",
+  "reward_function_id": "rf_def456",
+  "output_name": "qwen3-4b-math",
+  "hyperparameters": {
+    "learning_rate": 1e-6,
+    "num_epochs": 1,
+    "rollouts_per_prompt": 8,
+    "max_response_length": 2048,
+    "global_batch_size": 64
+  },
+  "gpu": {
+    "gpu_type": "A100-80GB",
+    "gpu_count": 1
+  },
+  "checkpoint_destination": {
+    "type": "veri"
+  }
+}
+```
+
+```bash
+curl -X POST "$VERI_BASE_URL/v1/training_jobs" \
+  -H "Authorization: Bearer $VERI_INTERNAL_API_KEY" \
+  -H "X-Veri-User-Id: $VERI_USER_ID" \
+  -H "Content-Type: application/json" \
+  -d @job.json
+```
+
+### Monitor the job
+
+Poll status:
+
+```bash
+curl "$VERI_BASE_URL/v1/training_jobs/job_xyz789" \
+  -H "Authorization: Bearer $VERI_INTERNAL_API_KEY" \
+  -H "X-Veri-User-Id: $VERI_USER_ID"
+```
+
+Stream logs:
+
+```bash
+curl -N "$VERI_BASE_URL/v1/training_jobs/job_xyz789/logs" \
+  -H "Authorization: Bearer $VERI_INTERNAL_API_KEY" \
+  -H "X-Veri-User-Id: $VERI_USER_ID"
+```
+
+When a job is `running` or `completed`, the response includes `dashboard_url` for Grafana.
+
+### Download the final checkpoint
+
+When the job reaches `completed`, fetch the presigned URL:
+
+```bash
+curl "$VERI_BASE_URL/v1/training_jobs/job_xyz789/model" \
+  -H "Authorization: Bearer $VERI_INTERNAL_API_KEY" \
+  -H "X-Veri-User-Id: $VERI_USER_ID"
+```
+
+## What to Expect Today
+
+- The end-to-end control-plane loop is wired up and job state transitions are working.
+- Billing, cost attribution, and Stripe deductions are implemented in the control plane.
+- Recent end-to-end validation proved the full platform path but hit an A100 40GB OOM during training, so the docs now reflect the current state rather than assuming every public quickstart succeeds yet.
 
 ## Next Steps
 
 <CardGroup cols={2}>
 
-<Card title="Batch Processing" icon="layer-group" href="/concepts/batch-processing">
-  Process multiple images efficiently.
+<Card title="Reward Functions" icon="star" href="/concepts/reward-functions">
+  Learn the current `trl` and `miles` reward formats.
 </Card>
 
 <Card title="API Reference" icon="code" href="/api-reference/introduction">
-  Explore all API endpoints.
+  Explore the live request and response shapes.
 </Card>
 
 </CardGroup>

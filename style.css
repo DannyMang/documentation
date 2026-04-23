@@ -1,0 +1,50 @@
+/* Mintlify applies repo CSS site-wide. Style the next/previous pager like buttons. */
+#pagination {
+  margin-top: 2rem;
+}
+
+#pagination a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 52px;
+  padding: 0.85rem 1.1rem;
+  border: 1px solid rgba(70, 143, 125, 0.22);
+  border-radius: 14px;
+  background: rgba(70, 143, 125, 0.04);
+  box-shadow: 0 1px 2px rgba(32, 13, 13, 0.04);
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+#pagination a:hover {
+  border-color: rgba(70, 143, 125, 0.42);
+  background: rgba(70, 143, 125, 0.08);
+  box-shadow: 0 8px 20px rgba(32, 13, 13, 0.08);
+  transform: translateY(-1px);
+}
+
+#pagination a span {
+  font-weight: 600;
+}
+
+#pagination a svg {
+  flex-shrink: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  #pagination a {
+    border-color: rgba(189, 230, 137, 0.2);
+    background: rgba(189, 230, 137, 0.06);
+    box-shadow: none;
+  }
+
+  #pagination a:hover {
+    border-color: rgba(189, 230, 137, 0.36);
+    background: rgba(189, 230, 137, 0.12);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.22);
+  }
+}
