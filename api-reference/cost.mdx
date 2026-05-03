@@ -14,9 +14,8 @@ Get an overview of attributed job spend for the last `N` days.
 ### Request
 
 ```bash
-curl "http://localhost:8000/v1/cost/summary?days=30" \
-  -H "Authorization: Bearer $VERI_INTERNAL_API_KEY" \
-  -H "X-Veri-User-Id: $VERI_USER_ID"
+curl "https://api.veri.studio/v1/cost/summary?days=30" \
+  -H "Authorization: Bearer vk_your_api_key"
 ```
 
 ### Response
@@ -41,9 +40,8 @@ curl "http://localhost:8000/v1/cost/summary?days=30" \
 ### Request
 
 ```bash
-curl "http://localhost:8000/v1/cost/by-provider?days=30" \
-  -H "Authorization: Bearer $VERI_INTERNAL_API_KEY" \
-  -H "X-Veri-User-Id: $VERI_USER_ID"
+curl "https://api.veri.studio/v1/cost/by-provider?days=30" \
+  -H "Authorization: Bearer vk_your_api_key"
 ```
 
 ### Response
@@ -66,9 +64,8 @@ curl "http://localhost:8000/v1/cost/by-provider?days=30" \
 ### Request
 
 ```bash
-curl "http://localhost:8000/v1/cost/by-gpu?days=30" \
-  -H "Authorization: Bearer $VERI_INTERNAL_API_KEY" \
-  -H "X-Veri-User-Id: $VERI_USER_ID"
+curl "https://api.veri.studio/v1/cost/by-gpu?days=30" \
+  -H "Authorization: Bearer vk_your_api_key"
 ```
 
 ### Response
@@ -113,9 +110,8 @@ Estimate the cost of a run from GPU shape, duration, provider, and markup.
 ### Request
 
 ```bash
-curl "http://localhost:8000/v1/cost/estimate?gpu_type=A100-80GB&gpu_count=1&duration_minutes=60&provider=modal&markup=1.3" \
-  -H "Authorization: Bearer $VERI_INTERNAL_API_KEY" \
-  -H "X-Veri-User-Id: $VERI_USER_ID"
+curl "https://api.veri.studio/v1/cost/estimate?gpu_type=A100-80GB&gpu_count=1&duration_minutes=60&provider=modal&markup=1.3" \
+  -H "Authorization: Bearer vk_your_api_key"
 ```
 
 ### Response
@@ -142,9 +138,8 @@ curl "http://localhost:8000/v1/cost/estimate?gpu_type=A100-80GB&gpu_count=1&dura
 ### Request
 
 ```bash
-curl "http://localhost:8000/v1/cost/monthly-projection?jobs_per_day=100&avg_duration_minutes=30&gpu_type=A100-80GB&gpu_count=1&provider=modal" \
-  -H "Authorization: Bearer $VERI_INTERNAL_API_KEY" \
-  -H "X-Veri-User-Id: $VERI_USER_ID"
+curl "https://api.veri.studio/v1/cost/monthly-projection?jobs_per_day=100&avg_duration_minutes=30&gpu_type=A100-80GB&gpu_count=1&provider=modal" \
+  -H "Authorization: Bearer vk_your_api_key"
 ```
 
 ### Response
@@ -171,9 +166,8 @@ Compare GPU costs across providers for a given job configuration.
 ### Request
 
 ```bash
-curl "http://localhost:8000/v1/cost/compare?gpu_type=A100-80GB&gpu_count=1&duration_minutes=60" \
-  -H "Authorization: Bearer $VERI_INTERNAL_API_KEY" \
-  -H "X-Veri-User-Id: $VERI_USER_ID"
+curl "https://api.veri.studio/v1/cost/compare?gpu_type=A100-80GB&gpu_count=1&duration_minutes=60" \
+  -H "Authorization: Bearer vk_your_api_key"
 ```
 
 ### Response
@@ -195,9 +189,8 @@ Get the raw pricing table keyed by provider and GPU type.
 ### Request
 
 ```bash
-curl http://localhost:8000/v1/cost/rates \
-  -H "Authorization: Bearer $VERI_INTERNAL_API_KEY" \
-  -H "X-Veri-User-Id: $VERI_USER_ID"
+curl https://api.veri.studio/v1/cost/rates \
+  -H "Authorization: Bearer vk_your_api_key"
 ```
 
 ### Response

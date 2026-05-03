@@ -1,62 +1,91 @@
 ---
 title: "Supervised Fine-Tuning"
-description: "Current status of supervised fine-tuning in Veri"
+description: "Fine-tune video generation models with LoRA SFT"
 ---
 
 ## Overview
 
-Supervised fine-tuning (SFT) is a natural workflow for many teams, especially when you already have clean input/output examples and want to improve instruction following directly.
+Veri supports supervised fine-tuning (SFT) for video generation models using LoRA via the `sft_video_gen` training method. This allows you to fine-tune supported video models on your own video datasets with parameter-efficient LoRA adapters.
 
-Right now, Veri's implemented training path is centered on GRPO and reward-based fine-tuning.
+## Supported Models
 
-<Warning>
-SFT is on the roadmap, but it is not part of the currently implemented training path yet.
-</Warning>
+Veri currently supports LoRA SFT for the following video generation model families:
 
-## What Veri Supports Today
+- **CogVideoX** (1.5B, 2B, 5B)
+- **Wan2.1** (1.3B, 14B)
+- **HunyuanVideo** (13B)
+- **LTX Video** (2B, 13B)
+- **Mochi** (1B)
 
-Today, Veri supports:
+Browse the full catalog in the [model library](https://veri.studio/models) and filter by the **Video Gen** tab.
 
-- reward-based fine-tuning with GRPO
-- custom reward functions
-- flexible dataset ingestion
-- explicit checkpoint destinations
-- cost, billing, and job lifecycle tracking
+## How It Works
 
-If your immediate goal is to improve formatting, correctness, or structured outputs, GRPO may still work well even if you originally thought of the task as SFT.
+Video gen SFT uses diffusers LoRA training scripts via `accelerate`. Instead of a reward function, you provide a dataset of video examples and the training loop learns to match them directly.
 
-## When SFT Will Be a Better Fit
+Key differences from GRPO:
 
-SFT will be the better choice when you have:
+| | GRPO | Video Gen SFT |
+|---|---|---|
+| **Reward function** | Required | Not used |
+| **Output** | Full model checkpoint | LoRA adapter |
+| **Training method** | Reinforcement learning | Supervised imitation |
+| **Use case** | Language model behaviors | Video generation style/content |
 
-- high-quality prompt/response pairs
-- a clear desired answer for each example
-- less need for nuanced reward shaping
-- a task where direct imitation is simpler than scoring
+## Hyperparameters
 
-## What to Do in the Meantime
+When creating a video gen SFT job, use `method: "sft_video_gen"` and configure these hyperparameters:
 
-If you want to move now:
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `learning_rate` | `1e-3` | Learning rate for the optimizer. |
+| `num_epochs` | `30` | Number of training epochs. |
+| `max_steps` | `null` | Optional explicit step cap. |
+| `lora_rank` | `64` | LoRA adapter rank. |
+| `lora_alpha` | `64` | LoRA scaling factor. |
+| `resolution_height` | `480` | Video frame height in pixels. |
+| `resolution_width` | `720` | Video frame width in pixels. |
+| `num_frames` | `49` | Number of video frames per sample. |
+| `fps` | `8` | Frames per second. |
+| `batch_size` | `1` | Per-device batch size. |
+| `gradient_accumulation_steps` | `4` | Gradient accumulation steps. |
+| `seed` | `42` | Random seed. |
 
-1. Start with the [Quickstart](/quickstart).
-2. Turn your examples into a dataset with fields that your reward function can inspect.
-3. Write a reward that scores closeness to the behavior you want.
-4. Keep the scope narrow and iterate on the reward signal.
+## Example Request
 
-## Roadmap Status
+```bash
+curl -X POST https://api.veri.studio/v1/training_jobs \
+  -H "Authorization: Bearer vk_your_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "base_model": "THUDM/CogVideoX-2b",
+    "dataset_id": "ds_abc123",
+    "method": "sft_video_gen",
+    "output_name": "cogvideo-2b-custom",
+    "hyperparameters": {
+      "learning_rate": 1e-3,
+      "num_epochs": 30,
+      "lora_rank": 64,
+      "resolution_height": 480,
+      "resolution_width": 720
+    },
+    "gpu": {
+      "gpu_type": "A100-80GB",
+      "gpu_count": 1
+    }
+  }'
+```
 
-The project tracker already calls out:
+<Note>
+Do not include a `reward_function_id` when using `sft_video_gen`. The API will reject the request if one is provided.
+</Note>
 
-- SFT training as a planned additional method
-- DPO as another future method
-- LoRA fine-tuning as a later addition once upstream support improves
+## Output
 
-So the honest current position is:
+Video gen SFT produces a LoRA adapter checkpoint rather than a full model. The adapter can be loaded with the diffusers library and applied to the base model for inference.
 
-**Veri is already useful for fine-tuning, but the implemented path today is GRPO rather than classic SFT.**
+## Next Steps
 
-## Best Next Steps
-
-- [GRPO Training](/concepts/grpo-training)
-- [Reward Functions](/concepts/reward-functions)
 - [Datasets](/concepts/datasets)
+- [GRPO Training](/concepts/grpo-training) for reward-based language model fine-tuning
+- [Deployment](/deployment) for serving your fine-tuned model

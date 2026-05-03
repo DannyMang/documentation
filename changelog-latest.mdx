@@ -5,40 +5,52 @@ description: "Most recent platform updates in Veri"
 
 ## Latest
 
-### Multi-source datasets, checkpoint destinations, and end-to-end validation
+### Production API hardening
 
-Recent work added:
+- ECS Fargate deployment behind HTTPS ALB replaces EC2/Docker Compose
+- Production config validation enforces strong keys, Postgres, encryption
+- CORS allowlist via configurable origins
+- Webhook signature enforcement in production
+- CI/CD pipeline with tests, coverage, and security scanning
 
-- multi-source dataset support across uploads, cloud storage, Hugging Face, and databases
-- explicit checkpoint destinations for Veri-managed storage or external buckets
-- end-to-end API validation across the upload-to-training flow
+### Multi-method training
 
-## Supporting Updates
+- Training method dispatch: `grpo` and `sft_video_gen`
+- Video generation SFT via diffusers LoRA training scripts
+- Supported video gen models: CogVideoX, Wan2.1, HunyuanVideo, LTX Video, Mochi
+- Method-specific hyperparameter schemas (GRPO vs SFT Video Gen)
+- Reward function is required for GRPO and forbidden for SFT methods
+- Frontend method column, filter, and detail view
+- API `method` filter on the training jobs list endpoint
 
-### Billing and credits
+### Multi-provider compute
 
-- Stripe customer balance now acts as the credit ledger
-- webhook handling adds credits after successful checkout
-- job completion can deduct credits automatically
-- billing UI now shows real balances and payment methods
+- Lambda Cloud, RunPod, and SF Compute adapters alongside Modal
+- Worker agent for VM-based providers with S3 status protocol
+- SSH key management (encrypted at rest)
+- Provider auto-selection picks the cheapest available for the requested GPU
+- Provider field on training job creation (`modal`, `lambda`, `runpod`, `sfcompute`, or auto)
 
-### Ownership and auth hardening
+### Auth migration
 
-- user ownership checks were tightened across datasets, rewards, and jobs
-- legacy `NULL user_id` records were locked down
-- auth middleware was restructured for the current proxy path and future per-user API keys
+- Migrated authentication from WorkOS to Clerk
+- Billing identity aligned with Clerk user metadata
 
-### Dashboard and proxy improvements
+### Model catalog
 
-- dashboard job responses were cleaned up
-- proxy behavior for streaming and control-plane access was improved
+- 85 curated models: 76 LLMs for GRPO, 10 video gen models for LoRA SFT
+- Model library UI with Video Gen filter tab and LoRA pills
+
+### Dashboard and settings
+
+- Admin console removed and consolidated into settings
+- Settings pages wired to real API data (API keys, errors, overview, training history)
+- TanStack Query client cache for dashboard polling
+- Datasets and evaluations frontend pages with create flows
 
 ## Current Focus Areas
 
-The repository still calls out these active next steps:
-
-- better Modal error capture and OOM hints
-- a polished successful end-to-end training run
-- log streaming improvements
-- public per-user API keys
-- broader observability integration
+- End-to-end training smoke test on production Fargate deployment
+- Stripe webhook flow end-to-end verification
+- Credential rotation (PlanetScale, Stripe, AWS)
+- Testing Lambda/RunPod adapters with real provider API keys

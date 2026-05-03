@@ -75,7 +75,8 @@ That means:
 
 - the model can be loaded with standard Hugging Face tooling
 - the final artifact is the thing users deploy, not an internal training checkpoint
-- the current platform is optimized around full fine-tuned checkpoints, not multi-LoRA serving
+
+GRPO jobs produce full fine-tuned checkpoints. Video gen SFT jobs produce LoRA adapter checkpoints that can be loaded with the diffusers library and applied to the base model.
 
 ## Deployment Options Today
 
@@ -84,9 +85,8 @@ That means:
 If you use `checkpoint_destination.type = "veri"`, fetch the model URL after the job completes:
 
 ```bash
-curl http://localhost:8000/v1/training_jobs/job_xyz789/model \
-  -H "Authorization: Bearer $VERI_INTERNAL_API_KEY" \
-  -H "X-Veri-User-Id: $VERI_USER_ID"
+curl https://api.veri.studio/v1/training_jobs/job_xyz789/model \
+  -H "Authorization: Bearer vk_your_api_key"
 ```
 
 ### Deploy from your own bucket

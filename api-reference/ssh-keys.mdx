@@ -1,0 +1,94 @@
+---
+title: "SSH Keys"
+description: "Manage SSH keys for VM-based compute providers"
+---
+
+SSH keys are used when deploying training jobs to VM-based providers like Lambda Cloud, RunPod, or SF Compute. Keys are encrypted at rest.
+
+## Create SSH Key
+
+<ParamField body="name" type="string" required>
+  A label for the key pair.
+</ParamField>
+
+<ParamField body="public_key" type="string" required>
+  The SSH public key.
+</ParamField>
+
+<ParamField body="private_key" type="string" required>
+  The SSH private key. Encrypted at rest.
+</ParamField>
+
+<ParamField body="provider" type="string">
+  Optional provider hint (e.g., `lambda`, `runpod`, `sfcompute`).
+</ParamField>
+
+### Request
+
+```bash
+curl -X POST https://api.veri.studio/v1/ssh_keys \
+  -H "Authorization: Bearer vk_your_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "lambda-deploy-key",
+    "public_key": "ssh-ed25519 AAAA...",
+    "private_key": "-----BEGIN OPENSSH PRIVATE KEY-----\n...",
+    "provider": "lambda"
+  }'
+```
+
+### Response
+
+```json
+{
+  "id": "sk_abc123",
+  "name": "lambda-deploy-key",
+  "provider": "lambda",
+  "created_at": "2026-05-01T10:00:00Z"
+}
+```
+
+---
+
+## List SSH Keys
+
+### Request
+
+```bash
+curl https://api.veri.studio/v1/ssh_keys \
+  -H "Authorization: Bearer vk_your_api_key"
+```
+
+### Response
+
+```json
+{
+  "items": [
+    {
+      "id": "sk_abc123",
+      "name": "lambda-deploy-key",
+      "provider": "lambda",
+      "created_at": "2026-05-01T10:00:00Z"
+    }
+  ]
+}
+```
+
+---
+
+## Delete SSH Key
+
+### Request
+
+```bash
+curl -X DELETE https://api.veri.studio/v1/ssh_keys/sk_abc123 \
+  -H "Authorization: Bearer vk_your_api_key"
+```
+
+### Response
+
+```json
+{
+  "status": "deleted"
+}
+```

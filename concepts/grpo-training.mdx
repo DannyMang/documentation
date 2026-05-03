@@ -83,12 +83,14 @@ These two settings are usually the first levers to pull when you hit OOM conditi
 
 ## Infrastructure
 
-Veri currently routes jobs to Modal-backed NVIDIA GPUs:
+Veri routes GRPO jobs to NVIDIA GPUs across multiple compute providers:
 
-- **A100 (80GB)** -- Suitable for models up to ~13B parameters.
-- **H100 (80GB)** -- Faster training, recommended for larger models or faster iteration.
+- **Modal** -- Serverless GPU functions with per-second billing.
+- **Lambda Cloud** -- On-demand GPU instances.
+- **RunPod** -- Pod-based GPU compute.
+- **SF Compute** -- VM-based GPU instances.
 
-GPU type and count are auto-recommended from model size if the request omits them. You can still override the selection explicitly in the `gpu` object on job creation.
+Available GPU types include **A100 (80GB)**, **H100 (80GB)**, **L40S**, and others depending on the provider. GPU type and count must be specified explicitly in the `gpu` object on job creation. You can specify a `provider` or omit it to let Veri auto-select the cheapest available option.
 
 The request can also choose a `checkpoint_destination`, which lets the final checkpoint land in Veri-managed storage or your own S3, GCS, or Azure location.
 
@@ -107,4 +109,4 @@ When training completes, Veri produces a model checkpoint in HuggingFace format.
 - Tokenizer files
 - Model configuration
 
-The checkpoint can be loaded directly with HuggingFace Transformers for inference or further fine-tuning. While the API contract is in place, the current platform docs intentionally call out that the fully polished successful public training run is still being finalized.
+The checkpoint can be loaded directly with HuggingFace Transformers for inference or further fine-tuning. The checkpoint can be loaded directly with `AutoModelForCausalLM.from_pretrained()` for inference or further fine-tuning.

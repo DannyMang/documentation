@@ -83,15 +83,13 @@ with open("prompts.jsonl", "w") as f:
 ```python Python SDK
 import veri
 
-client = veri.Client(api_key="your-internal-service-key", base_url="http://localhost:8000")
-client._http.headers["X-Veri-User-Id"] = "user_123"
+client = veri.Client(api_key="vk_your_api_key")
 dataset = client.datasets.upload("prompts.jsonl")
 ```
 
 ```bash cURL
-curl -X POST "http://localhost:8000/v1/datasets?name=my_prompts" \
-  -H "Authorization: Bearer $VERI_INTERNAL_API_KEY" \
-  -H "X-Veri-User-Id: $VERI_USER_ID" \
+curl -X POST "https://api.veri.studio/v1/datasets?name=my_prompts" \
+  -H "Authorization: Bearer vk_your_api_key" \
   -F "file=@prompts.jsonl"
 ```
 

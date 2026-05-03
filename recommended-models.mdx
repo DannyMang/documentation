@@ -5,11 +5,16 @@ description: "How to choose the right model for your Veri workflow"
 
 ## Overview
 
+Veri supports two training methods across different model types:
+
+- **GRPO** for language models (76 curated LLMs)
+- **Video Gen SFT** for video generation models (10 curated models)
+
 The right model depends on what you are optimizing for: iteration speed, output quality, structured behavior, or deployment constraints.
 
-For most teams, the best starting point is the smallest model that can already do the task reasonably well before fine-tuning.
+## Language Models (GRPO)
 
-## Quick Recommendations
+For most teams, the best starting point is the smallest model that can already do the task reasonably well before fine-tuning.
 
 ### Start small for fast iteration
 
@@ -28,30 +33,35 @@ Use larger models when you need:
 - more reliable long-form outputs
 - more headroom after fine-tuning
 
+## Video Generation Models (SFT)
+
+Video gen SFT uses LoRA fine-tuning on supported diffusion models. Currently supported families:
+
+| Family | Sizes | Notes |
+|--------|-------|-------|
+| **CogVideoX** | 1.5B, 2B, 5B | Good starting point for video gen experiments |
+| **Wan2.1** | 1.3B, 14B | Small and large variants |
+| **HunyuanVideo** | 13B | High-quality video generation |
+| **LTX Video** | 2B, 13B | Lightweight to large |
+| **Mochi** | 1B | Smallest video gen option |
+
 ## Good Starting Questions
 
 Ask yourself:
 
 1. Do I need the cheapest iteration loop or the best possible quality?
-2. Is the task mostly formatting, tool use, reasoning, or domain adaptation?
+2. Is the task language-based (GRPO) or video generation (SFT)?
 3. Do I need a model that is easy to serve in my current stack after training?
 4. How large a checkpoint can I realistically deploy?
 
-## Current Practical Advice
-
-- Start with a small or mid-sized instruct model for early experiments.
-- Use structured datasets when targeting function calling or tool use.
-- Keep the task narrow before expanding to broader behaviors.
-- Make sure the model you train is also one you are comfortable serving afterward.
-
 ## Explore the Model Catalog
 
-The frontend model library is the best place to browse currently presented model options:
+The model library is the best place to browse all supported models. Filter by **LLM** or **Video Gen** tabs.
 
 [Open the model library](https://veri.studio/models)
 
 ## Next Steps
 
 - [Quickstart](/quickstart)
-- [Datasets](/concepts/datasets)
-- [Reward Functions](/concepts/reward-functions)
+- [GRPO Training](/concepts/grpo-training)
+- [Supervised Fine-Tuning](/supervised-finetuning) for video gen models

@@ -19,7 +19,6 @@
               "index",
               "quickstart",
               "cli",
-              "authentication",
               "deployment"
             ]
           },
@@ -32,6 +31,15 @@
               "concepts/reward-functions",
               "concepts/datasets",
               "concepts/grpo-training"
+            ]
+          },
+          {
+            "group": "Examples",
+            "pages": [
+              "examples/index",
+              "examples/function-calling",
+              "examples/grpo-domain-qa",
+              "examples/custom-dataset"
             ]
           },
           {
@@ -81,6 +89,18 @@
             "group": "API Keys",
             "pages": [
               "api-reference/api-keys"
+            ]
+          },
+          {
+            "group": "SSH Keys",
+            "pages": [
+              "api-reference/ssh-keys"
+            ]
+          },
+          {
+            "group": "Billing",
+            "pages": [
+              "api-reference/billing"
             ]
           }
         ]

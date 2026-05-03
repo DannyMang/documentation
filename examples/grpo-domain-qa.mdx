@@ -1,0 +1,53 @@
+---
+title: "Improve Domain Answers with GRPO"
+description: "Use a reward function to optimize answers for a domain-specific rubric"
+---
+
+Use this workflow when you can score answer quality better than you can write a perfect target answer. GRPO lets the model explore multiple completions and reinforces the ones that satisfy your rubric.
+
+## What to Prepare
+
+- A prompt dataset with realistic domain questions.
+- A reward function that scores factuality, completeness, formatting, or policy fit.
+- A small first run so you can inspect reward trends before scaling.
+
+## Example Prompt
+
+```json
+{"prompt":"Explain when a customer should choose a reserved GPU pool instead of on-demand training."}
+```
+
+## Example Reward Function
+
+```python
+KEY_TERMS = {"predictable workload", "capacity", "cost", "availability"}
+
+def reward(prompt, completion, reference=None):
+    text = completion.lower()
+    coverage = sum(term in text for term in KEY_TERMS) / len(KEY_TERMS)
+    concise = 1.0 if 80 <= len(completion.split()) <= 180 else 0.6
+    return 0.75 * coverage + 0.25 * concise
+```
+
+## Launch
+
+```bash
+curl -X POST https://api.veri.studio/v1/training_jobs \
+  -H "Authorization: Bearer $VERI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "base_model": "Qwen/Qwen3-4B",
+    "dataset_id": "ds_domain_questions",
+    "reward_function_id": "rf_domain_rubric",
+    "output_name": "domain-qa-grpo",
+    "hyperparameters": {
+      "rollouts_per_prompt": 8,
+      "learning_rate": 0.000001
+    },
+    "gpu": { "gpu_type": "A100-80GB", "gpu_count": 1 }
+  }'
+```
+
+## Monitor
+
+Watch reward curves and sample completions while the job runs. If reward climbs but answers get worse, your reward function is probably too easy to exploit.

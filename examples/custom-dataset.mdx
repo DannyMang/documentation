@@ -1,0 +1,46 @@
+---
+title: "Prepare a Custom Dataset"
+description: "Format JSONL examples and launch a Veri training job"
+---
+
+This example walks through the minimum dataset shape for a first training run. Use it when you already have prompts and target responses, or when you are converting examples from another system.
+
+## JSONL Format
+
+Each line should be a standalone JSON object.
+
+```json
+{"prompt":"Summarize this support ticket in one sentence: ...","response":"Customer cannot access billing settings after changing workspaces."}
+{"prompt":"Rewrite this answer for a technical buyer: ...","response":"The API supports signed requests, per-user keys, and request-level tracing."}
+```
+
+## Upload
+
+```bash
+curl -X POST https://api.veri.studio/v1/datasets \
+  -H "Authorization: Bearer $VERI_API_KEY" \
+  -F "file=@training-data.jsonl" \
+  -F "name=support-response-examples"
+```
+
+## Start a Training Job
+
+```bash
+curl -X POST https://api.veri.studio/v1/training_jobs \
+  -H "Authorization: Bearer $VERI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "base_model": "Qwen/Qwen3-4B",
+    "dataset_id": "ds_support_examples",
+    "reward_function_id": "rf_response_quality",
+    "output_name": "support-response-model",
+    "gpu": { "gpu_type": "A100-80GB", "gpu_count": 1 }
+  }'
+```
+
+## Quality Checklist
+
+- Keep prompts close to production traffic.
+- Include difficult edge cases, not just ideal examples.
+- Remove secrets, credentials, and personal data before upload.
+- Start with hundreds of strong examples before scaling to larger datasets.

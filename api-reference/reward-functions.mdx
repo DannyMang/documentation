@@ -20,9 +20,8 @@ description: "Upload and manage Python reward functions"
 ### Request
 
 ```bash
-curl -X POST http://localhost:8000/v1/reward_functions \
-  -H "Authorization: Bearer $VERI_INTERNAL_API_KEY" \
-  -H "X-Veri-User-Id: $VERI_USER_ID" \
+curl -X POST https://api.veri.studio/v1/reward_functions \
+  -H "Authorization: Bearer vk_your_api_key" \
   -F "name=math_reward" \
   -F "file=@reward.py" \
   -F "format=trl"
@@ -56,9 +55,8 @@ curl -X POST http://localhost:8000/v1/reward_functions \
 ### Request
 
 ```bash
-curl "http://localhost:8000/v1/reward_functions?limit=10&offset=0" \
-  -H "Authorization: Bearer $VERI_INTERNAL_API_KEY" \
-  -H "X-Veri-User-Id: $VERI_USER_ID"
+curl "https://api.veri.studio/v1/reward_functions?limit=10&offset=0" \
+  -H "Authorization: Bearer vk_your_api_key"
 ```
 
 ### Response
@@ -87,9 +85,8 @@ curl "http://localhost:8000/v1/reward_functions?limit=10&offset=0" \
 ### Request
 
 ```bash
-curl http://localhost:8000/v1/reward_functions/rf_def456 \
-  -H "Authorization: Bearer $VERI_INTERNAL_API_KEY" \
-  -H "X-Veri-User-Id: $VERI_USER_ID"
+curl https://api.veri.studio/v1/reward_functions/rf_def456 \
+  -H "Authorization: Bearer vk_your_api_key"
 ```
 
 ### Response

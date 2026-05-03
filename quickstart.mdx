@@ -6,35 +6,26 @@ description: "Submit your first fine-tuning job in minutes"
 ## Prerequisites
 
 Before you begin, you'll need:
-- Access to the Veri web dashboard, or the internal service-key flow for local development
+- A Veri API key (create one from the [dashboard](https://veri.studio/dashboard) or via the [API keys endpoint](/api-reference/api-keys))
 - Python 3.10+
 - A dataset, either as JSONL or from a supported external source
-- A Python reward function in `trl` or `miles` format
-
-<Note>
-The current PoC is dashboard-first. Direct SDK and cURL usage against the control plane still depends on the trusted proxy auth path described in [Authentication](/authentication).
-</Note>
+- A Python reward function in `trl` or `miles` format (for GRPO jobs)
 
 ## Recommended First Run
 
-The easiest way to exercise the product today is:
-
 1. Sign in through the web app.
-2. Upload or connect a dataset.
-3. Upload a reward function.
-4. Submit a fine-tuning job from the dashboard.
-5. Watch the job status, cost surfaces, and billing state update as the run progresses.
+2. Create an API key from the settings page.
+3. Upload or connect a dataset.
+4. Upload a reward function (for GRPO) or skip this step (for video gen SFT).
+5. Submit a fine-tuning job.
+6. Watch the job status and cost update as the run progresses.
 
-## Local / Internal API Walkthrough
+## API Walkthrough
 
-These examples match the current control-plane request shapes.
-
-### Set local auth headers
+### Set your API key
 
 ```bash
-export VERI_BASE_URL="http://localhost:8000"
-export VERI_INTERNAL_API_KEY="your-internal-service-key"
-export VERI_USER_ID="user_123"
+export VERI_API_KEY="vk_your_api_key"
 ```
 
 ### Upload a JSONL dataset
@@ -49,9 +40,8 @@ Each row must include a `prompt` field. The value can be plain text or a chat-st
 Upload it:
 
 ```bash
-curl -X POST "$VERI_BASE_URL/v1/datasets?name=math_prompts" \
-  -H "Authorization: Bearer $VERI_INTERNAL_API_KEY" \
-  -H "X-Veri-User-Id: $VERI_USER_ID" \
+curl -X POST "https://api.veri.studio/v1/datasets?name=math_prompts" \
+  -H "Authorization: Bearer $VERI_API_KEY" \
   -F "file=@math_prompts.jsonl"
 ```
 
@@ -60,9 +50,8 @@ curl -X POST "$VERI_BASE_URL/v1/datasets?name=math_prompts" \
 For example, a Hugging Face dataset:
 
 ```bash
-curl -X POST "$VERI_BASE_URL/v1/datasets/connect" \
-  -H "Authorization: Bearer $VERI_INTERNAL_API_KEY" \
-  -H "X-Veri-User-Id: $VERI_USER_ID" \
+curl -X POST https://api.veri.studio/v1/datasets/connect \
+  -H "Authorization: Bearer $VERI_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "gsm8k-train",
@@ -81,9 +70,8 @@ curl -X POST "$VERI_BASE_URL/v1/datasets/connect" \
 You can validate a connection before creating it:
 
 ```bash
-curl -X POST "$VERI_BASE_URL/v1/datasets/connect/validate" \
-  -H "Authorization: Bearer $VERI_INTERNAL_API_KEY" \
-  -H "X-Veri-User-Id: $VERI_USER_ID" \
+curl -X POST https://api.veri.studio/v1/datasets/connect/validate \
+  -H "Authorization: Bearer $VERI_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "source_type": "s3",
@@ -93,7 +81,7 @@ curl -X POST "$VERI_BASE_URL/v1/datasets/connect/validate" \
 
 ### Upload a reward function
 
-TRL-format reward functions are currently the default:
+TRL-format reward functions are the default:
 
 ```python
 def reward(completions, answer=None, **kwargs):
@@ -111,9 +99,8 @@ def reward(completions, answer=None, **kwargs):
 Upload it:
 
 ```bash
-curl -X POST "$VERI_BASE_URL/v1/reward_functions" \
-  -H "Authorization: Bearer $VERI_INTERNAL_API_KEY" \
-  -H "X-Veri-User-Id: $VERI_USER_ID" \
+curl -X POST https://api.veri.studio/v1/reward_functions \
+  -H "Authorization: Bearer $VERI_API_KEY" \
   -F "name=math_reward" \
   -F "format=trl" \
   -F "file=@reward.py"
@@ -123,35 +110,30 @@ Use `format=miles` if your file defines `async def reward(args, sample, **kwargs
 
 ### Submit a training job
 
-```json
-{
-  "base_model": "Qwen/Qwen3-4B",
-  "dataset_id": "ds_abc123",
-  "reward_function_id": "rf_def456",
-  "output_name": "qwen3-4b-math",
-  "hyperparameters": {
-    "learning_rate": 1e-6,
-    "num_epochs": 1,
-    "rollouts_per_prompt": 8,
-    "max_response_length": 2048,
-    "global_batch_size": 64
-  },
-  "gpu": {
-    "gpu_type": "A100-80GB",
-    "gpu_count": 1
-  },
-  "checkpoint_destination": {
-    "type": "veri"
-  }
-}
-```
-
 ```bash
-curl -X POST "$VERI_BASE_URL/v1/training_jobs" \
-  -H "Authorization: Bearer $VERI_INTERNAL_API_KEY" \
-  -H "X-Veri-User-Id: $VERI_USER_ID" \
+curl -X POST https://api.veri.studio/v1/training_jobs \
+  -H "Authorization: Bearer $VERI_API_KEY" \
   -H "Content-Type: application/json" \
-  -d @job.json
+  -d '{
+    "base_model": "Qwen/Qwen3-4B",
+    "dataset_id": "ds_abc123",
+    "reward_function_id": "rf_def456",
+    "output_name": "qwen3-4b-math",
+    "hyperparameters": {
+      "learning_rate": 1e-6,
+      "num_epochs": 1,
+      "rollouts_per_prompt": 8,
+      "max_response_length": 2048,
+      "global_batch_size": 64
+    },
+    "gpu": {
+      "gpu_type": "A100-80GB",
+      "gpu_count": 1
+    },
+    "checkpoint_destination": {
+      "type": "veri"
+    }
+  }'
 ```
 
 ### Monitor the job
@@ -159,36 +141,25 @@ curl -X POST "$VERI_BASE_URL/v1/training_jobs" \
 Poll status:
 
 ```bash
-curl "$VERI_BASE_URL/v1/training_jobs/job_xyz789" \
-  -H "Authorization: Bearer $VERI_INTERNAL_API_KEY" \
-  -H "X-Veri-User-Id: $VERI_USER_ID"
+curl https://api.veri.studio/v1/training_jobs/job_xyz789 \
+  -H "Authorization: Bearer $VERI_API_KEY"
 ```
 
 Stream logs:
 
 ```bash
-curl -N "$VERI_BASE_URL/v1/training_jobs/job_xyz789/logs" \
-  -H "Authorization: Bearer $VERI_INTERNAL_API_KEY" \
-  -H "X-Veri-User-Id: $VERI_USER_ID"
+curl -N https://api.veri.studio/v1/training_jobs/job_xyz789/logs \
+  -H "Authorization: Bearer $VERI_API_KEY"
 ```
-
-When a job is `running` or `completed`, the response includes `dashboard_url` for Grafana.
 
 ### Download the final checkpoint
 
-When the job reaches `completed`, fetch the presigned URL:
+When the job reaches `completed`, fetch the download URL:
 
 ```bash
-curl "$VERI_BASE_URL/v1/training_jobs/job_xyz789/model" \
-  -H "Authorization: Bearer $VERI_INTERNAL_API_KEY" \
-  -H "X-Veri-User-Id: $VERI_USER_ID"
+curl https://api.veri.studio/v1/training_jobs/job_xyz789/model \
+  -H "Authorization: Bearer $VERI_API_KEY"
 ```
-
-## What to Expect Today
-
-- The end-to-end control-plane loop is wired up and job state transitions are working.
-- Billing, cost attribution, and Stripe deductions are implemented in the control plane.
-- Recent end-to-end validation proved the full platform path but hit an A100 40GB OOM during training, so the docs now reflect the current state rather than assuming every public quickstart succeeds yet.
 
 ## Next Steps
 
@@ -199,7 +170,7 @@ curl "$VERI_BASE_URL/v1/training_jobs/job_xyz789/model" \
 </Card>
 
 <Card title="API Reference" icon="code" href="/api-reference/introduction">
-  Explore the live request and response shapes.
+  Explore the full API documentation.
 </Card>
 
 </CardGroup>
