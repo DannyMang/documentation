@@ -1,129 +1,218 @@
 ---
 title: "Deployment"
-description: "How deployment works after fine-tuning with Veri"
+description: "Deploy fine-tuned models as inference endpoints"
 ---
 
 ## Overview
 
-Veri makes fine-tuning and checkpoint delivery simple. Today, deployment means training with Veri, receiving a Hugging Face-compatible checkpoint, and serving that model in your own stack.
+After training a model with Veri, you can deploy it as an OpenAI-compatible inference endpoint — or download the checkpoint and serve it yourself.
 
-<Note>
-Veri does not currently provide hosted inference endpoints. Managed model serving is planned for a later phase.
-</Note>
+Veri provides two deployment paths:
 
-## What Veri Handles
+1. **Hosted deployment** — deploy directly from a completed training job. Veri provisions GPU, serves the model, and gives you an OpenAI-compatible endpoint with per-request logging and metrics.
+2. **Self-hosted** — download the checkpoint and serve it in your own stack (vLLM, SGLang, Transformers, etc.).
 
-When you submit a training job, Veri handles:
+## Hosted Deployment
 
-- training job orchestration
-- GPU selection and backend routing
-- artifact storage during training
-- checkpoint packaging and delivery
-- billing and cost attribution
+### Create a deployment
 
-When the run finishes, the final checkpoint is exposed as a Hugging Face-format artifact that you can download or write to your own bucket.
+Deploy a completed training job as an inference endpoint:
 
-## Deployment Flow
+<Tabs>
+  <Tab title="Python SDK">
+    ```python
+    from veri_sdk import Client
+
+    client = Client()
+
+    deployment = client.deployments.create(
+        model="JOB_ID",           # training job ID
+        source="training_job",
+        name="my-math-model",
+        gpu={"gpu_type": "H100", "gpu_count": 1},
+    )
+    print(f"Deployment ID: {deployment.id}")
+    print(f"Status: {deployment.status}")
+    ```
+  </Tab>
+
+  <Tab title="curl">
+    ```bash
+    curl -X POST https://api.veri.studio/v1/deployments \
+      -H "Authorization: Bearer $VERI_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "model": "JOB_ID",
+        "source": "training_job",
+        "name": "my-math-model",
+        "gpu": {
+          "gpu_type": "H100",
+          "gpu_count": 1
+        }
+      }'
+    ```
+  </Tab>
+</Tabs>
+
+You can also deploy HuggingFace models directly:
+
+```bash
+curl -X POST https://api.veri.studio/v1/deployments \
+  -H "Authorization: Bearer $VERI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "Qwen/Qwen3-4B",
+    "source": "huggingface",
+    "name": "qwen3-base",
+    "gpu": {"gpu_type": "A100-80GB", "gpu_count": 1}
+  }'
+```
+
+### Deployment lifecycle
 
 <Steps>
 
-<Step title="Fine-tune your model">
-Submit a training job with your base model, dataset, reward function, and hyperparameters.
+<Step title="Queued">
+  Deployment created, waiting for GPU provisioning.
 </Step>
 
-<Step title="Choose where the checkpoint lands">
-Set `checkpoint_destination` to use Veri-managed storage or send the final checkpoint to your own `s3`, `gs`, or `az` bucket.
+<Step title="Provisioning">
+  GPU instance is starting and the model is loading.
 </Step>
 
-<Step title="Wait for completion">
-Track status through the dashboard, poll the API, or stream logs while training runs.
+<Step title="Serving">
+  Endpoint is live and accepting inference requests.
 </Step>
 
-<Step title="Deploy the checkpoint">
-Use the final Hugging Face checkpoint in the serving stack you already run today, such as Transformers, vLLM, TGI, or SGLang.
+<Step title="Stopped">
+  Deployment was stopped by the user. GPU released, billing stopped.
 </Step>
 
 </Steps>
 
-## Checkpoint Destinations
+### Send inference requests
 
-Veri supports these final checkpoint destinations:
+Once the deployment is serving, send OpenAI-compatible chat completion requests:
+
+<Tabs>
+  <Tab title="Python (OpenAI SDK)">
+    ```python
+    from openai import OpenAI
+
+    client = OpenAI(
+        base_url="https://api.veri.studio/v1/deployments/DEPLOYMENT_ID",
+        api_key="vk_your_api_key",
+    )
+
+    response = client.chat.completions.create(
+        model="my-math-model",
+        messages=[
+            {"role": "user", "content": "What is 15% of 240?"}
+        ],
+    )
+    print(response.choices[0].message.content)
+    ```
+  </Tab>
+
+  <Tab title="curl">
+    ```bash
+    curl -X POST https://api.veri.studio/v1/deployments/DEPLOYMENT_ID/chat/completions \
+      -H "Authorization: Bearer $VERI_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "model": "my-math-model",
+        "messages": [
+          {"role": "user", "content": "What is 15% of 240?"}
+        ]
+      }'
+    ```
+  </Tab>
+</Tabs>
+
+### Monitor your deployment
+
+View request history and aggregate metrics:
+
+```bash
+# Request history
+curl "https://api.veri.studio/v1/deployments/DEPLOYMENT_ID/requests?limit=20" \
+  -H "Authorization: Bearer $VERI_API_KEY"
+
+# Aggregate metrics
+curl "https://api.veri.studio/v1/deployments/DEPLOYMENT_ID/metrics" \
+  -H "Authorization: Bearer $VERI_API_KEY"
+```
+
+Metrics include total requests, average latency, token usage, error rate, uptime, and total cost.
+
+### Stop a deployment
+
+```bash
+curl -X POST https://api.veri.studio/v1/deployments/DEPLOYMENT_ID/stop \
+  -H "Authorization: Bearer $VERI_API_KEY"
+```
+
+Stopping a deployment releases the GPU and stops billing. You can view the deployment and its request history after stopping.
+
+### Billing
+
+Deployments are billed per-hour based on GPU type and count. Credits are deducted hourly while the deployment is running. Check your burn rate across all active jobs and deployments:
+
+```bash
+curl "https://api.veri.studio/v1/billing/burn_rate" \
+  -H "Authorization: Bearer $VERI_API_KEY"
+```
+
+---
+
+## Self-Hosted Deployment
+
+If you prefer to serve models in your own infrastructure, download the checkpoint from a completed training job.
+
+### Checkpoint destinations
 
 | Type | What happens |
 |---|---|
-| `veri` | Veri stores the final checkpoint and returns a download URL when the job completes. |
-| `s3` | Veri writes the final checkpoint to your S3 path. |
-| `gs` | Veri writes the final checkpoint to your Google Cloud Storage path. |
-| `az` | Veri writes the final checkpoint to your Azure Blob path. |
+| `veri` | Veri stores the checkpoint and returns a download URL. |
+| `s3` | Veri writes the checkpoint to your S3 path. |
+| `gs` | Veri writes the checkpoint to your Google Cloud Storage path. |
+| `az` | Veri writes the checkpoint to your Azure Blob path. |
 
-Example:
-
-```json
-{
-  "checkpoint_destination": {
-    "type": "s3",
-    "uri": "s3://my-bucket/checkpoints/qwen3-4b-math/"
-  }
-}
-```
-
-## Output Format
-
-The deployment contract is a final Hugging Face-compatible checkpoint.
-
-That means:
-
-- the model can be loaded with standard Hugging Face tooling
-- the final artifact is the thing users deploy, not an internal training checkpoint
-
-GRPO jobs produce full fine-tuned checkpoints. Video gen SFT jobs produce LoRA adapter checkpoints that can be loaded with the diffusers library and applied to the base model.
-
-## Deployment Options Today
-
-### Veri-managed download
-
-If you use `checkpoint_destination.type = "veri"`, fetch the model URL after the job completes:
+### Download the checkpoint
 
 ```bash
-curl https://api.veri.studio/v1/training_jobs/job_xyz789/model \
-  -H "Authorization: Bearer vk_your_api_key"
+curl https://api.veri.studio/v1/training_jobs/JOB_ID/model \
+  -H "Authorization: Bearer $VERI_API_KEY"
 ```
 
-### Deploy from your own bucket
+### Recommended serving stacks
 
-If you choose `s3`, `gs`, or `az`, Veri writes the final checkpoint directly to your storage so your serving infrastructure can pull from there.
+| Stack | Best for |
+|---|---|
+| **vLLM** | Production NVIDIA serving, multi-LoRA support |
+| **SGLang** | High-throughput serving, multi-turn workloads |
+| **Transformers** | Direct loading, custom pipelines |
 
-This is the best fit if you already deploy models through your own CI/CD, registry, or cloud inference platform.
+### Example: serve with vLLM
 
-## Recommended Serving Stacks
+```bash
+pip install vllm
 
-Veri does not require a specific inference layer. Based on the current architecture and roadmap:
+python -m vllm.entrypoints.openai.api_server \
+  --model ./my-checkpoint \
+  --host 0.0.0.0 \
+  --port 8000
+```
 
-- **Transformers** works well for direct loading and custom applications
-- **vLLM** is a good NVIDIA serving option
-- **SGLang** fits teams already using the RL training stack
-- **vLLM-ROCm** is the likely AMD serving path when hosted serving becomes a product area
+Your model is now serving at `http://localhost:8000/v1/chat/completions` with full OpenAI compatibility.
 
-## Current Limits
+## Deployment statuses
 
-Deployment is intentionally simple right now:
-
-- no hosted Veri inference endpoint
-- no browser-based model serving UI
-- no built-in A/B testing or online traffic routing yet
-- no multi-LoRA deployment workflow yet
-
-Those are future product areas, but the current path is already enough for teams that want Veri to handle fine-tuning while they keep control over serving.
-
-## Roadmap
-
-The current specs point toward a later serving phase that includes:
-
-- model serving after training completes
-- vLLM for NVIDIA deployments
-- vLLM-ROCm for AMD deployments
-- A/B testing between base and fine-tuned models
-
-For now, the simplest mental model is:
-
-**Veri fine-tunes the model. You deploy the resulting checkpoint wherever you serve models today.**
+| Status | Description |
+|--------|-------------|
+| `queued` | Deployment created, waiting for GPU |
+| `provisioning` | GPU starting, model loading |
+| `serving` | Endpoint live, accepting requests |
+| `unhealthy` | Health check failed (auto-recovers) |
+| `stopped` | Stopped by user |
+| `failed` | Deployment failed; check `error` field |

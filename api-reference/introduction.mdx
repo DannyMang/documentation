@@ -47,20 +47,32 @@ API keys use the `vk_` prefix and are hashed server-side. See [API Keys](/api-re
 | `POST` | `/v1/training_jobs` | Create a training job |
 | `GET` | `/v1/training_jobs` | List training jobs (filter by `status`, `method`) |
 | `GET` | `/v1/training_jobs/{id}` | Get job status |
-| `DELETE` | `/v1/training_jobs/{id}` | Cancel a job |
+| `POST` | `/v1/training_jobs/{id}/cancel` | Cancel a job |
 | `GET` | `/v1/training_jobs/{id}/logs` | Stream job logs (SSE) |
 | `GET` | `/v1/training_jobs/{id}/events` | Get job lifecycle events |
 | `GET` | `/v1/training_jobs/{id}/model` | Get checkpoint download URL |
+
+### Deployments
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/v1/deployments` | Create an inference deployment |
+| `GET` | `/v1/deployments` | List deployments (filter by `status`) |
+| `GET` | `/v1/deployments/{id}` | Get deployment details |
+| `POST` | `/v1/deployments/{id}/stop` | Stop a deployment |
+| `POST` | `/v1/deployments/{id}/chat/completions` | OpenAI-compatible inference |
+| `GET` | `/v1/deployments/{id}/requests` | List per-request logs |
+| `GET` | `/v1/deployments/{id}/metrics` | Get aggregate metrics |
 
 ### Cost
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/v1/cost/summary` | Get spend summary |
-| `GET` | `/v1/cost/by-provider` | Break down spend by provider |
-| `GET` | `/v1/cost/by-gpu` | Break down spend by GPU type |
+| `GET` | `/v1/cost/by_provider` | Break down spend by provider |
+| `GET` | `/v1/cost/by_gpu` | Break down spend by GPU type |
 | `GET` | `/v1/cost/estimate` | Estimate cost from GPU shape and duration |
-| `GET` | `/v1/cost/monthly-projection` | Project monthly spend |
+| `GET` | `/v1/cost/monthly_projection` | Project monthly spend |
 | `GET` | `/v1/cost/compare` | Compare provider costs |
 | `GET` | `/v1/cost/rates` | Get current GPU rates |
 
@@ -70,7 +82,8 @@ API keys use the `vk_` prefix and are hashed server-side. See [API Keys](/api-re
 |--------|----------|-------------|
 | `GET` | `/v1/billing/balance` | Get credit balance |
 | `GET` | `/v1/billing/transactions` | List balance transactions |
-| `POST` | `/v1/billing/check-balance` | Check whether a job can be covered by credits |
+| `POST` | `/v1/billing/check_balance` | Check whether a job can be covered by credits |
+| `GET` | `/v1/billing/burn_rate` | Get current credit burn rate from active jobs and deployments |
 
 ### API Keys
 
@@ -96,18 +109,32 @@ API keys use the `vk_` prefix and are hashed server-side. See [API Keys](/api-re
 
 ## Response Format
 
-Responses are standard JSON. Single-resource endpoints return one object. List endpoints return paginated objects with `items`, `total`, `limit`, and `offset`.
+Responses are standard JSON. Every response object includes an `object` field that identifies the resource type (e.g., `"training_job"`, `"deployment"`, `"dataset"`, `"reward_function"`, `"api_key"`, `"ssh_key"`).
+
+Single-resource endpoints return one object. List endpoints return cursor-paginated responses:
+
+```json
+{
+  "object": "list",
+  "data": [...],
+  "has_more": false
+}
+```
 
 **Success (2xx)**
 ```json
 {
   "id": "job_abc123",
+  "object": "training_job",
   "status": "queued",
   "base_model": "Qwen/Qwen3-4B",
   "method": "grpo",
   "output_name": "my-model",
-  "gpu_type": "A100-80GB",
-  "gpu_count": 1,
+  "gpu_requested": {
+    "type": "A100-80GB",
+    "count": 1
+  },
+  "gpu": null,
   "created_at": "2026-04-14T12:00:00Z"
 }
 ```
@@ -115,7 +142,12 @@ Responses are standard JSON. Single-resource endpoints return one object. List e
 **Error (4xx/5xx)**
 ```json
 {
-  "detail": "Invalid API key"
+  "error": {
+    "type": "invalid_request_error",
+    "code": null,
+    "message": "Invalid API key",
+    "param": null
+  }
 }
 ```
 
@@ -132,14 +164,26 @@ Responses are standard JSON. Single-resource endpoints return one object. List e
 
 ## Pagination
 
-List endpoints support pagination with `limit` and `offset` query parameters:
+List endpoints support cursor-based pagination with `limit` and `after` query parameters:
 
 ```bash
-curl "https://api.veri.studio/v1/datasets?limit=10&offset=20" \
+curl "https://api.veri.studio/v1/datasets?limit=10&after=ds_abc123" \
   -H "Authorization: Bearer vk_your_api_key"
 ```
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `limit` | integer | 20 | Maximum number of items to return |
-| `offset` | integer | 0 | Number of items to skip |
+| `after` | string | — | ID of the last item from the previous page (cursor) |
+
+The response includes a `has_more` field indicating whether additional pages exist:
+
+```json
+{
+  "object": "list",
+  "data": [...],
+  "has_more": true
+}
+```
+
+To paginate, pass the `id` of the last item in `data` as the `after` parameter in the next request.

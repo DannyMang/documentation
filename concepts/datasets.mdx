@@ -88,8 +88,9 @@ dataset = client.datasets.upload("prompts.jsonl")
 ```
 
 ```bash cURL
-curl -X POST "https://api.veri.studio/v1/datasets?name=my_prompts" \
+curl -X POST https://api.veri.studio/v1/datasets \
   -H "Authorization: Bearer vk_your_api_key" \
+  -F "name=my_prompts" \
   -F "file=@prompts.jsonl"
 ```
 
@@ -102,8 +103,8 @@ curl -X POST "https://api.veri.studio/v1/datasets?name=my_prompts" \
 dataset = client.datasets.connect(
     name="gsm8k-train",
     source_type="hf",
-    hf_dataset="gsm8k",
-    hf_config={
+    huggingface_dataset="gsm8k",
+    huggingface_config={
         "split": "train",
         "column_mapping": {"question": "prompt", "answer": "label"},
     },

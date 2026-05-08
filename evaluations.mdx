@@ -1,0 +1,60 @@
+---
+title: "Evaluations"
+description: "Run automated evaluations against trained checkpoints and deployments"
+---
+
+<Note>
+**Work in progress.** Evaluations are on the post-beta roadmap — this page describes the planned shape of the feature. The API and SDK surface below is illustrative and may change before launch. For early access or feedback, [contact us](mailto:daniel@veri.studio).
+</Note>
+
+## Overview
+
+Veri Evaluations will let you score a trained model — or a live deployment — against a fixed dataset and a reward function (or judge model), so you can compare runs and catch regressions before promoting a checkpoint.
+
+Today, the same reward functions you use for [GRPO training](/concepts/reward-functions) double as evaluation primitives. Evaluations make that loop standalone:
+
+- Pick a model or deployment.
+- Pick a dataset of prompts (and optional references).
+- Pick one or more reward functions or judges.
+- Get aggregate metrics + per-example traces.
+
+## Planned workflow
+
+<Steps>
+  <Step title="Pick what you're evaluating">
+    A trained checkpoint, a deployment endpoint, or a base model (for baselines).
+  </Step>
+  <Step title="Pick a dataset">
+    Reuse any [Veri dataset](/concepts/datasets), or upload an eval-only set of prompts and (optional) reference outputs.
+  </Step>
+  <Step title="Pick scorers">
+    Reuse your existing [reward functions](/concepts/reward-functions), or attach a judge model (LLM-as-judge) for open-ended tasks.
+  </Step>
+  <Step title="Run and compare">
+    Submit an eval job. Veri returns per-example scores, aggregate metrics, and a comparison view across runs.
+  </Step>
+</Steps>
+
+## What's coming first
+
+The first release will focus on the surface most teams already need:
+
+- **Reward-function evals** — score generations with the same Python reward function used for GRPO.
+- **Deterministic metrics** — exact-match, regex, JSON-validity, function-calling correctness.
+- **Run comparisons** — side-by-side scores across checkpoints from the same training job.
+
+## Coming after that
+
+- LLM-as-judge with rubric prompts.
+- Eval-only datasets (no training labels required).
+- Scheduled evals against live deployments for drift detection.
+- Public eval leaderboards for shared benchmarks.
+
+## In the meantime
+
+You can already approximate evaluation today by:
+
+1. Submitting a small [training job](/api-reference/training-jobs) with `max_steps: 0` and your eval reward function — the reward signal at step 0 is your baseline score.
+2. Running your reward function locally against generations from a [deployment](/deployment) endpoint.
+
+If you have an evaluation use case you need before the official launch, [reach out](mailto:daniel@veri.studio) — early-access slots are available.

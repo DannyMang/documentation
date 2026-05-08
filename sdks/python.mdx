@@ -52,8 +52,8 @@ print(f"Source: {dataset.source_type}")
 dataset = client.datasets.connect(
     name="gsm8k-train",
     source_type="hf",
-    hf_dataset="gsm8k",
-    hf_config={
+    huggingface_dataset="gsm8k",
+    huggingface_config={
         "split": "train",
         "column_mapping": {
             "question": "prompt",
@@ -79,7 +79,7 @@ print(result["valid"], result.get("num_rows"))
 ### List datasets
 
 ```python
-datasets = client.datasets.list(limit=10, offset=0)
+datasets = client.datasets.list(limit=10)
 for ds in datasets:
     print(f"{ds.id}: {ds.name} ({ds.source_type})")
 ```
@@ -99,7 +99,7 @@ Use `format="miles"` for files that implement `async def reward(args, sample, **
 ### List reward functions
 
 ```python
-rewards = client.reward_functions.list(limit=10, offset=0)
+rewards = client.reward_functions.list(limit=10)
 for rf in rewards:
     print(f"{rf.id}: {rf.name} ({rf.format})")
 ```
@@ -128,8 +128,7 @@ job = client.training_jobs.create(
         "max_response_length": 2048,
         "global_batch_size": 64,
     },
-    gpu_type="A100-80GB",
-    gpu_count=1,
+    gpu={"type": "A100-80GB", "count": 1},
     checkpoint_destination={"type": "veri"},
 )
 print(f"Job ID: {job.id}")
@@ -151,6 +150,10 @@ jobs = client.training_jobs.list()
 
 # Filter by status
 running_jobs = client.training_jobs.list(status="running")
+
+# Paginate with cursor
+page = client.training_jobs.list(limit=10)
+next_page = client.training_jobs.list(limit=10, after=page[-1].id)
 ```
 
 ### Wait for completion

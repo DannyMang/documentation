@@ -5,8 +5,8 @@ description: "Upload and manage training datasets"
 
 ## Upload Dataset
 
-<ParamField query="name" type="string" required>
-  A human-readable name for the dataset.
+<ParamField body="name" type="string" required>
+  A human-readable name for the dataset (sent as a form field alongside the file).
 </ParamField>
 
 <ParamField body="file" type="file" required>
@@ -16,8 +16,9 @@ description: "Upload and manage training datasets"
 ### Request
 
 ```bash
-curl -X POST "https://api.veri.studio/v1/datasets?name=math_prompts" \
+curl -X POST https://api.veri.studio/v1/datasets \
   -H "Authorization: Bearer vk_your_api_key" \
+  -F "name=math_prompts" \
   -F "file=@math_prompts.jsonl"
 ```
 
@@ -26,12 +27,11 @@ curl -X POST "https://api.veri.studio/v1/datasets?name=math_prompts" \
 ```json
 {
   "id": "ds_abc123",
-  "user_id": "user_123",
+  "object": "dataset",
   "name": "math_prompts",
   "source_type": "upload",
-  "s3_key": "datasets/ds_abc123/data.jsonl",
   "source_uri": null,
-  "hf_dataset": null,
+  "huggingface_dataset": null,
   "num_rows": 1500,
   "created_at": "2026-04-14T12:00:00Z"
 }
@@ -53,11 +53,11 @@ curl -X POST "https://api.veri.studio/v1/datasets?name=math_prompts" \
   Required for `s3`, `gs`, and `az` sources.
 </ParamField>
 
-<ParamField body="hf_dataset" type="string">
+<ParamField body="huggingface_dataset" type="string">
   Required for `hf` sources.
 </ParamField>
 
-<ParamField body="hf_config" type="object">
+<ParamField body="huggingface_config" type="object">
   Optional Hugging Face config, including `split`, `column_mapping`, and `token`.
 </ParamField>
 
@@ -82,8 +82,8 @@ curl -X POST https://api.veri.studio/v1/datasets/connect \
   -d '{
     "name": "gsm8k-train",
     "source_type": "hf",
-    "hf_dataset": "gsm8k",
-    "hf_config": {
+    "huggingface_dataset": "gsm8k",
+    "huggingface_config": {
       "split": "train",
       "column_mapping": {
         "question": "prompt",
@@ -98,12 +98,11 @@ curl -X POST https://api.veri.studio/v1/datasets/connect \
 ```json
 {
   "id": "ds_hf123456789",
-  "user_id": "user_123",
+  "object": "dataset",
   "name": "gsm8k-train",
   "source_type": "hf",
-  "s3_key": null,
   "source_uri": null,
-  "hf_dataset": "gsm8k",
+  "huggingface_dataset": "gsm8k",
   "num_rows": null,
   "created_at": "2026-04-21T12:00:00Z"
 }
@@ -146,14 +145,14 @@ curl -X POST https://api.veri.studio/v1/datasets/connect/validate \
   Maximum number of datasets to return.
 </ParamField>
 
-<ParamField query="offset" type="integer" default="0">
-  Number of datasets to skip.
+<ParamField query="after" type="string">
+  Cursor for pagination. Pass the ID of the last item from the previous page.
 </ParamField>
 
 ### Request
 
 ```bash
-curl "https://api.veri.studio/v1/datasets?limit=10&offset=0" \
+curl "https://api.veri.studio/v1/datasets?limit=10" \
   -H "Authorization: Bearer vk_your_api_key"
 ```
 
@@ -161,31 +160,30 @@ curl "https://api.veri.studio/v1/datasets?limit=10&offset=0" \
 
 ```json
 {
-  "items": [
+  "object": "list",
+  "data": [
     {
       "id": "ds_abc123",
+      "object": "dataset",
       "name": "math_prompts",
       "source_type": "upload",
-      "s3_key": "datasets/ds_abc123/data.jsonl",
       "source_uri": null,
-      "hf_dataset": null,
+      "huggingface_dataset": null,
       "num_rows": 1500,
       "created_at": "2026-04-14T12:00:00Z"
     },
     {
       "id": "ds_def456",
+      "object": "dataset",
       "name": "gsm8k-train",
       "source_type": "hf",
-      "s3_key": null,
       "source_uri": null,
-      "hf_dataset": "gsm8k",
+      "huggingface_dataset": "gsm8k",
       "num_rows": null,
       "created_at": "2026-04-21T12:00:00Z"
     }
   ],
-  "total": 2,
-  "limit": 10,
-  "offset": 0
+  "has_more": false
 }
 ```
 
@@ -205,11 +203,11 @@ curl https://api.veri.studio/v1/datasets/ds_abc123 \
 ```json
 {
   "id": "ds_abc123",
+  "object": "dataset",
   "name": "math_prompts",
   "source_type": "upload",
-  "s3_key": "datasets/ds_abc123/data.jsonl",
   "source_uri": null,
-  "hf_dataset": null,
+  "huggingface_dataset": null,
   "num_rows": 1500,
   "created_at": "2026-04-14T12:00:00Z"
 }

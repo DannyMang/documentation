@@ -3,7 +3,7 @@ title: "SSH Keys"
 description: "Manage SSH keys for VM-based compute providers"
 ---
 
-SSH keys are used when deploying training jobs to VM-based providers like Lambda Cloud, RunPod, or SF Compute. Keys are encrypted at rest.
+SSH keys are used when deploying training jobs to VM-based providers like Lambda Cloud, RunPod, or . Keys are encrypted at rest.
 
 ## Create SSH Key
 
@@ -42,6 +42,7 @@ curl -X POST https://api.veri.studio/v1/ssh_keys \
 ```json
 {
   "id": "sk_abc123",
+  "object": "ssh_key",
   "name": "lambda-deploy-key",
   "provider": "lambda",
   "created_at": "2026-05-01T10:00:00Z"
@@ -51,6 +52,14 @@ curl -X POST https://api.veri.studio/v1/ssh_keys \
 ---
 
 ## List SSH Keys
+
+<ParamField query="limit" type="integer" default="20">
+  Maximum number of keys to return.
+</ParamField>
+
+<ParamField query="after" type="string">
+  Cursor for pagination. Pass the ID of the last item from the previous page.
+</ParamField>
 
 ### Request
 
@@ -63,14 +72,17 @@ curl https://api.veri.studio/v1/ssh_keys \
 
 ```json
 {
-  "items": [
+  "object": "list",
+  "data": [
     {
       "id": "sk_abc123",
+      "object": "ssh_key",
       "name": "lambda-deploy-key",
       "provider": "lambda",
       "created_at": "2026-05-01T10:00:00Z"
     }
-  ]
+  ],
+  "has_more": false
 }
 ```
 
@@ -89,6 +101,8 @@ curl -X DELETE https://api.veri.studio/v1/ssh_keys/sk_abc123 \
 
 ```json
 {
-  "status": "deleted"
+  "id": "sk_abc123",
+  "object": "ssh_key",
+  "deleted": true
 }
 ```

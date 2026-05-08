@@ -24,12 +24,9 @@ curl "https://api.veri.studio/v1/cost/summary?days=30" \
 {
   "period_days": 30,
   "job_count": 12,
-  "total_raw_cost_usd": 142.5,
-  "total_user_cost_usd": 185.25,
-  "gross_margin_usd": 42.75,
-  "gross_margin_pct": 23.1,
+  "total_cost_usd": 185.25,
   "total_gpu_hours": 47.5,
-  "avg_cost_per_job_usd": 11.875
+  "avg_cost_per_job_usd": 15.44
 }
 ```
 
@@ -40,7 +37,7 @@ curl "https://api.veri.studio/v1/cost/summary?days=30" \
 ### Request
 
 ```bash
-curl "https://api.veri.studio/v1/cost/by-provider?days=30" \
+curl "https://api.veri.studio/v1/cost/by_provider?days=30" \
   -H "Authorization: Bearer vk_your_api_key"
 ```
 
@@ -49,10 +46,9 @@ curl "https://api.veri.studio/v1/cost/by-provider?days=30" \
 ```json
 [
   {
-    "provider": "modal",
+    "provider": "prime_intellect",
     "job_count": 12,
-    "raw_cost_usd": 142.5,
-    "user_cost_usd": 185.25
+    "cost_usd": 185.25
   }
 ]
 ```
@@ -64,7 +60,7 @@ curl "https://api.veri.studio/v1/cost/by-provider?days=30" \
 ### Request
 
 ```bash
-curl "https://api.veri.studio/v1/cost/by-gpu?days=30" \
+curl "https://api.veri.studio/v1/cost/by_gpu?days=30" \
   -H "Authorization: Bearer vk_your_api_key"
 ```
 
@@ -75,7 +71,7 @@ curl "https://api.veri.studio/v1/cost/by-gpu?days=30" \
   {
     "gpu_type": "A100-80GB",
     "job_count": 10,
-    "raw_cost_usd": 118.4,
+    "cost_usd": 154.0,
     "gpu_hours": 39.2
   }
 ]
@@ -99,7 +95,7 @@ Estimate the cost of a run from GPU shape, duration, provider, and markup.
   Runtime used for the estimate.
 </ParamField>
 
-<ParamField query="provider" type="string" default="modal">
+<ParamField query="provider" type="string" default="prime_intellect">
   Provider key from the pricing table.
 </ParamField>
 
@@ -110,7 +106,7 @@ Estimate the cost of a run from GPU shape, duration, provider, and markup.
 ### Request
 
 ```bash
-curl "https://api.veri.studio/v1/cost/estimate?gpu_type=A100-80GB&gpu_count=1&duration_minutes=60&provider=modal&markup=1.3" \
+curl "https://api.veri.studio/v1/cost/estimate?gpu_type=A100-80GB&gpu_count=1&duration_minutes=60&provider=prime_intellect&markup=1.3" \
   -H "Authorization: Bearer vk_your_api_key"
 ```
 
@@ -118,15 +114,14 @@ curl "https://api.veri.studio/v1/cost/estimate?gpu_type=A100-80GB&gpu_count=1&du
 
 ```json
 {
-  "raw_cost_usd": 3.472,
-  "user_cost_usd": 4.5136,
+  "cost_usd": 4.5136,
   "gpu_cost_usd": 3.4,
   "storage_cost_usd": 0.0,
   "overhead_cost_usd": 0.072,
   "duration_seconds": 3600.0,
   "gpu_type": "A100-80GB",
   "gpu_count": 1,
-  "provider": "modal",
+  "provider": "prime_intellect",
   "markup_multiplier": 1.3
 }
 ```
@@ -138,7 +133,7 @@ curl "https://api.veri.studio/v1/cost/estimate?gpu_type=A100-80GB&gpu_count=1&du
 ### Request
 
 ```bash
-curl "https://api.veri.studio/v1/cost/monthly-projection?jobs_per_day=100&avg_duration_minutes=30&gpu_type=A100-80GB&gpu_count=1&provider=modal" \
+curl "https://api.veri.studio/v1/cost/monthly_projection?jobs_per_day=100&avg_duration_minutes=30&gpu_type=A100-80GB&gpu_count=1&provider=prime_intellect" \
   -H "Authorization: Bearer vk_your_api_key"
 ```
 
@@ -148,12 +143,8 @@ curl "https://api.veri.studio/v1/cost/monthly-projection?jobs_per_day=100&avg_du
 {
   "total_jobs": 3000,
   "avg_cost_per_job_usd": 1.736,
-  "compute_monthly_usd": 5208.0,
-  "keep_warm_monthly_usd": 216.0,
-  "total_raw_monthly_usd": 5424.0,
-  "total_revenue_monthly_usd": 6770.4,
-  "gross_margin_usd": 1346.4,
-  "gross_margin_pct": 19.9
+  "total_monthly_usd": 5208.0,
+  "keep_warm_monthly_usd": 216.0
 }
 ```
 
@@ -174,7 +165,7 @@ curl "https://api.veri.studio/v1/cost/compare?gpu_type=A100-80GB&gpu_count=1&dur
 
 ```json
 {
-  "modal": 3.4,
+  "prime_intellect": 3.4,
   "aws": 5.12,
   "aws_savings_1y": 3.33
 }
@@ -197,7 +188,7 @@ curl https://api.veri.studio/v1/cost/rates \
 
 ```json
 {
-  "modal": {
+  "prime_intellect": {
     "A100-40GB": 2.78,
     "A100-80GB": 3.4,
     "H100": 6.0,

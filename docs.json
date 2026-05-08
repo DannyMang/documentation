@@ -80,6 +80,12 @@
             ]
           },
           {
+            "group": "Deployments",
+            "pages": [
+              "api-reference/deployments"
+            ]
+          },
+          {
             "group": "Cost",
             "pages": [
               "api-reference/cost"
@@ -146,8 +152,6 @@
     }
   },
   "footer": {
-    "socials": {
-      "github": "https://github.com/ashworks1706/veri"
-    }
+    "socials": {}
   }
 }

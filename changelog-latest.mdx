@@ -17,7 +17,7 @@ description: "Most recent platform updates in Veri"
 
 - Training method dispatch: `grpo` and `sft_video_gen`
 - Video generation SFT via diffusers LoRA training scripts
-- Supported video gen models: CogVideoX, Wan2.1, HunyuanVideo, LTX Video, Mochi
+- Supported video gen models: CogVideoX, Wan2.1, LTX Video, Mochi
 - Method-specific hyperparameter schemas (GRPO vs SFT Video Gen)
 - Reward function is required for GRPO and forbidden for SFT methods
 - Frontend method column, filter, and detail view
@@ -25,11 +25,11 @@ description: "Most recent platform updates in Veri"
 
 ### Multi-provider compute
 
-- Lambda Cloud, RunPod, and SF Compute adapters alongside Modal
+- Lambda Cloud, RunPod, and  adapters alongside Modal
 - Worker agent for VM-based providers with S3 status protocol
 - SSH key management (encrypted at rest)
 - Provider auto-selection picks the cheapest available for the requested GPU
-- Provider field on training job creation (`modal`, `lambda`, `runpod`, `sfcompute`, or auto)
+- Provider field on training job creation (`prime_intellect`, `lambda`, `runpod`, `sfcompute`, or auto)
 
 ### Auth migration
 
@@ -38,7 +38,7 @@ description: "Most recent platform updates in Veri"
 
 ### Model catalog
 
-- 85 curated models: 76 LLMs for GRPO, 10 video gen models for LoRA SFT
+- 95 curated models: 86 LLMs for GRPO, 9 video gen models for LoRA SFT
 - Model library UI with Video Gen filter tab and LoRA pills
 
 ### Dashboard and settings

@@ -1,176 +1,348 @@
 ---
 title: "Quickstart"
-description: "Submit your first fine-tuning job in minutes"
+description: "Train your own reasoning model in minutes"
 ---
 
-## Prerequisites
+# Quickstart
 
-Before you begin, you'll need:
-- A Veri API key (create one from the [dashboard](https://veri.studio/dashboard) or via the [API keys endpoint](/api-reference/api-keys))
-- Python 3.10+
-- A dataset, either as JSONL or from a supported external source
-- A Python reward function in `trl` or `miles` format (for GRPO jobs)
+> Train a math reasoning model using GRPO — the same technique behind DeepSeek R1
 
-## Recommended First Run
+In this quickstart, you'll fine-tune **Qwen 2.5 7B** on the [GSM8K](https://huggingface.co/datasets/openai/gsm8k) dataset to produce a model that reasons step-by-step through grade school math problems. Veri handles GPU provisioning, job orchestration, and checkpoint delivery — you just provide the dataset and reward function.
 
-1. Sign in through the web app.
-2. Create an API key from the settings page.
-3. Upload or connect a dataset.
-4. Upload a reward function (for GRPO) or skip this step (for video gen SFT).
-5. Submit a fine-tuning job.
-6. Watch the job status and cost update as the run progresses.
+<Tip>
+  Want the full script instead? Grab [`quickstart.py`](https://github.com/DannyMang/veri_examples/blob/main/quickstart.py) from the [examples repo](https://github.com/DannyMang/veri_examples) — a single self-contained Python file that walks through the entire flow with detailed comments.
+</Tip>
 
-## API Walkthrough
+## Step 1: Get your API key
 
-### Set your API key
+Create an API key from the [Veri dashboard](https://veri.studio/dashboard/settings) and export it:
 
-```bash
-export VERI_API_KEY="vk_your_api_key"
-```
+<Tabs>
+  <Tab title="macOS / Linux">
+    ```bash
+    export VERI_API_KEY="vk_your_api_key"
+    ```
+  </Tab>
 
-### Upload a JSONL dataset
+  <Tab title="Windows">
+    ```powershell
+    setx VERI_API_KEY "vk_your_api_key"
+    ```
+  </Tab>
+</Tabs>
 
-Each row must include a `prompt` field. The value can be plain text or a chat-style message array.
+## Step 2: Connect the GSM8K dataset
 
-```json
-{"prompt": "What is 15 * 23?"}
-{"prompt": "Solve for x: 2x + 5 = 17", "expected_answer": "6"}
-```
+[GSM8K](https://huggingface.co/datasets/openai/gsm8k) is OpenAI's dataset of 8,800 grade school math problems with step-by-step solutions. It's the standard benchmark for training reasoning models.
 
-Upload it:
+Veri can connect directly to Hugging Face — no download needed:
 
-```bash
-curl -X POST "https://api.veri.studio/v1/datasets?name=math_prompts" \
-  -H "Authorization: Bearer $VERI_API_KEY" \
-  -F "file=@math_prompts.jsonl"
-```
+<Tabs>
+  <Tab title="Python SDK">
+    ```python
+    from veri_sdk import Client
 
-### Or connect an external dataset
+    client = Client()
 
-For example, a Hugging Face dataset:
+    dataset = client.datasets.connect(
+        name="gsm8k-train",
+        source_type="hf",
+        huggingface_dataset="openai/gsm8k",
+        huggingface_config={
+            "config_name": "main",
+            "split": "train",
+            "column_mapping": {
+                "question": "prompt",
+                "answer": "label",
+            },
+        },
+    )
+    print(f"Dataset ID: {dataset.id}")
+    ```
+  </Tab>
 
-```bash
-curl -X POST https://api.veri.studio/v1/datasets/connect \
-  -H "Authorization: Bearer $VERI_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "gsm8k-train",
-    "source_type": "hf",
-    "hf_dataset": "gsm8k",
-    "hf_config": {
-      "split": "train",
-      "column_mapping": {
-        "question": "prompt",
-        "answer": "label"
-      }
-    }
-  }'
-```
+  <Tab title="curl">
+    ```bash
+    curl -X POST https://api.veri.studio/v1/datasets/connect \
+      -H "Authorization: Bearer $VERI_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "name": "gsm8k-train",
+        "source_type": "hf",
+        "huggingface_dataset": "openai/gsm8k",
+        "huggingface_config": {
+          "config_name": "main",
+          "split": "train",
+          "column_mapping": {
+            "question": "prompt",
+            "answer": "label"
+          }
+        }
+      }'
+    ```
+  </Tab>
+</Tabs>
 
-You can validate a connection before creating it:
+The `column_mapping` tells Veri that GSM8K's `question` field is the prompt and `answer` is the label your reward function can check against.
 
-```bash
-curl -X POST https://api.veri.studio/v1/datasets/connect/validate \
-  -H "Authorization: Bearer $VERI_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "source_type": "s3",
-    "source_uri": "s3://my-bucket/prompts.jsonl"
-  }'
-```
+## Step 3: Write a reward function
 
-### Upload a reward function
+GRPO works by generating multiple completions per prompt, scoring each one, and reinforcing the better responses. Your reward function defines what "better" means.
 
-TRL-format reward functions are the default:
+For math reasoning, we want to reward two things:
+1. **Correct answers** — did the model get the right number?
+2. **Structured reasoning** — did it show its work in a clear format?
+
+Save this as `reward.py`:
 
 ```python
+import re
+
 def reward(completions, answer=None, **kwargs):
+    """Score completions on correctness and reasoning format.
+
+    Rewards:
+      +1.0  correct final answer
+      +0.5  structured <reasoning>...</reasoning><answer>...</answer> format
+      +0.25 any numeric answer attempted (even if wrong)
+    """
     scores = []
     for completion in completions:
-        if answer and str(answer) in completion:
-            scores.append(1.0)
-        elif "<answer>" in completion and "</answer>" in completion:
-            scores.append(0.5)
+        score = 0.0
+
+        # Check for structured reasoning format
+        has_reasoning = bool(re.search(
+            r"<reasoning>.*?</reasoning>", completion, re.DOTALL
+        ))
+        has_answer_tag = bool(re.search(
+            r"<answer>.*?</answer>", completion, re.DOTALL
+        ))
+        if has_reasoning and has_answer_tag:
+            score += 0.5
+
+        # Extract the numeric answer
+        answer_match = re.search(r"<answer>\s*([\d,.]+)\s*</answer>", completion)
+        if answer_match:
+            predicted = answer_match.group(1).replace(",", "")
         else:
-            scores.append(0.0)
+            # Fallback: grab the last number in the completion
+            numbers = re.findall(r"[\d,.]+", completion)
+            predicted = numbers[-1].replace(",", "") if numbers else None
+
+        if predicted:
+            score += 0.25  # attempted a numeric answer
+
+            # Check correctness against the label
+            if answer:
+                # GSM8K answers have format "#### 42" — extract the number
+                ref_match = re.search(r"####\s*([\d,.]+)", str(answer))
+                ref = ref_match.group(1).replace(",", "") if ref_match else str(answer).strip()
+                if predicted == ref:
+                    score += 1.0
+
+        scores.append(score)
     return scores
 ```
 
+This reward function gives partial credit — the model learns structured reasoning first, then improves on correctness. The scoring breakdown:
+
+| Behavior | Reward |
+|---|---|
+| Random/empty response | 0.0 |
+| Attempted a numeric answer | 0.25 |
+| Used `<reasoning>` + `<answer>` format | 0.5 |
+| Correct final answer | +1.0 |
+| Perfect (correct + structured) | 1.75 |
+
 Upload it:
 
-```bash
-curl -X POST https://api.veri.studio/v1/reward_functions \
-  -H "Authorization: Bearer $VERI_API_KEY" \
-  -F "name=math_reward" \
-  -F "format=trl" \
-  -F "file=@reward.py"
+<Tabs>
+  <Tab title="Python SDK">
+    ```python
+    reward_fn = client.reward_functions.upload("reward.py", format="trl")
+    print(f"Reward ID: {reward_fn.id}")
+    ```
+  </Tab>
+
+  <Tab title="curl">
+    ```bash
+    curl -X POST https://api.veri.studio/v1/reward_functions \
+      -H "Authorization: Bearer $VERI_API_KEY" \
+      -F "name=gsm8k_math_reward" \
+      -F "format=trl" \
+      -F "file=@reward.py"
+    ```
+  </Tab>
+</Tabs>
+
+## Step 4: Launch training
+
+Now submit the GRPO training job. Veri automatically provisions the GPU, loads the dataset, and starts training.
+
+<Tabs>
+  <Tab title="Python SDK">
+    ```python
+    job = client.training_jobs.create(
+        base_model="Qwen/Qwen2.5-7B-Instruct",
+        dataset_id=dataset.id,
+        reward_function_id=reward_fn.id,
+        output_name="qwen2.5-7b-math-reasoning",
+        hyperparameters={
+            "learning_rate": 1e-6,
+            "rollouts_per_prompt": 8,
+            "max_response_length": 2048,
+            "kl_coef": 0.001,
+        },
+        gpu={"type": "A100-80GB", "count": 1},
+    )
+
+    print(f"Job ID: {job.id}")
+    print(f"Status: {job.status}")
+    ```
+  </Tab>
+
+  <Tab title="curl">
+    ```bash
+    curl -X POST https://api.veri.studio/v1/training_jobs \
+      -H "Authorization: Bearer $VERI_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "base_model": "Qwen/Qwen2.5-7B-Instruct",
+        "dataset_id": "YOUR_DATASET_ID",
+        "reward_function_id": "YOUR_REWARD_ID",
+        "output_name": "qwen2.5-7b-math-reasoning",
+        "hyperparameters": {
+          "learning_rate": 1e-6,
+          "rollouts_per_prompt": 8,
+          "max_response_length": 2048,
+          "kl_coef": 0.001
+        },
+        "gpu": {
+          "type": "A100-80GB",
+          "count": 1
+        }
+      }'
+    ```
+  </Tab>
+</Tabs>
+
+### What happens during training
+
+For each prompt in GSM8K, GRPO:
+1. Generates 8 completions from the model
+2. Scores each with your reward function
+3. Computes relative advantages — completions that scored above the group mean get reinforced
+4. Updates the model weights while staying close to the original (controlled by `kl_coef`)
+
+Over time, the model learns to produce structured reasoning that arrives at correct answers.
+
+## Step 5: Monitor and download
+
+<Tabs>
+  <Tab title="Python SDK">
+    ```python
+    # Wait for completion (polls automatically)
+    job.wait()
+    print(f"Status: {job.status}")
+
+    # Download the fine-tuned model
+    if job.download_url:
+        print(f"Checkpoint: {job.download_url}")
+    ```
+  </Tab>
+
+  <Tab title="curl">
+    Poll the job status:
+
+    ```bash
+    curl https://api.veri.studio/v1/training_jobs/$JOB_ID \
+      -H "Authorization: Bearer $VERI_API_KEY"
+    ```
+
+    When the job reaches `completed`, download the checkpoint:
+
+    ```bash
+    curl https://api.veri.studio/v1/training_jobs/$JOB_ID/model \
+      -H "Authorization: Bearer $VERI_API_KEY"
+    ```
+  </Tab>
+</Tabs>
+
+## Step 6: Use your model
+
+The output is a standard HuggingFace checkpoint. Load it directly:
+
+```python
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+model = AutoModelForCausalLM.from_pretrained("./qwen2.5-7b-math-reasoning")
+tokenizer = AutoTokenizer.from_pretrained("./qwen2.5-7b-math-reasoning")
+
+prompt = "Natalia sold clips to 48 of her friends in April, and then she sold half as many clips in May. How many clips did Natalia sell altogether in April and May?"
+
+inputs = tokenizer(prompt, return_tensors="pt")
+outputs = model.generate(**inputs, max_new_tokens=512)
+print(tokenizer.decode(outputs[0], skip_special_tokens=True))
 ```
 
-Use `format=miles` if your file defines `async def reward(args, sample, **kwargs) -> float`.
+After training, you should see structured reasoning like:
 
-### Submit a training job
-
-```bash
-curl -X POST https://api.veri.studio/v1/training_jobs \
-  -H "Authorization: Bearer $VERI_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "base_model": "Qwen/Qwen3-4B",
-    "dataset_id": "ds_abc123",
-    "reward_function_id": "rf_def456",
-    "output_name": "qwen3-4b-math",
-    "hyperparameters": {
-      "learning_rate": 1e-6,
-      "num_epochs": 1,
-      "rollouts_per_prompt": 8,
-      "max_response_length": 2048,
-      "global_batch_size": 64
-    },
-    "gpu": {
-      "gpu_type": "A100-80GB",
-      "gpu_count": 1
-    },
-    "checkpoint_destination": {
-      "type": "veri"
-    }
-  }'
+```
+<reasoning>
+Natalia sold 48 clips in April.
+In May, she sold half as many: 48 / 2 = 24 clips.
+Total clips sold: 48 + 24 = 72
+</reasoning>
+<answer>72</answer>
 ```
 
-### Monitor the job
+## What to try next
 
-Poll status:
+### Customize the reward function
 
-```bash
-curl https://api.veri.studio/v1/training_jobs/job_xyz789 \
-  -H "Authorization: Bearer $VERI_API_KEY"
-```
+The reward function above is a starting point. You can add more signals:
+- **Penalize** overly long responses (`-0.5` if over 500 tokens)
+- **Reward** step-by-step arithmetic (`+0.25` per intermediate calculation)
+- **Check** unit consistency or mathematical notation
 
-Stream logs:
+### Try different models
 
-```bash
-curl -N https://api.veri.studio/v1/training_jobs/job_xyz789/logs \
-  -H "Authorization: Bearer $VERI_API_KEY"
-```
+Start small for fast iteration, scale up for quality:
 
-### Download the final checkpoint
+| Model | Best for |
+|---|---|
+| `Qwen/Qwen2.5-1.5B-Instruct` | Fast experimentation, validating reward functions |
+| `Qwen/Qwen2.5-7B-Instruct` | Good balance of quality and cost |
+| `meta-llama/Llama-3.1-8B-Instruct` | Strong general reasoning baseline |
 
-When the job reaches `completed`, fetch the download URL:
+### Try video generation
 
-```bash
-curl https://api.veri.studio/v1/training_jobs/job_xyz789/model \
-  -H "Authorization: Bearer $VERI_API_KEY"
-```
+Veri also supports LoRA SFT for video generation models like CogVideoX, Wan2.1, and LTX Video. See [Video Gen Fine-Tuning](/supervised-finetuning).
 
-## Next Steps
+## Next steps
 
-<CardGroup cols={2}>
+<CardGroup cols={3}>
+  <Card title="Reward Functions" icon="star" href="/concepts/reward-functions">
+    Design better reward signals
+  </Card>
 
-<Card title="Reward Functions" icon="star" href="/concepts/reward-functions">
-  Learn the current `trl` and `miles` reward formats.
-</Card>
+  <Card title="GRPO Training" icon="brain" href="/concepts/grpo-training">
+    Understand GRPO hyperparameters
+  </Card>
 
-<Card title="API Reference" icon="code" href="/api-reference/introduction">
-  Explore the full API documentation.
-</Card>
+  <Card title="API Reference" icon="code" href="/api-reference/introduction">
+    Complete API documentation
+  </Card>
 
+  <Card title="Python SDK" icon="python" href="/sdks/python">
+    Full SDK reference
+  </Card>
+
+  <Card title="Model Catalog" icon="books" href="/recommended-models">
+    Browse 95+ supported models
+  </Card>
+
+  <Card title="Deployment" icon="cloud" href="/deployment">
+    Serve your fine-tuned model
+  </Card>
 </CardGroup>
