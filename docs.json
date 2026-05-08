@@ -30,7 +30,8 @@
               "supervised-finetuning",
               "concepts/reward-functions",
               "concepts/datasets",
-              "concepts/grpo-training"
+              "concepts/grpo-training",
+              "evaluations"
             ]
           },
           {
