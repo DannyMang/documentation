@@ -1,60 +1,47 @@
 ---
 title: "Evaluations"
-description: "Run automated evaluations against trained checkpoints and deployments"
+description: "Score deployed models against a dataset using reusable scorers"
 ---
 
-<Note>
-**Work in progress.** Evaluations are on the post-beta roadmap — this page describes the planned shape of the feature. The API and SDK surface below is illustrative and may change before launch. For early access or feedback, [contact us](mailto:daniel@veri.studio).
-</Note>
+Evaluations are live for Phase A — `exact_match` and `contains` scorers against any SERVING [deployment](/api-reference/deployments).
 
-## Overview
+<CardGroup cols={2}>
+  <Card title="Concept guide" icon="book-open" href="/concepts/evaluations">
+    What an eval is, the fine-tune-vs-base workflow, when to use which scorer, run lifecycle, and cost notes.
+  </Card>
+  <Card title="API reference" icon="code" href="/api-reference/evaluations">
+    Endpoint-by-endpoint reference: create, list, runs, items, cancel, plus the scorer-config shapes.
+  </Card>
+</CardGroup>
 
-Veri Evaluations will let you score a trained model — or a live deployment — against a fixed dataset and a reward function (or judge model), so you can compare runs and catch regressions before promoting a checkpoint.
+## Quick start
 
-Today, the same reward functions you use for [GRPO training](/concepts/reward-functions) double as evaluation primitives. Evaluations make that loop standalone:
+```python
+from veri_sdk import Client
 
-- Pick a model or deployment.
-- Pick a dataset of prompts (and optional references).
-- Pick one or more reward functions or judges.
-- Get aggregate metrics + per-example traces.
+client = Client()
 
-## Planned workflow
+eval = client.evals.create(
+    name="math accuracy",
+    dataset_id="ds_abc123",
+    scorers=[{"type": "exact_match", "name": "em", "reference_field": "label"}],
+)
 
-<Steps>
-  <Step title="Pick what you're evaluating">
-    A trained checkpoint, a deployment endpoint, or a base model (for baselines).
-  </Step>
-  <Step title="Pick a dataset">
-    Reuse any [Veri dataset](/concepts/datasets), or upload an eval-only set of prompts and (optional) reference outputs.
-  </Step>
-  <Step title="Pick scorers">
-    Reuse your existing [reward functions](/concepts/reward-functions), or attach a judge model (LLM-as-judge) for open-ended tasks.
-  </Step>
-  <Step title="Run and compare">
-    Submit an eval job. Veri returns per-example scores, aggregate metrics, and a comparison view across runs.
-  </Step>
-</Steps>
+run = client.evals.runs.create(eval.id, model=f"deployment:{dep_id}", num_samples=200)
+run = run.wait()
 
-## What's coming first
+print(f"Mean score: {run.results['scores']['em']['mean']:.3f}")
+```
 
-The first release will focus on the surface most teams already need:
+## What's shipped (Phase A)
 
-- **Reward-function evals** — score generations with the same Python reward function used for GRPO.
-- **Deterministic metrics** — exact-match, regex, JSON-validity, function-calling correctness.
-- **Run comparisons** — side-by-side scores across checkpoints from the same training job.
+- `exact_match` scorer — case-insensitive by default, strips whitespace, coerces non-string references.
+- `contains` scorer — substring or regex match against a dataset reference field.
+- Model target: `deployment:<id>` against a SERVING deployment.
+- Dataset support: JSONL uploads.
+- Full run lifecycle with per-sample item rows + aggregate `mean/median/std/min/max/count/error_count` per scorer.
 
-## Coming after that
+## Coming next
 
-- LLM-as-judge with rubric prompts.
-- Eval-only datasets (no training labels required).
-- Scheduled evals against live deployments for drift detection.
-- Public eval leaderboards for shared benchmarks.
-
-## In the meantime
-
-You can already approximate evaluation today by:
-
-1. Submitting a small [training job](/api-reference/training-jobs) with `max_steps: 0` and your eval reward function — the reward signal at step 0 is your baseline score.
-2. Running your reward function locally against generations from a [deployment](/deployment) endpoint.
-
-If you have an evaluation use case you need before the official launch, [reach out](mailto:daniel@veri.studio) — early-access slots are available.
+- **Phase B:** `reward_function` (reuse your training reward), `llm_judge`, `python` (custom Python), BYOK frontier comparators (OpenAI/Anthropic/Google), and ephemeral deployments for `job:<id>` targets.
+- **Phase C:** curated public benchmarks (MMLU, GPQA, HumanEval, IFEval, MATH-500, GSM8K, AIME, HellaSwag, ARC, TruthfulQA) via [Inspect AI](https://inspect.aisi.org.uk/).

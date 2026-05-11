@@ -31,6 +31,7 @@
               "concepts/reward-functions",
               "concepts/datasets",
               "concepts/grpo-training",
+              "concepts/evaluations",
               "evaluations"
             ]
           },
@@ -84,6 +85,12 @@
             "group": "Deployments",
             "pages": [
               "api-reference/deployments"
+            ]
+          },
+          {
+            "group": "Evaluations",
+            "pages": [
+              "api-reference/evaluations"
             ]
           },
           {

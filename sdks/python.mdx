@@ -35,6 +35,8 @@ The SDK covers all control-plane resources:
 - `client.datasets` — upload, connect, validate, list, get
 - `client.reward_functions` — upload, list, get
 - `client.training_jobs` — create, list, get, cancel, wait
+- `client.deployments` — create, list, get, stop, chat, metrics, requests
+- `client.evals` — create, list, get, delete + nested `.runs` (create, get, list, items, cancel, wait)
 
 ## Datasets
 
@@ -181,6 +183,40 @@ if job.download_url:
 ```
 
 The current SDK file does not yet include helper methods for the cost and billing endpoints. Use raw HTTP calls or add wrappers if you need them immediately.
+
+## Evaluations
+
+Run an eval against a deployed model and read back per-sample scores. See the [Evaluations concept page](/concepts/evaluations) and the [Evaluations API reference](/api-reference/evaluations) for the full surface.
+
+```python
+# 1. Define the eval once (dataset + scorers)
+eval = client.evals.create(
+    name="math accuracy",
+    dataset_id="ds_abc123",
+    scorers=[
+        {"type": "exact_match", "name": "em", "reference_field": "label"},
+    ],
+)
+
+# 2. Run against a serving deployment
+run = client.evals.runs.create(
+    eval.id,
+    model="deployment:dep_xxx",
+    num_samples=200,    # cap for a quick preview
+)
+
+# 3. Block until terminal (poll_interval=5s by default)
+run = run.wait()
+
+# 4. Read aggregate scores
+print(run.status)                          # "completed"
+print(run.results["scores"]["em"]["mean"]) # e.g. 0.825
+
+# 5. Browse per-sample results
+items = client.evals.runs.items(eval.id, run.id, limit=50)
+for item in items:
+    print(item.item_index, item.output, "→", item.scores)
+```
 
 ## Error Handling
 
