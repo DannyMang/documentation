@@ -1,0 +1,161 @@
+---
+title: "veri volumes"
+sidebarTitle: "Volumes"
+description: "Create, upload, list, and delete persistent storage volumes."
+keywords: ["veri volumes", "storage", "mount", "upload", "multipart"]
+---
+
+The `veri volumes` group manages persistent named storage that mounts into training workers at `/mnt/<volume-name>`. Conceptual overview lives in the [Volumes](/concepts/volumes) guide.
+
+## Commands
+
+| Command | Purpose |
+| --- | --- |
+| `create <name>` | Create a volume (idempotent). |
+| `list` | List your volumes. |
+| `get <name>` | Show one volume's metadata. |
+| `delete <name> [--yes]` | Delete a volume + queue its S3 prefix for cleanup. |
+| `upload <vol> <path> [--to /remote]` | Upload one file. Auto-multipart for files > 5 GiB. |
+| `upload-dir <vol> <dir> [--to /]` | Recursively upload a directory (up to 8 files concurrent). |
+| `ls <vol> [path]` | List files inside the volume. |
+| `rm <vol> <path>` | Delete one file. |
+
+## Create a volume
+
+```bash
+veri volumes create my-corpus
+```
+
+Names must match `^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$`. Re-running with the same name returns the existing volume — no error.
+
+## Upload files
+
+For a single file:
+
+```bash
+veri volumes upload my-corpus ./train.jsonl
+```
+
+The remote path defaults to `/<filename>`. Override with `--to`:
+
+```bash
+veri volumes upload my-corpus ./train.jsonl --to /data/2026-05/train.jsonl
+```
+
+Files larger than 5 GiB are uploaded with S3 multipart automatically. A progress bar shows transfer rate, ETA, and total transferred.
+
+For a directory:
+
+```bash
+veri volumes upload-dir my-corpus ./training-data --to /data
+```
+
+Up to 8 files transfer concurrently. The progress bar reports cumulative bytes across all files. A per-file failure aborts the batch — you can safely re-run since S3 PUT is idempotent on the same key.
+
+## List + inspect
+
+```bash
+$ veri volumes list
+┃ name       ┃ id      ┃ size      ┃ files ┃ updated_at           ┃
+┃ my-corpus  ┃ vol_abc ┃ 14.2 GiB  ┃ 1023  ┃ 2026-05-14T18:22:09Z ┃
+```
+
+```bash
+$ veri volumes get my-corpus --format json
+{
+  "object": "volume",
+  "id": "vol_abc",
+  "name": "my-corpus",
+  "size": "14.2 GiB",
+  "files": 1023,
+  "updated_at": "2026-05-14T18:22:09Z"
+}
+```
+
+List files inside a volume:
+
+```bash
+veri volumes ls my-corpus            # all files
+veri volumes ls my-corpus /data/2026 # filter by prefix
+```
+
+## Delete
+
+```bash
+veri volumes delete my-corpus
+```
+
+Prompts for the volume name as confirmation and shows the file count + total bytes that will be deleted. Pass `--yes` to skip the prompt in scripts:
+
+```bash
+veri volumes delete my-corpus --yes
+```
+
+The DB row is dropped immediately; the S3 prefix is reaped by a background reconciler within ~60 seconds. There is no undo.
+
+Delete a single file inside a volume without removing the volume itself:
+
+```bash
+veri volumes rm my-corpus /data/old.jsonl
+```
+
+## Pipe-friendly output
+
+`--quiet` strips formatting and emits just the relevant id:
+
+```bash
+VOL_ID=$(veri volumes create my-corpus --quiet)
+echo $VOL_ID    # vol_abc123
+```
+
+`--format json|jsonl|csv` swaps the table renderer for machine-readable output, and the progress bar on uploads is suppressed.
+
+```bash
+veri volumes list --format json > volumes.json
+```
+
+## Common workflows
+
+### Re-use a volume across many training jobs
+
+```bash
+veri volumes create gsm8k
+veri volumes upload gsm8k ./gsm8k-train.jsonl --to /train.jsonl
+```
+
+Then in your script:
+
+```python
+dataset = client.datasets.from_volume(volume="gsm8k", path="/train.jsonl")
+client.training_jobs.create(..., dataset_id=dataset.id)
+```
+
+Every subsequent training run skips the upload and reuses the same S3 prefix.
+
+### Migrate from a local directory
+
+```bash
+veri volumes create research-corpus
+veri volumes upload-dir research-corpus ./local-corpus --to /
+veri volumes ls research-corpus    # confirm the file tree mirrors local
+```
+
+### Inspect failed uploads
+
+If `volumes upload-dir` aborts mid-batch, files that completed are already on the volume — you can resume by re-running the same command. S3 PUT is idempotent on the same key.
+
+```bash
+veri volumes ls my-corpus                 # see what made it
+veri volumes upload-dir my-corpus ./data  # re-run; existing files are skipped
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Volumes overview" icon="hard-drive" href="/concepts/volumes">
+    What volumes are, pricing, when to use them.
+  </Card>
+  <Card title="REST API" icon="globe" href="/api-reference/volumes">
+    `/v1/volumes` endpoints + multipart upload protocol.
+  </Card>
+</CardGroup>

@@ -30,6 +30,7 @@
               "supervised-finetuning",
               "concepts/reward-functions",
               "concepts/datasets",
+              "concepts/volumes",
               "concepts/grpo-training",
               "concepts/evaluations",
               "evaluations"
@@ -79,6 +80,12 @@
             "group": "Training Jobs",
             "pages": [
               "api-reference/training-jobs"
+            ]
+          },
+          {
+            "group": "Volumes",
+            "pages": [
+              "api-reference/volumes"
             ]
           },
           {
