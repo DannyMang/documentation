@@ -1,82 +1,76 @@
 ---
-title: "Build with Veri"
-description: "Fine-tune open-source models to be the best for your use-case "
+title: "Introduction"
+description: "Mintlify is an AI-native documentation platform built for developers, with beautiful defaults, interactive API playgrounds, and smart search."
+mode: "frame"
+keywords: ["overview", "platform", "getting started", "features"]
+boost: 3
 ---
 
-## Get started in minutes
+export const HeroCard = ({ filename, title, description, href }) => {
+  return (
+    <a className="group cursor-pointer pb-8" href={href}>
+      <img
+        src={`https://raw.githubusercontent.com/mintlify/docs/refs/heads/main/images/hero/${filename}.png`}
+        className="block dark:hidden pointer-events-none group-hover:scale-105 transition-all duration-100"
+      />
+      <img
+        src={`https://raw.githubusercontent.com/mintlify/docs/refs/heads/main/images/hero/${filename}-dark.png`}
+        className="pointer-events-none group-hover:scale-105 transition-all duration-100 hidden dark:block"
+      />
+      <h3 className="mt-5 text-gray-900 dark:text-zinc-50 font-medium">
+        {title}
+      </h3>
+      <span className="mt-1.5">{description}</span>
+    </a>
+  );
+};
 
-Veri helps you fine-tune language models with your own datasets and reward functions. Choose any model we support, let us handle the infrastructure, and deploy your custom model seamlessly. 
+<div className="relative">
+  <div className="absolute -top-14 left-0 right-0 opacity-80">
+    <img
+      src="/images/hero/background-light.svg"
+      className="block dark:hidden pointer-events-none w-full h-auto"
+      alt="Decorative background image."
+    />
+    <img
+      src="/images/hero/background-dark.svg"
+      className="hidden dark:block pointer-events-none w-full h-auto"
+      alt="Decorative background image."
+    />
+  </div>
 
-<CardGroup cols={2}>
-  <Card
-    title="Get Started"
-    icon="rocket"
-    href="/quickstart"
-  >
-    Submit your first training job in minutes.
-  </Card>
-  <Card
-    title="Easy Deployment"
-    icon="cloud"
-    href="/deployment"
-  >
-    Train with Veri, then deploy the final Hugging Face checkpoint wherever you already serve models.
-  </Card>
-  <Card
-    title="Try the Playground"
-    icon="play"
-    href="/playground"
-  >
-    Explore the current playground preview and see how Veri is shaping the product experience.
-  </Card>
-  <Card
-    title="Connect Your Dataset"
-    icon="database"
-    href="/concepts/datasets"
-  >
-    Upload JSONL directly or connect data from cloud storage, Hugging Face, and databases.
-  </Card>
-  <Card
-    title="Fine-Tune for Function Calling"
-    icon="code"
-    href="/function-calling"
-  >
-    Use structured datasets and reward functions to train models toward tool use and predictable outputs.
-  </Card>
-  <Card
-    title="Video Gen Fine-Tuning"
-    icon="video"
-    href="/supervised-finetuning"
-  >
-    Fine-tune video generation models with LoRA SFT on CogVideoX, Wan2.1, LTX Video, and more.
-  </Card>
-</CardGroup>
+  <div className="relative z-10 px-4 py-16 lg:py-48 lg:pb-24 max-w-3xl mx-auto">
+    <h1 className="block text-4xl font-medium text-center text-gray-900 dark:text-zinc-50 tracking-tight">
+      Documentation
+    </h1>
 
-## Resources & Help
+    <div className="max-w-xl mx-auto px-4 mt-4 text-lg text-center text-gray-500 dark:text-zinc-500">
+      Meet the next generation of documentation. AI-native, beautiful out-of-the-box, and built for developers and teams.
+    </div>
 
-<CardGroup cols={3}>
-  <Card title="Which model should I use?" icon="compass" href="/recommended-models">
-    Find the best model for your use case.
-  </Card>
-  <Card title="Cookbook" icon="book-open" href="/cookbook">
-    Code examples and practical starting points for training workflows.
-  </Card>
-  <Card title="Examples Repo" icon="github" href="https://github.com/DannyMang/veri_examples">
-    Runnable Python scripts for quickstart, reward functions, and more.
-  </Card>
-  <Card title="API Reference" icon="code" href="/api-reference/introduction">
-    Complete API documentation.
-  </Card>
-  <Card title="Discord Community" icon="discord" href="https://discord.gg/DBZSRzPAuR">
-    Ask questions and get help from developers.
-  </Card>
-  <Card title="Security & Compliance" icon="shield-check" href="/security-compliance">
-    We are currently in the SOC 2 process and documenting our security posture as we build.
-  </Card>
-  <Card title="System Status" icon="signal" href="https://veri.studio/status">
-    Check service uptime on our standalone status page.
-  </Card>
-  <Card title="Talk to Sales" icon="building" href="https://cal.com/veri.studio/30min">
-    Talk to our team.
-  </Card>
-</CardGroup>
+    <div className="px-6 lg:px-0 mt-12 lg:mt-24 grid sm:grid-cols-2 gap-x-6 gap-y-4">
+      <HeroCard filename="rocket" title="Quickstart" description="Deploy your first docs site in minutes with our step-by-step guide" href="/quickstart" />
+
+      <HeroCard
+        filename="cli"
+        title="CLI installation"
+        description="Install the CLI to preview and develop your docs locally"
+        href="/installation"
+      />
+
+      <HeroCard
+        filename="editor"
+        title="Web editor"
+        description="Make quick updates and manage content with our browser-based editor"
+        href="/editor/index"
+      />
+
+      <HeroCard
+        filename="components"
+        title="Components"
+        description="Build rich, interactive documentation with our ready-to-use components"
+        href="/components/accordions"
+      />
+    </div>
+  </div>
+</div>

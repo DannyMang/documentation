@@ -1,0 +1,159 @@
+---
+title: "Fine-tune a model"
+sidebarTitle: "Fine-tuning Quickstart"
+description: "One decorator, one CLI command, one fine-tuned model."
+keywords: ["quickstart", "fine-tune", "GRPO", "training", "GSM8K", "decorator"]
+---
+
+{/* doctest-page-gpu-required */}
+
+Fine-tuning is **one decorator**. Define a reward function, decorate it with your training config, and run with `veri train`.
+
+We use **Qwen2.5-0.5B-Instruct** for a fast smoke run on [GSM8K](https://huggingface.co/datasets/openai/gsm8k). The 0.5B / 50-step path typically finishes in ~10 min and costs under $1 on an A100.
+
+<Warning>
+  This quickstart spends real GPU credit. Check your balance with `veri billing balance` before you start.
+</Warning>
+
+## Write your script
+
+Save as `fine_tune.py`:
+
+```python
+from veri_sdk import training_job
+
+
+@training_job(
+    base_model="Qwen/Qwen2.5-0.5B-Instruct",
+    dataset="hf:openai/gsm8k",
+    column_mapping={"question": "prompt", "answer": "label"},
+    gpu_type="A100-80GB",
+    gpu_count=1,
+    hyperparameters={
+        "learning_rate": 1e-6,
+        "rollouts_per_prompt": 4,
+        "max_response_length": 512,
+        "kl_coef": 0.001,
+        "max_steps": 50,
+    },
+)
+def reward(completions, answer, **kwargs):
+    import re
+
+    scores = []
+    for c, expected in zip(completions, answer):
+        text = c[-1]["content"] if isinstance(c, list) else str(c)
+        format_ok = bool(re.search(r"<answer>.*?</answer>", text, re.DOTALL))
+        m = re.search(r"<answer>(.*?)</answer>", text, re.DOTALL)
+        correct = bool(m and expected.strip() in m.group(1).strip())
+        scores.append(0.5 * float(format_ok) + 0.5 * float(correct))
+    return scores
+```
+
+The `@training_job` decorator is **metadata only** — importing this file does nothing at runtime. `veri train` is what actually uploads, submits, and waits.
+
+## Run it
+
+```bash
+veri train fine_tune.py
+```
+
+You'll see:
+
+```
+[1/4] Bundling reward function from fine_tune.py...
+[2/4] Uploading reward function (name=reward)...
+      reward_fn.id = rf_abc123
+[3/4] Resolving dataset 'hf:openai/gsm8k'...
+      dataset.id = ds_xyz456 (connected from 'openai/gsm8k')
+[4/4] Submitting training job (Qwen/Qwen2.5-0.5B-Instruct, A100-80GB x1)...
+      job.id = tj_def789
+      waiting for completion (polls every 15s)...
+      dashboard: https://veri.studio/jobs/tj_def789
+      status: queued
+      status: provisioning
+      status: running
+      status: completed
+      cost: $0.4732
+```
+
+Open the dashboard URL the moment it appears to watch the live training curve while the script polls.
+
+## Test your reward function locally
+
+Because the decorator is metadata only, the decorated function is still callable in-process. `.local(...)` is explicit "I'm running locally, don't submit anything" — perfect for unit tests.
+
+```python
+from fine_tune import reward
+
+scores = reward.local(
+    completions=[[{"content": "12 + 7 = <answer>19</answer>"}]],
+    answer=["19"],
+)
+assert scores == [1.0]
+```
+
+## Download the checkpoint
+
+The script doesn't auto-download. Once it prints `status: completed`, pull the checkpoint:
+
+```bash
+veri jobs download tj_def789 --output ./checkpoints
+```
+
+Or scripted:
+
+```python
+from veri_sdk import Client
+
+client = Client()
+job = client.training_jobs.get("tj_def789")
+job.download("./checkpoints")
+```
+
+## What you can change
+
+Every kwarg on `@training_job` is documented in the [API reference](/api-reference/training-jobs). The interesting ones:
+
+| Kwarg | What it controls |
+|---|---|
+| `base_model` | Any Hugging Face causal LM. Qwen2.5-7B is a good production default once your loop works. |
+| `dataset` | `"hf:<org>/<name>"` to auto-connect a Hugging Face dataset, or `"ds_<id>"` to reference one you already uploaded. |
+| `hyperparameters` | `learning_rate`, `rollouts_per_prompt`, `max_steps`, `kl_coef`, `max_response_length`, plus method-specific keys. See [GRPO](/fine-tuning/grpo). |
+| `gpu_type` / `gpu_count` | Single A100 fits 0.5B-7B comfortably. 70B needs `gpu_count=4`+. |
+
+## For more control
+
+The decorator wraps a multi-step SDK flow for the common case. Use the SDK directly if you want to orchestrate multiple jobs, run conditional logic, share a dataset across runs, or skip the auto-connect step:
+
+```python
+from veri_sdk import Client
+
+client = Client()
+reward_fn = client.reward_functions.upload("reward.py", format="trl")
+dataset = client.datasets.connect(name="my-data", source_type="hf", ...)
+job = client.training_jobs.create(
+    base_model="...", dataset_id=dataset.id, reward_function_id=reward_fn.id, ...
+)
+job.wait()
+job.download("./checkpoints")
+```
+
+See [Fine-tuning, deeper](/fine-tuning) for the full surface.
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Deploy this model" icon="cloud" href="/quickstart/deploy">
+    Skip downloading — serve your fine-tuned checkpoint directly from Veri.
+  </Card>
+  <Card title="Evaluate it" icon="chart-line" href="/quickstart/eval">
+    Score the fine-tuned model on a held-out GSM8K split.
+  </Card>
+  <Card title="Fine-tuning, deeper" icon="brain" href="/fine-tuning">
+    Lifecycle, failure modes, and what each hyperparameter actually does.
+  </Card>
+  <Card title="Reward functions" icon="scale-balanced" href="/concepts/reward-functions">
+    Write rewards for tasks beyond format-and-correctness.
+  </Card>
+</CardGroup>

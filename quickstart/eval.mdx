@@ -1,0 +1,137 @@
+---
+title: "Run an eval"
+sidebarTitle: "Evals Quickstart"
+description: "Score a model on a held-out dataset, read the aggregate result, and inspect failures."
+keywords: ["quickstart", "eval", "evaluation", "scorer", "exact_match"]
+---
+
+{/* doctest-page-gpu-required */}
+
+This walks through Veri's evaluation primitives end-to-end: define an Eval (dataset + scorers), kick off an EvalRun against a model, wait for it to finish, and read both the aggregate score and per-item results.
+
+We score against a small held-out GSM8K subset using the `exact_match` scorer.
+
+<Note>
+  Evals don't have separate billing. Cost flows through the deployment you target — see [Cost & billing](/concepts/cost-and-billing).
+</Note>
+
+<Steps>
+  <Step title="Prereq: a deployment to evaluate">
+    Eval runs score against a live deployment, so you need one running first. Finish [Deploy a model](/quickstart/deploy) and reuse `dep.id`.
+
+    ```python
+    from veri_sdk import Client
+    client = Client()
+
+    target_model = dep.id  # from /quickstart/deploy
+    ```
+
+    <Note>
+      Targeting `hf:org/model` or `job:<id>` directly (without an existing deployment) is on the Phase B roadmap.
+    </Note>
+  </Step>
+
+  <Step title="Connect the eval dataset">
+    Pull a small slice of GSM8K's test split — 20 rows is enough to see the loop work without spending much.
+
+    ```python
+    eval_dataset = client.datasets.connect(
+        name="gsm8k-eval-smoke",
+        source_type="hf",
+        huggingface_dataset="openai/gsm8k",
+        huggingface_config={
+            "split": "test[:20]",
+            "column_mapping": {
+                "question": "prompt",
+                "answer": "label",
+            },
+        },
+    )
+
+    print(eval_dataset.id)
+    ```
+  </Step>
+
+  <Step title="Define the eval">
+    An Eval is the **definition** — dataset + scorers. Runs are separate (one definition can have many runs against many models).
+
+    ```python
+    eval_def = client.evals.create(
+        name="gsm8k-smoke",
+        dataset_id=eval_dataset.id,
+        scorers=[
+            {"type": "exact_match", "field": "label"},
+        ],
+    )
+
+    print(eval_def.id)
+    ```
+
+    <Tip>
+      `exact_match` and `contains` are the scorers available today (Phase A). LLM judge, custom Python scorers, and benchmark scorers (MMLU, GPQA, HumanEval, ...) are on the roadmap — see [Evaluations](/evaluations).
+    </Tip>
+  </Step>
+
+  <Step title="Kick off a run">
+    ```python
+    run = client.evals.runs.create(
+        eval_def.id,
+        model=target_model,
+    )
+
+    print(f"Run {run.id} — status: {run.status}")
+    ```
+  </Step>
+
+  <Step title="Wait for completion">
+    ```python
+    run = client.evals.runs.wait(eval_def.id, run.id, poll_interval=5)
+
+    print(f"Status: {run.status}")
+    print(f"Processed: {run.processed_items} / {run.total_items}")
+    ```
+
+    A 20-row run typically completes in under a minute.
+  </Step>
+
+  <Step title="Read the aggregate result">
+    ```python
+    print(run.results)
+    # → {"exact_match": {"mean": 0.35, "count": 20, ...}}
+    ```
+
+    The aggregate is computed once the run finishes, with one entry per scorer.
+  </Step>
+
+  <Step title="Inspect the failures">
+    The interesting signal isn't the average — it's which items the model got wrong.
+
+    ```python
+    items = client.evals.runs.items(eval_def.id, run.id, limit=50)
+
+    failures = [i for i in items if i.scores.get("exact_match", 0) == 0]
+    for item in failures[:5]:
+        print(f"--- item {item.item_index} ---")
+        print(f"Input:  {item.input[:200]}")
+        print(f"Output: {item.output[:200]}")
+        print(f"Label:  {item.label}")
+    ```
+  </Step>
+</Steps>
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Compare two models" icon="scale-balanced" href="/examples/run-eval-suite">
+    Run the same eval against a base model and your fine-tune, then diff the results.
+  </Card>
+  <Card title="Evaluations, deeper" icon="chart-line" href="/evaluations">
+    Scorer types, run lifecycle, and the eval worker architecture.
+  </Card>
+  <Card title="Fine-tune to improve the score" icon="brain" href="/quickstart/fine-tune">
+    Train against the failures you just found.
+  </Card>
+  <Card title="API reference" icon="code" href="/api-reference/evaluations">
+    Endpoint-level details for evals, runs, and items.
+  </Card>
+</CardGroup>
