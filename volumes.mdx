@@ -1,0 +1,118 @@
+---
+title: "Volumes"
+description: "Named persistent storage that mounts into training workers"
+---
+
+## Overview
+
+Veri Volumes are named persistent storage you upload to once and reference from any number of training jobs. The worker mounts the volume at `/mnt/<name>` before training starts; your script reads files from the mount the same way it would read any local file.
+
+Volumes solve three problems with the upload-per-job flow:
+
+- **Reuse.** Upload your dataset once, reference it from 100 training jobs without re-uploading.
+- **Large datasets.** Files stay on disk on the worker — no full materialization into Python memory, so multi-tens-of-GB datasets work on H100-class GPUs.
+- **Bring your own data.** S3/SQL connect paths aren't available; Volumes are the supported path for proprietary data that doesn't live on HuggingFace.
+
+## When to use a Volume
+
+Pick a Volume when any of the following is true:
+
+- You expect to run more than one training job against the same dataset.
+- Your dataset is larger than a few GB.
+- Your dataset isn't public and isn't on HuggingFace.
+
+For one-off experiments against small public data, the dataset upload (`veri datasets upload`) or HuggingFace connect (`veri datasets connect-hf`) paths are simpler.
+
+## Pricing
+
+| Tier | Rate |
+| --- | --- |
+| First 512 GiB per user (averaged over the month) | Free |
+| Above 512 GiB | $0.085 per GiB-month |
+
+The free tier is per **user**, not per volume — your usage is summed across every volume you own, averaged across the calendar month, and the first 512 GiB of that average is free. Storage is billed monthly via Stripe credit deduction on the 1st of the following month.
+
+A user averaging 600 GiB across the month pays $0.085 × (600 − 512) = **$7.48** for that month.
+
+## Quickstart
+
+<Steps>
+
+<Step title="Create a volume">
+```bash
+veri volumes create my-corpus
+```
+
+The name must match `^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$`. Re-running with the same name is idempotent — it returns the existing volume.
+</Step>
+
+<Step title="Upload your dataset">
+```bash
+veri volumes upload my-corpus ./train.jsonl
+```
+
+Files larger than 5 GiB are uploaded with multipart automatically. A progress bar shows transfer rate and ETA.
+
+For a directory, use `upload-dir` — up to 8 files transfer concurrently:
+
+```bash
+veri volumes upload-dir my-corpus ./training-data --to /data
+```
+</Step>
+
+<Step title="Reference the volume in a training job">
+The SDK exposes a `from_volume` helper that creates a Dataset pointing at a file inside the volume:
+
+```python
+from veri_sdk import Client
+
+client = Client()
+dataset = client.datasets.from_volume(
+    volume="my-corpus",
+    path="/train.jsonl",
+)
+job = client.training_jobs.create(
+    base_model="Qwen/Qwen2.5-0.5B-Instruct",
+    dataset_id=dataset.id,
+    output_name="my-run",
+    gpu_type="H100",
+    gpu_count=1,
+)
+```
+
+When the worker boots, it mounts `my-corpus` at `/mnt/my-corpus` and reads `/mnt/my-corpus/train.jsonl` directly. No download to `/tmp`, no in-memory list materialization.
+</Step>
+
+</Steps>
+
+## Worker behavior
+
+Before training starts, the worker:
+
+1. Mints short-lived AWS credentials scoped to the volume's S3 prefix (read-only, 30-minute TTL).
+2. Checks that the volume fits in available disk (refuses if it would consume more than 80% of free space — you'll see `volume_too_large_for_node` in the job error and need a larger GPU SKU).
+3. Syncs the prefix to `/mnt/<volume-name>` using `aws s3 sync`.
+4. Verifies the post-sync file count and total bytes against what the control plane recorded. If a file silently dropped during sync, the job fails fast with `volume_sync_incomplete` rather than training on partial data.
+
+These steps add a few seconds to job startup for small volumes; a 50 GB volume sync typically takes 30–60s on H100-class network.
+
+## Deletion
+
+```bash
+veri volumes delete my-corpus
+```
+
+Without `--yes`, the CLI prompts for the volume name as a confirmation and shows the file count + total bytes that will be deleted. The DB row is dropped immediately; the S3 prefix is cleaned up by a background reconciler within a minute.
+
+There is no time-based garbage collection. Volumes stay until you delete them — the monthly billing meter is what keeps storage bills aligned with what you actually use.
+
+## API + CLI references
+
+<CardGroup cols={2}>
+  <Card title="CLI commands" icon="terminal" href="/cli/volumes">
+    `veri volumes create / upload / list / delete`
+  </Card>
+  <Card title="REST API" icon="globe" href="/api-reference/volumes">
+    `/v1/volumes` endpoints including multipart upload init.
+  </Card>
+</CardGroup>

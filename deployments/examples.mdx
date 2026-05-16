@@ -1,0 +1,159 @@
+---
+title: "Examples"
+sidebarTitle: "Examples"
+description: "Recipes: deploy + chat + stop, serve a fine-tune, swap models, capture cost."
+keywords: ["examples", "deploy", "chat", "fine-tune", "OpenAI SDK"]
+---
+
+Three runnable recipes. All assume `from veri_sdk import Client; client = Client()` and `veri login` already done.
+
+## Recipe 1 — Deploy, chat, stop
+
+The basic loop. Use this any time you need to send a few requests and then shut down.
+
+```python
+dep = client.deployments.create(
+    model="Qwen/Qwen2.5-0.5B-Instruct",
+    source="huggingface",
+    name="hello-deploy",
+    gpu={"gpu_type": "A100-80GB", "gpu_count": 1},
+)
+
+try:
+    dep.wait()
+    print(f"Endpoint: {dep.endpoint_url}")
+
+    response = dep.chat([{"role": "user", "content": "What is 12 + 7?"}])
+    print(response["choices"][0]["message"]["content"])
+finally:
+    dep.stop()
+    final = client.deployments.get(dep.id)
+    print(f"Cost: ${final.total_cost_usd:.4f}, Requests: {final.total_requests}")
+```
+
+The `try/finally` is the pattern that prevents accidental long-running deployments.
+
+## Recipe 2 — Serve your fine-tuned model
+
+After a training job completes, deploy it directly — no checkpoint download needed.
+
+```python
+# Assume job is a completed training_job from /quickstart/fine-tune
+job = client.training_jobs.get("tj_your_completed_job")
+
+assert job.status == "completed", f"Job not done: {job.status}"
+
+dep = client.deployments.create(
+    model=job.id,                # the training job ID
+    source="training_job",       # not huggingface
+    name=f"{job.output_name}-serving",
+    gpu={"gpu_type": "A100-80GB", "gpu_count": 1},  # often smaller than training GPU
+)
+
+dep.wait()
+
+# Test it
+response = dep.chat([
+    {"role": "user", "content": "Solve this: A train travels 60mph for 2 hours. How far?"},
+])
+print(response["choices"][0]["message"]["content"])
+
+# Inspect the request log
+recent = dep.requests(limit=5)
+for req in recent:
+    print(f"{req['latency_ms']:.0f}ms  {req['prompt_tokens']}→{req['completion_tokens']} tokens")
+
+dep.stop()
+```
+
+## Recipe 3 — OpenAI SDK interop
+
+Useful when you have existing code that targets OpenAI and want to swap in a Veri deployment.
+
+```python
+from openai import OpenAI
+
+# Spin up the deployment as usual
+dep = client.deployments.create(
+    model="meta-llama/Llama-3.1-8B-Instruct",
+    source="huggingface",
+    name="llama-8b",
+    gpu={"gpu_type": "H100", "gpu_count": 1},
+)
+dep.wait()
+
+# Swap in the OpenAI client — same shape, different base_url
+oai = OpenAI(
+    base_url=dep.endpoint_url,
+    api_key="vk_your_key_here",
+)
+
+# All your existing OpenAI-shaped code works unchanged
+def chat(prompt: str) -> str:
+    r = oai.chat.completions.create(
+        model=dep.name,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.7,
+        max_tokens=512,
+    )
+    return r.choices[0].message.content
+
+print(chat("What's the capital of France?"))
+print(chat("Write me a haiku about debugging."))
+
+dep.stop()
+```
+
+This works the same way with LangChain, LlamaIndex, or any other library that lets you set `base_url` / `api_base`.
+
+## Recipe 4 — Compare two models on the same prompt
+
+Spin up two deployments side by side and ping both.
+
+```python
+prompts = ["What is 12 + 7?", "Write a haiku about coffee.", "Explain RLHF in one sentence."]
+
+dep_small = client.deployments.create(
+    model="Qwen/Qwen2.5-0.5B-Instruct",
+    source="huggingface",
+    name="qwen-small",
+    gpu={"gpu_type": "A100-80GB", "gpu_count": 1},
+)
+dep_big = client.deployments.create(
+    model="Qwen/Qwen2.5-7B-Instruct",
+    source="huggingface",
+    name="qwen-big",
+    gpu={"gpu_type": "H100", "gpu_count": 1},
+)
+
+dep_small.wait()
+dep_big.wait()
+
+try:
+    for p in prompts:
+        small = dep_small.chat([{"role": "user", "content": p}])["choices"][0]["message"]["content"]
+        big = dep_big.chat([{"role": "user", "content": p}])["choices"][0]["message"]["content"]
+        print(f"\nPROMPT: {p}\n  SMALL: {small[:100]}\n  BIG:   {big[:100]}")
+finally:
+    dep_small.stop()
+    dep_big.stop()
+```
+
+For a structured comparison with scoring, use [Evaluations](/evaluations) instead.
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="OpenAI compatibility" icon="code" href="/deployments/openai-compat">
+    Full list of what's supported in chat.
+  </Card>
+  <Card title="Run an eval" icon="chart-line" href="/evaluations">
+    Score a deployment against a held-out dataset.
+  </Card>
+  <Card title="Cost & pricing" icon="dollar-sign" href="/deployments/cost">
+    Per-hour rates and the idle warning.
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/quickstart/deploy">
+    Shorter version of recipe 1.
+  </Card>
+</CardGroup>

@@ -1,0 +1,147 @@
+---
+title: "veri datasets"
+sidebarTitle: "Datasets"
+description: "Upload JSONL files, connect HuggingFace datasets, validate, and inspect datasets."
+keywords: ["veri datasets", "upload", "connect-hf", "jsonl", "huggingface"]
+---
+
+The `veri datasets` group covers every dataset operation: upload local JSONL, connect a HuggingFace dataset, validate structure, and inspect registered datasets.
+
+## Commands
+
+| Command | Purpose |
+| --- | --- |
+| `upload <path>` | Upload a JSONL file. Auto-runs structural validation. |
+| `connect-hf <repo>` | Connect a HuggingFace dataset. |
+| `check <path>` | Standalone structural validator. |
+| `preview <path> [--n N]` | Print the first N rows of a local JSONL. |
+| `list` | List registered datasets. |
+| `get <id>` | Show one dataset. |
+| `delete <id>` | Delete a dataset. |
+
+## Upload a local JSONL
+
+```bash
+veri datasets upload ./datasets/train.jsonl --name my-train
+```
+
+`upload` runs structural validation before the network call. If validation fails, nothing is uploaded:
+
+```bash
+$ veri datasets upload bad.jsonl
+Validation failed: 1 issue(s), 0 rows.
+  • line 1: invalid JSON (Expecting value)
+
+Use --skip-validation to upload anyway.
+```
+
+The validator checks:
+
+- Each non-blank line parses as JSON.
+- Every row is a JSON object (not a list or scalar).
+- Row count is `> 0`.
+- No duplicate `id` field values (when an `id` column exists).
+- Required columns are present, if specified.
+
+To skip validation:
+
+```bash
+veri datasets upload bad.jsonl --skip-validation
+```
+
+<Note>
+  `--deep-check` is a reserved flag for tokenizer-dependent checks (length distribution). It is not yet implemented and emits a warning if passed today.
+</Note>
+
+`--name` defaults to the filename stem. Use `--quiet` for ID-only output that pipes cleanly:
+
+```bash
+DS_ID=$(veri datasets upload data.jsonl --quiet)
+echo $DS_ID    # ds_abc123
+```
+
+## Connect a HuggingFace dataset
+
+No download required; Veri references the HF repo directly.
+
+```bash
+veri datasets connect-hf openai/gsm8k --split train --name gsm8k-train
+```
+
+Rename columns at connect time with `--map old=new` (repeatable):
+
+```bash
+veri datasets connect-hf openai/gsm8k \
+  --split train \
+  --map question=prompt \
+  --map answer=label
+```
+
+| Flag | Purpose |
+| --- | --- |
+| `--split` | HF split (default `train`). |
+| `--config` | HF dataset config / subset name. |
+| `--map old=new` | Column rename. Repeatable. |
+| `--name` | Display name. Default derived from repo. |
+
+## Validate without uploading
+
+```bash
+veri datasets check ./datasets/train.jsonl
+```
+
+Same validator as `upload --check`, but standalone. Exits `1` on issues:
+
+```bash
+$ veri datasets check ok.jsonl
+OK — 1000 rows.
+
+$ echo $?
+0
+```
+
+Use `--format json` for machine-readable output:
+
+```bash
+veri datasets check ok.jsonl --format json
+# {"ok": true, "row_count": 1000, "errors": []}
+```
+
+## Preview rows
+
+```bash
+veri datasets preview ./datasets/train.jsonl --n 3
+```
+
+Reads the first N JSON rows from a local file. Useful before upload; for registered datasets use `veri datasets get <id>` followed by the dashboard.
+
+## List, get, delete
+
+```bash
+veri datasets list                              # default 20 rows
+veri datasets list --limit 100 --format json
+veri datasets get ds_abc123
+veri datasets delete ds_abc123
+```
+
+`delete` is irreversible. The CLI exits `0` and prints the deleted ID; no confirmation prompt.
+
+## Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Success. |
+| `1` | User error (validation failed, missing flag, bad URI). |
+| `2` | API error (server returned 4xx/5xx). |
+| `4` | Auth error (no credentials, expired key). |
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Training" icon="brain" href="/cli/training">
+    Upload a reward function, submit a job against this dataset.
+  </Card>
+  <Card title="The run verb" icon="play" href="/cli/run">
+    Reference a dataset ID from `configs/train.toml`.
+  </Card>
+</CardGroup>

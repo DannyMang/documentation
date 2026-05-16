@@ -1,0 +1,231 @@
+---
+title: "veri run — Hero Verb & Project Layout"
+sidebarTitle: "veri run + init"
+description: "Dispatch a config to the right create command, scaffold projects, and override TOML fields from the CLI."
+keywords: ["veri run", "veri init", "kind dispatch", "TOML override", "--set"]
+---
+
+`veri run <config.toml>` is a thin shortcut over the explicit `veri jobs create` / `veri deployments create` / `veri evals create`. It reads the required `kind` field from the config and dispatches.
+
+The contract is plural-noun-verb (`veri jobs create configs/train.toml`); `veri run` exists to save typing on the common path.
+
+## Scaffold a project: `veri init`
+
+```bash
+veri init my-project
+# or, in the current directory:
+veri init
+```
+
+`veri init NAME` writes 9 files into `./NAME`. With no `NAME`, scaffolds into the current directory.
+
+```
+my-project/
+├── veri.toml                  # project defaults: gpu_type, gpu_count, base_model
+├── reward.py                  # TRL-style reward function stub
+├── configs/
+│   ├── train.toml             # kind = "train"
+│   ├── deploy.toml            # kind = "deploy"
+│   └── eval.toml              # kind = "eval"
+├── datasets/
+│   └── README.md
+├── AGENTS.md                  # directory contract for coding agents
+├── CLAUDE.md                  # one-liner: "See AGENTS.md."
+└── .gitignore
+```
+
+By default `init` refuses to write into a non-empty directory. Use `--force` to scaffold alongside existing files (existing files are preserved):
+
+```bash
+veri init --force
+```
+
+## Dispatch rules
+
+Every config starts with a required `kind` line:
+
+```toml
+kind = "train"    # or "deploy" or "eval"
+```
+
+`veri run <path>` reads `kind` and routes:
+
+| `kind = ` | Dispatches to |
+| --- | --- |
+| `"train"` | `veri jobs create` |
+| `"deploy"` | `veri deployments create` |
+| `"eval"` | `veri evals create` |
+
+Missing `kind` or an unknown value errors with a "did you mean" hint:
+
+```bash
+$ veri run nokind.toml
+Error: config 'nokind.toml' is missing required `kind` field.
+Add one of: kind = "train" | "deploy" | "eval"
+```
+
+## Override TOML fields from the CLI
+
+Use `--set <dotted.key>=<value>` to override any nested value. Convenience long-flags expand to `--set` internally.
+
+```bash
+# Submit a training run with two overrides:
+veri run configs/train.toml \
+  --set model.base=Qwen/Qwen3-8B \
+  --set method.learning_rate=2e-6
+
+# Convenience flag (jobs only) — same as --set model.base=...:
+veri jobs create configs/train.toml --base-model Qwen/Qwen3-8B
+```
+
+### Type coercion
+
+Values parse as TOML scalars: `true` / `false`, integers, floats, ISO timestamps, quoted strings. To force a string on a numeric-looking value, use `--set-string`:
+
+```bash
+veri jobs create configs/train.toml --set-string job.name=2026-05-12
+```
+
+### Repeated flags build a list
+
+```bash
+veri jobs create configs/train.toml --set tags=experiment --set tags=v2
+# Results in tags = ["experiment", "v2"]
+```
+
+### Conflict detection
+
+The merger rejects setting a scalar and a sub-key at the same path:
+
+```bash
+$ veri jobs create train.toml --set model=foo --set model.base=bar
+Error: --set conflict: 'model' is set as a scalar; can't also set sub-key 'model.base'
+```
+
+### Convenience long-flags
+
+These flags are sugar over `--set` on `veri jobs create`:
+
+| Flag | Expands to |
+| --- | --- |
+| `--base-model X` | `--set model.base=X` |
+| `--gpu-type X` | `--set resources.gpu_type=X` |
+| `--gpu-count N` | `--set resources.gpu_count=N` |
+| `--dataset X` | `--set dataset.id=X` |
+| `--reward X` | `--set reward.id=X` |
+
+## Config schemas
+
+### `veri.toml` (project root)
+
+```toml
+[project]
+name = "my-project"
+
+[defaults]
+gpu_type = "A100-80GB"
+gpu_count = 1
+base_model = "Qwen/Qwen3-4B"
+```
+
+### `configs/train.toml`
+
+```toml
+kind = "train"
+
+[job]
+name = "first-run"
+output_model = "tuned-model"
+
+[model]
+base = "Qwen/Qwen3-4B"
+
+[dataset]
+id = "ds_abc123"
+
+[reward]
+id = "rf_abc"
+file = "./reward.py"
+format = "trl"
+
+[method]
+type = "grpo"           # grpo | sft | dpo
+learning_rate = 1e-6
+max_steps = 100
+rollouts_per_prompt = 4
+max_response_length = 512
+
+[resources]
+gpu_type = "A100-80GB"
+gpu_count = 1
+
+[checkpoint]
+destination = "veri"    # or { type = "s3", uri = "s3://..." }
+```
+
+<Note>
+  In Phase-1, `[dataset].id` and `[reward].id` must reference already-registered IDs. Upload first with `veri datasets upload` / `veri rewards upload`, then paste the returned IDs into the config.
+</Note>
+
+### `configs/deploy.toml`
+
+```toml
+kind = "deploy"
+
+[deployment]
+name = "my-endpoint"
+model = "job_abc"           # training job id, or HF repo
+source = "training_job"     # training_job | huggingface
+
+[resources]
+gpu_type = "A100-80GB"
+gpu_count = 1
+
+[autoscaling]
+min_replicas = 1
+max_replicas = 1
+```
+
+### `configs/eval.toml`
+
+```toml
+kind = "eval"
+
+[eval]
+name = "first-eval"
+dataset_id = "ds_test"
+
+[[scorers]]
+type = "exact-match"
+weight = 1.0
+
+[run]
+model = "dep_abc"           # deployment id, training job id, or HF repo
+num_samples = 100
+```
+
+## `--dry-run` before billing
+
+On `veri jobs create` (and `veri run` with `kind="train"`), `--dry-run` reports the estimated cost without submitting:
+
+```bash
+$ veri run configs/train.toml --dry-run
+Dry run — no job submitted.
+┏━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━┓
+┃ field                ┃ value    ┃
+┡━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━┩
+│ estimated_cost_usd   │ 12.34    │
+│ duration_minutes     │ 100      │
+└──────────────────────┴──────────┘
+```
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Datasets" icon="database" href="/cli/datasets">
+    Upload, connect HuggingFace, validate.
+  </Card>
+  <Card title="Training" icon="brain" href="/cli/training">
+    Rewards + jobs end-to-end.
+  </Card>
+</CardGroup>

@@ -1,0 +1,222 @@
+---
+title: "Deployments API"
+sidebarTitle: "API reference"
+description: "Every endpoint for creating, calling, and managing deployments."
+keywords: ["deployments", "API reference", "endpoints", "schemas"]
+---
+
+Reference for `/v1/deployments/*`. All endpoints require Bearer token auth (`Authorization: Bearer vk_...`).
+
+## Endpoints
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `POST` | `/v1/deployments` | Create a deployment |
+| `GET` | `/v1/deployments` | List (paginated, filter by `status`) |
+| `GET` | `/v1/deployments/{id}` | Get one |
+| `POST` | `/v1/deployments/{id}/stop` | Transition to `stopped` |
+| `POST` | `/v1/deployments/{id}/chat/completions` | OpenAI-compatible chat |
+| `GET` | `/v1/deployments/{id}/requests` | Request log |
+| `GET` | `/v1/deployments/{id}/metrics` | Aggregated metrics |
+
+## POST /v1/deployments
+
+Create a deployment from a base HF model or a completed training job.
+
+**Request schema:**
+
+```json
+{
+  "model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "source": "huggingface",
+  "name": "my-deploy",
+  "gpu": {"gpu_type": "A100-80GB", "gpu_count": 1},
+  "provider": "lambda"
+}
+```
+
+| Field | Required | Notes |
+| --- | --- | --- |
+| `model` | yes | HF model ID (when `source=huggingface`) or training job ID (when `source=training_job`) |
+| `source` | yes | `huggingface` or `training_job` |
+| `name` | yes | Human label; appears in dashboard + as the OpenAI `model` field default |
+| `gpu` | yes | `{"gpu_type": "...", "gpu_count": 1-8}` |
+| `provider` | no | Auto-selects cheapest if omitted |
+
+**Validation:** When `source=training_job`, the job must exist, belong to you, and be `completed`. Otherwise `404` or `400`.
+
+**Response** (`201`):
+
+```json
+{
+  "object": "deployment",
+  "id": "dep_abc123",
+  "status": "queued",
+  "name": "my-deploy",
+  "model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "source": "huggingface",
+  "endpoint_url": null,
+  "gpu": {"type": "A100-80GB", "count": 1},
+  "provider": "lambda",
+  "cost_per_hour_usd": 1.43,
+  "total_cost_usd": 0.0,
+  "total_requests": 0,
+  "error": null,
+  "started_at": null,
+  "stopped_at": null,
+  "created_at": "2026-05-12T...",
+  "updated_at": "2026-05-12T..."
+}
+```
+
+`endpoint_url` populates when status reaches `serving`.
+
+## GET /v1/deployments
+
+List your deployments. Filter by `status` (`queued` / `provisioning` / `serving` / `unhealthy` / `stopped` / `failed`).
+
+```bash
+curl "https://api.veri.studio/v1/deployments?status=serving" \
+  -H "Authorization: Bearer vk_..."
+```
+
+Returns `PaginatedList[DeploymentResponse]`.
+
+## GET /v1/deployments/{id}
+
+Single deployment. Same shape as create response, with timestamps + cost populated as it runs.
+
+## POST /v1/deployments/{id}/stop
+
+Transition to `stopped`. A final billing tick settles the partial-hour spend. Returns the updated deployment.
+
+```python
+final = client.deployments.stop(deployment_id)
+print(f"Total cost: ${final.total_cost_usd:.4f}")
+```
+
+## POST /v1/deployments/{id}/chat/completions
+
+OpenAI-compatible. See [OpenAI compatibility](/deployments/openai-compat) for the supported subset of fields.
+
+**Request:**
+
+```json
+{
+  "model": "my-deploy",
+  "messages": [{"role": "user", "content": "Hello"}],
+  "temperature": 0.7,
+  "max_tokens": 256
+}
+```
+
+**Response:**
+
+```json
+{
+  "id": "chatcmpl-abc",
+  "object": "chat.completion",
+  "created": 1715000000,
+  "model": "my-deploy",
+  "choices": [
+    {"index": 0, "message": {"role": "assistant", "content": "..."}, "finish_reason": "stop"}
+  ],
+  "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
+}
+```
+
+## GET /v1/deployments/{id}/requests
+
+Per-request log: prompt tokens, completion tokens, latency, status code, error (if any).
+
+```bash
+curl ".../v1/deployments/dep_abc/requests?limit=50" -H "Authorization: Bearer vk_..."
+```
+
+**Response:**
+
+```json
+{
+  "data": [
+    {
+      "id": "req_xyz",
+      "deployment_id": "dep_abc",
+      "prompt_tokens": 12,
+      "completion_tokens": 8,
+      "latency_ms": 245.3,
+      "status_code": 200,
+      "error_message": null,
+      "created_at": "2026-05-12T..."
+    }
+  ],
+  "has_more": true
+}
+```
+
+Includes failed requests (`status_code >= 400`) for debugging.
+
+## GET /v1/deployments/{id}/metrics
+
+Aggregated counters across all requests:
+
+```json
+{
+  "total_requests": 42,
+  "total_prompt_tokens": 5230,
+  "total_completion_tokens": 1840,
+  "total_cost_usd": 0.82,
+  "avg_latency_ms": 1240.5,
+  "error_rate": 0.024,
+  "uptime_seconds": 3600.0
+}
+```
+
+## State machine
+
+```
+queued → provisioning → serving → stopped
+                    ↘                    ↘
+                     failed             failed
+                                ↕
+                            unhealthy
+```
+
+`unhealthy` is a transient state when health checks fail; it returns to `serving` if the pod recovers.
+
+Cost accrues during `serving` and `unhealthy` only.
+
+## Worker-only endpoints
+
+None — deployments don't have a worker callback API. The serving backend talks to the model server directly via the registered backend interface.
+
+## SDK convenience
+
+The SDK wraps the create flow into a `Deployment` dataclass with bound methods:
+
+```python
+dep = client.deployments.create(model="...", source="huggingface", name="...", gpu={...})
+dep.wait()                                          # polls until serving
+response = dep.chat([{"role": "user", "content": "Hi"}])
+metrics = dep.metrics()
+recent = dep.requests(limit=20)
+dep.stop()
+```
+
+These all hit the endpoints above.
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="OpenAI compatibility" icon="code" href="/deployments/openai-compat">
+    What chat fields are supported.
+  </Card>
+  <Card title="Cost & pricing" icon="dollar-sign" href="/deployments/cost">
+    Pricing formula and idle warning.
+  </Card>
+  <Card title="Hosting & GPU sizing" icon="server" href="/deployments/hosting">
+    Pick the right GPU.
+  </Card>
+  <Card title="Examples" icon="book" href="/deployments/examples">
+    End-to-end recipes.
+  </Card>
+</CardGroup>

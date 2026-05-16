@@ -1,0 +1,127 @@
+---
+title: "veri evals"
+sidebarTitle: "Evals"
+description: "Define an eval, run it against a deployed model or HF repo, inspect per-sample outputs."
+keywords: ["veri evals", "evaluation", "scorer", "exact-match", "llm-judge"]
+---
+
+An eval is a `(dataset, scorers)` pair. Running it against a model produces a run with overall scores and per-item outputs.
+
+## Commands
+
+| Command | Purpose |
+| --- | --- |
+| `create <config>` or `--quick` | Define an eval and (optionally) start a run. |
+| `list` / `get <id>` / `delete <id>` | Manage eval definitions. |
+| `runs list <eval-id>` | List runs of an eval. |
+| `runs get <eval-id> <run-id>` | Show a single run. |
+| `runs items <eval-id> <run-id>` | Per-sample outputs + scores. |
+
+## Create from a config
+
+```bash
+veri evals create configs/eval.toml
+# or, via the hero verb:
+veri run configs/eval.toml
+```
+
+The config must declare `kind = "eval"`. See the [config schema](/cli/run#configs-eval-toml).
+
+If the config includes a `[run]` table with a `model` field, the CLI creates the eval **and** immediately starts a run:
+
+```toml
+kind = "eval"
+
+[eval]
+name = "first-eval"
+dataset_id = "ds_test"
+
+[[scorers]]
+type = "exact-match"
+weight = 1.0
+
+[run]
+model = "dep_abc"           # deployment id, training job id, or HF repo
+num_samples = 100
+```
+
+## Create inline with `--quick`
+
+For one-shot evals without a config file:
+
+```bash
+veri evals create --quick \
+  --dataset ds_test \
+  --model dep_abc \
+  --scorer exact-match \
+  --n 100
+```
+
+`--quick` requires `--dataset` AND `--model`. The default scorer is `exact-match`; override with `--scorer llm-judge` or any other registered scorer type.
+
+| Flag | Purpose |
+| --- | --- |
+| `--dataset` | Required. Dataset ID. |
+| `--model` | Required. Deployment ID, job ID, or HF repo. |
+| `--scorer` | Scorer type (default `exact-match`). |
+| `--n` | Sample count (default `100`). |
+| `--name` | Eval name. Default derived from scorer. |
+
+For multi-scorer evals or weighted setups, write a config file.
+
+## Inspect runs
+
+```bash
+# All runs of an eval:
+veri evals runs list eval_abc
+
+# One specific run:
+veri evals runs get eval_abc run_xyz --format json
+
+# Per-sample outputs:
+veri evals runs items eval_abc run_xyz --limit 50
+```
+
+`runs items` returns the model's output, the ground-truth label, the score from each scorer, and per-sample latency. Use `--format jsonl` to stream into downstream analysis:
+
+```bash
+veri evals runs items eval_abc run_xyz --format jsonl > results.jsonl
+```
+
+Pagination via `--after <item-id> --limit N`.
+
+## Compare a fine-tuned vs base model
+
+Run the same eval against two models (base + fine-tuned), then compare run results in your tool of choice:
+
+```bash
+# Run against the base model:
+veri evals create --quick --dataset ds_test --model "Qwen/Qwen3-4B" --name base-eval
+
+# Run against your fine-tuned deployment:
+veri evals create --quick --dataset ds_test --model dep_finetuned --name finetuned-eval
+```
+
+<Note>
+  `veri evals compare <run-id-a> <run-id-b>` is Phase-2. Until then, pull both runs with `--format json` and diff them externally.
+</Note>
+
+## Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Success. |
+| `1` | User error (`--quick` missing `--dataset` or `--model`, kind mismatch, no scorers). |
+| `2` | API error. |
+| `4` | Auth error. |
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Training" icon="brain" href="/cli/training">
+    Train a model worth evaluating.
+  </Card>
+  <Card title="Deployments" icon="cloud" href="/cli/deployments">
+    Stand up the endpoint you'll be scoring.
+  </Card>
+</CardGroup>

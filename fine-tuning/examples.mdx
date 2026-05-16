@@ -1,0 +1,206 @@
+---
+title: "Examples"
+sidebarTitle: "Examples"
+description: "Three end-to-end fine-tuning recipes: math reasoning with GRPO, a custom multi-signal reward, and video generation LoRA SFT."
+keywords: ["examples", "math", "GSM8K", "custom reward", "video generation", "LoRA", "CogVideoX"]
+---
+
+Three runnable examples, each tuned for a different use case. All snippets work against `https://api.veri.studio` after `veri login`.
+
+## Math reasoning with GRPO
+
+Train Qwen on GSM8K to wrap answers in `<answer>` tags and get them right. Same shape as the [Quickstart](/quickstart/fine-tune), but here we go bigger and explain the choices.
+
+```python
+from veri_sdk import Client
+client = Client()
+
+dataset = client.datasets.connect(
+    name="gsm8k-train",
+    source_type="hf",
+    huggingface_dataset="openai/gsm8k",
+    huggingface_config={
+        "split": "train",
+        "column_mapping": {"question": "prompt", "answer": "answer"},
+    },
+)
+
+reward_fn = client.reward_functions.upload(
+    "math_reward_trl.py",  # see /fine-tuning/reward-functions for the function body
+    format="trl",
+    name="math-format-correctness",
+)
+
+job = client.training_jobs.create(
+    base_model="Qwen/Qwen2.5-7B-Instruct",  # production size
+    dataset_id=dataset.id,
+    reward_function_id=reward_fn.id,
+    output_name="qwen-7b-gsm8k",
+    method="grpo",
+    hyperparameters={
+        "learning_rate": 1e-6,
+        "rollouts_per_prompt": 8,
+        "max_response_length": 2048,
+        "kl_coef": 0.001,
+        "num_epochs": 1,  # full pass over GSM8K (~7.5K rows)
+    },
+    gpu_type="H100",
+    gpu_count=2,
+)
+
+job.wait(poll_interval=30)
+print(f"Cost: ${job.cost_usd:.2f}")
+```
+
+**What to watch:**
+- `reward_mean` should climb from negative or near-zero into positive territory within the first few hundred steps
+- `reward_std` should stay > 0 — if it collapses, the model is producing identical outputs (policy collapse)
+- `response_length_mean` should stabilize around the natural answer length, not balloon toward `max_response_length`
+
+After completion, evaluate against held-out GSM8K test:
+
+```python
+# 1. Deploy the trained model
+dep = client.deployments.create(
+    model=job.id,
+    source="training_job",
+    name="qwen-7b-gsm8k-eval",
+    gpu={"gpu_type": "H100", "gpu_count": 1},
+)
+dep.wait()
+
+# 2. Score on a held-out subset (see /quickstart/eval for the full shape)
+test_ds = client.datasets.connect(
+    name="gsm8k-test",
+    source_type="hf",
+    huggingface_dataset="openai/gsm8k",
+    huggingface_config={"split": "test[:200]", "column_mapping": {"question": "prompt", "answer": "answer"}},
+)
+
+eval_def = client.evals.create(
+    name="gsm8k-test-200",
+    dataset_id=test_ds.id,
+    scorers=[{"type": "exact_match", "name": "exact_answer", "reference_field": "answer"}],
+)
+
+run = client.evals.runs.create(eval_def.id, model=f"deployment:{dep.id}")
+run = client.evals.runs.wait(eval_def.id, run.id)
+print(run.results)
+```
+
+## Custom multi-signal reward
+
+A reward that combines correctness, format, and a length penalty. Useful when the model gets the answer right but produces verbose, off-topic preambles.
+
+```python
+# multi_signal_reward.py
+import re
+
+def reward(completions, answer, **kwargs):
+    scores = []
+    for completion, expected in zip(completions, answer):
+        text = completion[-1]["content"] if isinstance(completion, list) else str(completion)
+
+        # 1. Format: must wrap in <answer></answer>
+        format_score = 0.3 if re.search(r"<answer>.*?</answer>", text, re.DOTALL) else 0.0
+
+        # 2. Correctness: ground truth appears inside the tags
+        m = re.search(r"<answer>(.*?)</answer>", text, re.DOTALL)
+        correct_score = 0.0
+        if m and expected:
+            inner = m.group(1).strip()
+            if expected.strip() in inner:
+                correct_score = 0.5
+
+        # 3. Length: penalize responses > 300 chars
+        length_score = 0.2 * max(0.0, 1.0 - max(0, len(text) - 300) / 1000)
+
+        scores.append(format_score + correct_score + length_score)
+    return scores
+```
+
+Total bounded at `1.0`. Each weight is tunable. Test locally before upload:
+
+```bash
+python -c "
+from multi_signal_reward import reward
+print(reward(
+    ['<answer>4</answer>', 'I think it is 4', 'The answer is 4. Let me explain at length...' + 'X' * 500],
+    ['4', '4', '4'],
+))
+# → [0.8, 0.0, 0.7] — first wins, second has no format, third gets length penalty
+"
+```
+
+Then upload + use:
+
+```python
+reward_fn = client.reward_functions.upload(
+    "multi_signal_reward.py",
+    format="trl",
+    name="math-multi-signal",
+)
+
+job = client.training_jobs.create(
+    base_model="Qwen/Qwen2.5-0.5B-Instruct",
+    dataset_id=dataset.id,
+    reward_function_id=reward_fn.id,
+    output_name="qwen-0.5b-multi-signal",
+    method="grpo",
+    hyperparameters={"max_steps": 100},
+    gpu_type="A100-80GB",
+    gpu_count=1,
+)
+```
+
+## Video generation LoRA SFT
+
+Different method, different runner. Trains a LoRA adapter on top of a video diffusion model.
+
+```python
+job = client.training_jobs.create(
+    base_model="THUDM/CogVideoX-5b",
+    dataset_id=video_dataset.id,
+    output_name="cogvideo-5b-custom",
+    method="sft_video_gen",     # not grpo
+    # No reward_function_id — SFT is supervised, not RL
+    hyperparameters={
+        "learning_rate": 1e-3,
+        "num_epochs": 30,
+        "lora_rank": 64,
+        "lora_alpha": 64,
+        "resolution_height": 480,
+        "resolution_width": 720,
+        "num_frames": 49,
+        "fps": 8,
+        "batch_size": 1,
+        "gradient_accumulation_steps": 4,
+    },
+    gpu_type="A100-80GB",   # video gen requires 80GB; A100-40GB rejected
+    gpu_count=1,
+)
+
+job.wait(poll_interval=60)
+job.download(output_dir="./video-checkpoints")
+```
+
+Supported video gen models: `THUDM/CogVideoX-5b`, `THUDM/CogVideoX-2b`, `Wan-AI/Wan2.1-T2V-14B`, `Wan-AI/Wan2.1-T2V-1.3B`, `Lightricks/LTX-Video`, `genmo/mochi-1-preview`.
+
+The output is a LoRA adapter (small file), not a full checkpoint — load it on top of the base model at inference time.
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="GRPO algorithm" icon="brain" href="/fine-tuning/grpo">
+    Hyperparameter intuition + failure modes.
+  </Card>
+  <Card title="Deploy your fine-tune" icon="cloud" href="/deployments">
+    Serve the result with an OpenAI-compatible endpoint.
+  </Card>
+  <Card title="Run an eval" icon="chart-line" href="/evaluations">
+    Score the result on a held-out dataset.
+  </Card>
+  <Card title="Recommended models" icon="compass" href="/resources/models">
+    Pick the right base model for your task.
+  </Card>
+</CardGroup>

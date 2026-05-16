@@ -1,0 +1,170 @@
+---
+title: "Reward functions"
+sidebarTitle: "Reward functions"
+description: "Score model completions for GRPO training. TRL or Miles formats, with sandbox limits and validation rules."
+keywords: ["reward functions", "TRL", "Miles", "GRPO", "scoring"]
+---
+
+A reward function turns a model completion into a number. GRPO uses these scores to compute advantages — completions above the group mean get reinforced, completions below get penalized.
+
+You upload a `.py` file once and reference its `id` from any number of training jobs.
+
+## Two formats
+
+Veri accepts two reward function shapes. Pick based on the runner you'll use:
+
+| Format | Signature | When to use |
+| --- | --- | --- |
+| `trl` | `def reward(completions, answer, **kwargs) -> list[float]` | Default. Used by TRL GRPOTrainer (today's runner on NVIDIA). |
+| `miles` | `async def reward(args, sample, **kwargs) -> float` | Used by Miles RL loop (future AMD bare metal). |
+
+The validator checks the function signature on upload — wrong shape rejects with HTTP 422.
+
+<Warning>
+  Miles-format rewards are **NVIDIA-only**. The runner refuses jobs that pair `format=miles` with an AMD GPU.
+</Warning>
+
+## TRL format
+
+Used by today's primary runner. Receives a batch of completions, returns one score per completion.
+
+```python
+import re
+
+def reward(completions, answer, **kwargs):
+    scores = []
+    for completion, expected in zip(completions, answer):
+        # Handle chat-format completions (list of message dicts)
+        text = completion[-1]["content"] if isinstance(completion, list) else str(completion)
+
+        format_ok = bool(re.search(r"<answer>.*?</answer>", text, re.DOTALL))
+
+        m = re.search(r"<answer>(.*?)</answer>", text, re.DOTALL)
+        correct = bool(m and expected and expected.strip() in m.group(1).strip())
+
+        scores.append(0.5 * float(format_ok) + 0.5 * float(correct))
+    return scores
+```
+
+- `completions` — list of strings OR list of message-dict lists (depending on how the runner formats prompts)
+- `answer` — list of ground-truth strings (from the dataset's `answer` column)
+- Return — list of floats, **same length as `completions`**
+
+## Miles format
+
+Async-per-rollout interface, used by the upcoming AMD runner.
+
+```python
+import re
+
+async def reward(args, sample, **kwargs) -> float:
+    response = sample.response
+    label = sample.label or ""
+
+    format_ok = bool(re.search(r"<answer>.*?</answer>", response, re.DOTALL))
+
+    m = re.search(r"<answer>(.*?)</answer>", response, re.DOTALL)
+    correct = bool(m and label.strip() in m.group(1).strip())
+
+    return 0.5 * float(format_ok) + 0.5 * float(correct)
+```
+
+- `sample.response` — model completion
+- `sample.label` — ground truth
+- Return — single float
+
+## Upload
+
+<CodeGroup>
+```python SDK
+reward_fn = client.reward_functions.upload(
+    "math_reward.py",
+    format="trl",
+    name="math-reward",
+)
+
+print(reward_fn.id)
+```
+
+```bash CLI
+veri rewards upload math_reward.py --format trl --name math-reward
+```
+</CodeGroup>
+
+The CLI runs an AST check (file parses + at least one function defined). Use `--skip-validation` to bypass, but the upload will still fail at job submission if the signature is wrong.
+
+## Sandbox + limits
+
+Reward functions run inside the training runner. They have:
+
+- **No network egress** — calls to external APIs will silently fail or hang
+- **Standard library + the runner image's pre-installed packages** only — no `pip install` at runtime
+- **A timeout** per rollout batch — exceeding it fails the job with `error.code = "training_error"`
+
+For PoC, treat this as "trusted users only." Real isolation (gVisor / Firecracker) is on the Phase 2 roadmap.
+
+## Composing rewards
+
+A common pattern is to weight multiple signals:
+
+```python
+def reward(completions, answer, **kwargs):
+    scores = []
+    for completion, expected in zip(completions, answer):
+        text = completion[-1]["content"] if isinstance(completion, list) else str(completion)
+
+        format_score = 0.3 if has_correct_format(text) else 0.0
+        correct_score = 0.5 if has_correct_answer(text, expected) else 0.0
+        length_score = 0.2 * length_penalty(text, target=200)
+
+        scores.append(format_score + correct_score + length_score)
+    return scores
+```
+
+Keep each component bounded so the total stays in a stable range — `[0, 1]` is conventional. GRPO normalizes scores within a group, so the absolute scale matters less than the spread.
+
+## Reuse across jobs
+
+Once uploaded, a reward function is reusable. The same `id` can drive any number of training jobs.
+
+```python
+job1 = client.training_jobs.create(
+    base_model="Qwen/Qwen2.5-0.5B-Instruct",
+    dataset_id=ds.id,
+    reward_function_id=reward_fn.id,
+    # ...
+)
+job2 = client.training_jobs.create(
+    base_model="Qwen/Qwen2.5-7B-Instruct",
+    dataset_id=ds.id,
+    reward_function_id=reward_fn.id,  # same reward
+    # ...
+)
+```
+
+## Lifecycle
+
+```python
+client.reward_functions.list()
+client.reward_functions.get(reward_id)
+client.reward_functions.delete(reward_id)
+```
+
+Like datasets, reward functions are deduped by content hash — uploading the same file twice returns the same id.
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="GRPO algorithm" icon="brain" href="/fine-tuning/grpo">
+    What the score actually does inside the training loop.
+  </Card>
+  <Card title="Custom reward example" icon="book" href="/fine-tuning/examples">
+    Walkthrough of a non-trivial reward.
+  </Card>
+  <Card title="Submit a job" icon="play" href="/fine-tuning/api">
+    Wire the reward into `training_jobs.create`.
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/quickstart/fine-tune">
+    End-to-end with the example math reward.
+  </Card>
+</CardGroup>

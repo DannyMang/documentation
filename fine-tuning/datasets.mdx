@@ -1,0 +1,142 @@
+---
+title: "Datasets"
+sidebarTitle: "Datasets"
+description: "JSONL upload + 9 source-type connectors. Validation, encryption, dedup."
+keywords: ["datasets", "jsonl", "huggingface", "s3", "postgres", "snowflake", "bigquery"]
+---
+
+A dataset is a collection of training examples Veri reads at job submission time. Two ways to get one in:
+
+1. **Upload** a JSONL file directly
+2. **Connect** an external source — Veri pulls from cloud storage, Hugging Face, or your warehouse
+
+Either way, the result is a dataset record with an `id` you reference in `client.training_jobs.create(dataset_id=...)`.
+
+## JSONL format
+
+Each line is one training example:
+
+```json
+{"prompt": [{"role": "user", "content": "What is 12 + 7?"}], "answer": "19"}
+{"prompt": "What is 45 - 18?", "answer": "27"}
+```
+
+- **`prompt`** (required) — string OR list of OpenAI-format message dicts
+- **`answer`** / **`label`** — ground truth used by your reward function (optional but typically present)
+
+The validation step at upload rejects any row missing `prompt`.
+
+## Source types
+
+| `source_type` | Required fields | Notes |
+| --- | --- | --- |
+| `upload` | multipart `file` + `name` | JSONL only; one row per line |
+| `s3` | `source_uri` (`s3://bucket/path.jsonl`), `credentials` (optional with IAM role) | AWS S3 |
+| `gs` | `source_uri` (`gs://bucket/path.jsonl`), `credentials` (service account JSON) | Google Cloud Storage |
+| `az` | `source_uri` (`az://container/path.jsonl`), `credentials` (account name + key) | Azure Blob Storage |
+| `hf` | `huggingface_dataset`, `huggingface_config` (split + column_mapping) | Hugging Face Hub |
+| `postgres` | `db_connection`, `db_query` | SQL must produce `prompt` + `answer` columns |
+| `mysql` | `db_connection`, `db_query` | Same |
+| `snowflake` | `db_connection`, `db_query` | Same |
+| `bigquery` | `db_connection`, `db_query` | Same |
+
+## Connect from Hugging Face
+
+Most users start here — pull `openai/gsm8k` straight from HF, no local download.
+
+The `column_mapping` tells Veri which source columns become `prompt` and `answer`.
+
+<CodeGroup>
+```python SDK
+client.datasets.connect(
+    name="gsm8k-train",
+    source_type="hf",
+    huggingface_dataset="openai/gsm8k",
+    huggingface_config={
+        "split": "train",
+        "column_mapping": {
+            "question": "prompt",
+            "answer": "answer",
+        },
+    },
+)
+```
+
+```bash CLI
+veri datasets connect-hf openai/gsm8k \
+  --map question=prompt --map answer=answer \
+  --name gsm8k-train
+```
+</CodeGroup>
+
+For private HF datasets, set up a [Hugging Face integration](/account/integrations) first; the token is encrypted and applied automatically.
+
+## Validate before connecting
+
+Test the connection + preview the first row + see total row count without committing.
+
+```python
+result = client.datasets.validate(
+    source_type="hf",
+    huggingface_dataset="openai/gsm8k",
+    huggingface_config={"split": "train", "column_mapping": {"question": "prompt", "answer": "answer"}},
+)
+
+print(f"Valid: {result['valid']}")
+print(f"Rows: {result['num_rows']}")
+print(f"Columns: {result['columns']}")
+```
+
+If `result.valid` is `false`, `result.error` tells you why.
+
+## Upload a JSONL file
+
+For one-off experiments:
+
+<CodeGroup>
+```python SDK
+dataset = client.datasets.upload(
+    "training_data.jsonl",
+    name="my-experiment",
+)
+```
+
+```bash CLI
+veri datasets upload training_data.jsonl --name my-experiment
+```
+</CodeGroup>
+
+The CLI runs structural validation by default. Pass `--skip-validation` to skip, `--deep-check` for tokenizer-aware checks (slower).
+
+## Dedup
+
+Datasets are content-addressed. Uploading the same bytes twice (same file, or two files with identical content) returns the same `id` — one S3 object, one DB row.
+
+This means you can re-run a script that uploads the same dataset without worrying about stale duplicates.
+
+## Lifecycle
+
+Datasets are kept until you delete them.
+
+```python
+client.datasets.delete(dataset_id)
+```
+
+Delete fails with HTTP 400 if any training job still references the dataset. Delete the jobs first.
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="Reward functions" icon="scale-balanced" href="/fine-tuning/reward-functions">
+    Score completions with TRL or Miles-format functions.
+  </Card>
+  <Card title="Submit a training job" icon="brain" href="/fine-tuning/api">
+    Use your dataset_id in `training_jobs.create`.
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/quickstart/fine-tune">
+    Full GRPO end-to-end with GSM8K.
+  </Card>
+  <Card title="Examples" icon="book" href="/fine-tuning/examples">
+    Math reasoning, custom rewards, video gen.
+  </Card>
+</CardGroup>

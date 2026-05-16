@@ -1,0 +1,163 @@
+---
+title: "OpenAI compatibility"
+sidebarTitle: "OpenAI compatibility"
+description: "What works with the OpenAI SDK, LangChain, LlamaIndex, etc. — and what doesn't."
+keywords: ["OpenAI compatible", "LangChain", "LlamaIndex", "interop", "chat completions"]
+---
+
+A Veri deployment exposes the OpenAI Chat Completions API at `dep.endpoint_url`. Anything that already speaks OpenAI works — point `base_url` at the deployment and pass your Veri API key.
+
+## What works
+
+Basic chat with one or more messages, returning a completion. Works in:
+
+- **OpenAI Python SDK**
+- **OpenAI Node SDK**
+- **LangChain** (`ChatOpenAI(base_url=...)`)
+- **LlamaIndex** (`OpenAI(api_base=...)`)
+- **Vercel AI SDK**
+- **curl** with the standard OpenAI request shape
+- Anything else that targets `/chat/completions`
+
+```python
+from openai import OpenAI
+
+oai = OpenAI(
+    base_url=dep.endpoint_url,
+    api_key="vk_your_key_here",
+)
+
+response = oai.chat.completions.create(
+    model=dep.name,
+    messages=[
+        {"role": "system", "content": "You are a helpful math tutor."},
+        {"role": "user", "content": "What is 12 + 7?"},
+    ],
+    temperature=0.7,
+    max_tokens=256,
+)
+
+print(response.choices[0].message.content)
+print(response.usage)
+```
+
+## What's NOT supported (yet)
+
+<Warning>
+  Today's chat surface is intentionally minimal. If your client passes any of these, they're either silently ignored or rejected:
+
+  - **Streaming** (`stream=true`) — accepted by the schema but ignored. You always get the full response. Clients that wait for SSE events will hang.
+  - **Tool calling** (`tools`, `tool_choice`) — not supported. Use prompting + structured output parsing instead.
+  - **Sampling parameters** beyond `temperature` and `max_tokens`: `top_p`, `frequency_penalty`, `presence_penalty`, `logit_bias` are not supported.
+  - **Structured outputs** (`response_format` with JSON schema) — not supported.
+  - **Vision** (image inputs) — not supported.
+  - **Audio** — not supported.
+
+  Streaming and tools are the highest-priority items on the roadmap.
+</Warning>
+
+## Request shape
+
+```json
+{
+  "model": "your-deployment-name",
+  "messages": [
+    {"role": "user", "content": "Hello"}
+  ],
+  "temperature": 0.7,
+  "max_tokens": 256,
+  "stream": false
+}
+```
+
+The `model` field in the request is **echoed back** in the response — it's not validated against the deployment's actual model. Pass whatever string you want.
+
+## Response shape
+
+```json
+{
+  "id": "chatcmpl-abc123",
+  "object": "chat.completion",
+  "created": 1715000000,
+  "model": "your-deployment-name",
+  "choices": [
+    {
+      "index": 0,
+      "message": {"role": "assistant", "content": "Hello back!"},
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 10,
+    "completion_tokens": 5,
+    "total_tokens": 15
+  }
+}
+```
+
+`finish_reason` values: `stop` (normal end), `length` (hit `max_tokens`).
+
+## LangChain example
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import HumanMessage
+
+llm = ChatOpenAI(
+    base_url=dep.endpoint_url,
+    api_key="vk_your_key_here",
+    model=dep.name,
+    temperature=0.7,
+)
+
+result = llm.invoke([HumanMessage(content="What is 12 + 7?")])
+print(result.content)
+```
+
+## LlamaIndex example
+
+```python
+from llama_index.llms.openai import OpenAI as LlamaOpenAI
+
+llm = LlamaOpenAI(
+    api_base=dep.endpoint_url,
+    api_key="vk_your_key_here",
+    model=dep.name,
+    temperature=0.7,
+)
+
+print(llm.complete("What is 12 + 7?"))
+```
+
+## curl
+
+```bash
+curl "$ENDPOINT_URL/chat/completions" \
+  -H "Authorization: Bearer vk_your_key_here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "your-deployment-name",
+    "messages": [{"role": "user", "content": "Hello"}]
+  }'
+```
+
+## What about embeddings?
+
+Not supported — Veri serves chat completions only, not embeddings. Use a dedicated embeddings provider or run a local model for that surface.
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="Deployments API" icon="play" href="/deployments/api">
+    `create` / `chat` / `stop` endpoint reference.
+  </Card>
+  <Card title="Examples" icon="book" href="/deployments/examples">
+    Deploy + chat + stop, swap base for fine-tune.
+  </Card>
+  <Card title="Hosting & GPU sizing" icon="server" href="/deployments/hosting">
+    Pick the right GPU for the model.
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/quickstart/deploy">
+    First-time deployment in ~10 minutes.
+  </Card>
+</CardGroup>

@@ -1,0 +1,136 @@
+---
+title: "veri deployments"
+sidebarTitle: "Deployments"
+description: "Create OpenAI-compatible inference endpoints, manage their lifecycle, and inspect traffic."
+keywords: ["veri deployments", "inference", "endpoint", "openai compatible", "chat"]
+---
+
+The `veri deployments` group creates and manages inference endpoints. Each deployment exposes an OpenAI-compatible `/chat/completions` API backed by a Veri-trained or HuggingFace model.
+
+## Commands
+
+| Command | Purpose |
+| --- | --- |
+| `create <config>` or inline | Bring up a deployment. |
+| `list` | List deployments. |
+| `get <id>` | Show one deployment. |
+| `stop <id>` | Pause without deleting. Billing pauses. |
+| `chat <id>` | Send a one-shot message for smoke testing. |
+| `metrics <id>` | RPS, latency, GPU utilization. |
+| `requests <id>` | Recent inference requests. |
+
+## Create from a config
+
+```bash
+veri deployments create configs/deploy.toml
+# or, via the hero verb:
+veri run configs/deploy.toml
+```
+
+The config must declare `kind = "deploy"`. See the [config schema](/cli/run#configs-deploy-toml).
+
+## Create inline
+
+Two mutually exclusive modes — deploy a training job's output, or deploy a HuggingFace model directly.
+
+```bash
+# From a finished training job:
+veri deployments create \
+  --model job_abc \
+  --name my-endpoint \
+  --gpu-type A100-80GB \
+  --gpu-count 1
+
+# Directly from HuggingFace (no training):
+veri deployments create \
+  --from-hf Qwen/Qwen3-4B \
+  --name qwen-prod \
+  --gpu-type A100-80GB \
+  --gpu-count 1
+```
+
+| Flag | Purpose |
+| --- | --- |
+| `--model <job-id>` | Deploy a training job's checkpoint. |
+| `--from-hf <repo>` | Deploy a HuggingFace repo. Mutually exclusive with `--model`. |
+| `--name` | Display name. |
+| `--gpu-type` | Required in inline form. |
+| `--gpu-count` | Default `1`. |
+
+## Smoke-test with `chat`
+
+The fastest way to confirm a deployment is healthy:
+
+```bash
+veri deployments chat dep_abc --message "What is 2+2?"
+```
+
+The CLI calls the OpenAI-compatible endpoint with a single user message and prints the assistant's reply.
+
+| Flag | Purpose |
+| --- | --- |
+| `--message` / `-m` | Required. The user message. |
+| `--model` | Override the model name in the request body. Defaults to the deployment's name. |
+| `--temperature` | Sampling temperature. Default `1.0`. |
+| `--max-tokens` | Cap on response tokens. |
+
+For programmatic chat, point any OpenAI-compatible client at the deployment's `endpoint_url` (visible in `veri deployments get`).
+
+## Pause to control billing
+
+```bash
+veri deployments stop dep_abc
+```
+
+`stop` pauses billing without deleting the deployment. There is no inverse `start` command in Phase-1 — bring the deployment back up by creating a new one.
+
+<Note>
+  `start`, `scale`, `rollback`, and `history` are Phase-2. Each depends on backend work that is not yet shipped.
+</Note>
+
+## Inspect traffic
+
+```bash
+veri deployments metrics dep_abc
+```
+
+Returns RPS, p50/p95 latency, GPU utilization. JSON output is dict-shaped (suitable for `jq`):
+
+```bash
+veri deployments metrics dep_abc --format json | jq .p95_latency_ms
+```
+
+Recent requests:
+
+```bash
+veri deployments requests dep_abc --limit 50
+veri deployments requests dep_abc --after req_xyz --limit 100   # pagination
+```
+
+## List, get
+
+```bash
+veri deployments list
+veri deployments list --status serving --format json
+veri deployments get dep_abc
+```
+
+## Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Success. |
+| `1` | User error (both `--model` and `--from-hf` passed, missing `--gpu-type` inline). |
+| `2` | API error. |
+| `4` | Auth error. |
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Evaluate the endpoint" icon="chart-line" href="/cli/evals">
+    Run scorers against your deployed model.
+  </Card>
+  <Card title="The run verb" icon="play" href="/cli/run">
+    Deploy from a TOML config.
+  </Card>
+</CardGroup>

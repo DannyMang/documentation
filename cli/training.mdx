@@ -1,0 +1,176 @@
+---
+title: "veri rewards + veri jobs"
+sidebarTitle: "Training"
+description: "Upload reward functions, submit training jobs from configs or inline flags, and manage them through completion."
+keywords: ["veri jobs", "veri rewards", "training", "GRPO", "checkpoint download"]
+---
+
+Training a model on Veri is a two-step CLI flow: register a reward function with `veri rewards upload`, then submit a job with `veri jobs create` (or `veri run`). Once submitted, manage the job through completion with `list / get / cancel / download`.
+
+## Reward functions
+
+| Command | Purpose |
+| --- | --- |
+| `upload <path.py>` | Register a reward function. Auto-runs AST validation. |
+| `list` | List registered reward functions. |
+| `get <id>` | Show one reward function. |
+| `delete <id>` | Delete a reward function. |
+
+### Upload
+
+```bash
+veri rewards upload ./reward.py --name math-reward
+```
+
+`upload` runs an AST-only structural check before uploading:
+
+- File parses as valid Python.
+- The file defines at least one function.
+
+The check deliberately stops there — verifying specific signatures (TRL vs DPO vs custom) requires actually importing user code, which the CLI refuses to do in its own process. If your reward function imports modules missing from the training runtime, the failure surfaces in the training logs once the job starts.
+
+Skip validation explicitly when needed:
+
+```bash
+veri rewards upload ./reward.py --skip-validation
+```
+
+| Flag | Purpose |
+| --- | --- |
+| `--name` | Display name (default: filename stem). |
+| `--format` | Reward format (`trl` by default). |
+| `--skip-validation` | Don't run the AST check. |
+
+### List, get, delete
+
+```bash
+veri rewards list
+veri rewards get rf_abc
+veri rewards delete rf_abc
+```
+
+<Note>
+  `veri rewards test` (run the reward against a dataset) is not in Phase-1. It depends on dataset row iteration, which is owed by the SDK first.
+</Note>
+
+## Training jobs
+
+| Command | Purpose |
+| --- | --- |
+| `create <config>` or inline | Submit a training job. |
+| `list` | List jobs. |
+| `get <id>` | Show one job. |
+| `cancel <id>` | Cancel a running job. |
+| `download <id>` | Download the completed checkpoint. |
+| `estimate <config>` | Pre-submit cost estimate. |
+
+### Submit from a config
+
+```bash
+veri jobs create configs/train.toml
+# or, via the hero verb:
+veri run configs/train.toml
+```
+
+The config must declare `kind = "train"`. See [`veri run`](/cli/run#configs-train-toml) for the full schema.
+
+`create` returns the job ID. Pipe-friendly form:
+
+```bash
+JOB_ID=$(veri jobs create configs/train.toml --quiet)
+```
+
+### Submit inline (no config file)
+
+```bash
+veri jobs create \
+  --base-model "Qwen/Qwen3-4B" \
+  --dataset ds_abc \
+  --reward rf_abc \
+  --gpu-type A100-80GB \
+  --gpu-count 1
+```
+
+Inline form requires `--base-model` AND `--dataset`. Pass `--reward` for RL methods (GRPO/DPO); omit for SFT.
+
+### Override config values
+
+```bash
+veri jobs create configs/train.toml \
+  --set model.base=Qwen/Qwen3-8B \
+  --set method.learning_rate=2e-6 \
+  --set resources.gpu_count=4
+```
+
+The convenience flags `--base-model`, `--gpu-type`, `--gpu-count`, `--dataset`, `--reward` expand to `--set` internally. See [Override syntax](/cli/run#override-toml-fields-from-the-cli) for type coercion and conflict detection.
+
+### Dry-run cost estimate
+
+```bash
+veri jobs create configs/train.toml --dry-run
+```
+
+Reports estimated cost via the cost API; does not submit. Use this before any non-trivial run.
+
+Standalone form:
+
+```bash
+veri jobs estimate configs/train.toml --format json
+```
+
+### List, get, cancel
+
+```bash
+veri jobs list                              # most recent 20
+veri jobs list --status running             # filter
+veri jobs list --method grpo
+veri jobs get job_abc
+veri jobs cancel job_abc
+```
+
+`list` supports `--limit`, `--after`, `--status`, `--method`. All commands accept `--format json`.
+
+### Watch progress
+
+There is no `--follow` log tailer in Phase-1 (deferred until the SDK exposes streaming). For now:
+
+```bash
+# Poll status in a script:
+while [ "$(veri jobs get $JOB_ID --format json | jq -r .status)" = "running" ]; do
+  sleep 30
+done
+
+# Or open the dashboard for live logs:
+veri jobs get $JOB_ID --format json | jq -r .dashboard_url | xargs open
+```
+
+### Download a completed checkpoint
+
+```bash
+veri jobs download job_abc --output-dir ./checkpoints
+```
+
+The download URL is only populated after the job reaches `completed`. Trying to download an in-flight job exits `1` with a clear message.
+
+## Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Success. |
+| `1` | User error (missing flag, bad config, job not downloadable). |
+| `2` | API error. |
+| `4` | Auth error. |
+
+## What's next
+
+<CardGroup cols={3}>
+  <Card title="Deploy this model" icon="cloud" href="/cli/deployments">
+    Serve the checkpoint with an OpenAI-compatible endpoint.
+  </Card>
+  <Card title="Evaluate it" icon="chart-line" href="/cli/evals">
+    Score it on a held-out dataset.
+  </Card>
+  <Card title="The run verb" icon="play" href="/cli/run">
+    Config schemas and `--set` overrides.
+  </Card>
+</CardGroup>

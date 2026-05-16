@@ -1,0 +1,162 @@
+---
+title: "Examples"
+sidebarTitle: "Examples"
+description: "Run an eval, inspect failures, compare two runs against the same definition."
+keywords: ["examples", "eval suite", "compare runs", "inspect failures"]
+---
+
+## Recipe 1 — Run an eval and inspect failures
+
+Score a deployment on a held-out GSM8K subset, then read the worst items to see where it fails.
+
+```python
+from veri_sdk import Client
+client = Client()
+
+# Connect a small test split
+test_ds = client.datasets.connect(
+    name="gsm8k-test-100",
+    source_type="hf",
+    huggingface_dataset="openai/gsm8k",
+    huggingface_config={
+        "split": "test[:100]",
+        "column_mapping": {"question": "prompt", "answer": "answer"},
+    },
+)
+
+# Define eval (reuse the same Eval id across multiple runs)
+eval_def = client.evals.create(
+    name="gsm8k-test-100",
+    dataset_id=test_ds.id,
+    scorers=[
+        {"type": "exact_match", "name": "exact", "reference_field": "answer"},
+        {"type": "contains", "name": "mentions", "reference_field": "answer"},
+    ],
+)
+
+# Kick off a run against an existing deployment
+run = client.evals.runs.create(
+    eval_def.id,
+    model=f"deployment:{dep.id}",  # dep from /quickstart/deploy
+)
+
+run = client.evals.runs.wait(eval_def.id, run.id, poll_interval=5)
+
+print(f"Status: {run.status}")
+print(f"Aggregate: {run.results}")
+```
+
+Now drill into the failures:
+
+```python
+items = client.evals.runs.items(eval_def.id, run.id, limit=100)
+
+failures = [i for i in items if i.scores.get("exact", 0) == 0]
+print(f"\n{len(failures)}/{len(items)} items failed exact match\n")
+
+for item in failures[:5]:
+    print(f"--- item {item.item_index} ---")
+    print(f"Input:  {item.input[:200]}")
+    print(f"Output: {item.output[:200]}")
+    print(f"Label:  {item.label}")
+    print(f"Scores: {item.scores}")
+    print(f"Latency: {item.latency_ms:.0f}ms\n")
+```
+
+## Recipe 2 — Compare two models on the same eval
+
+The same Eval definition can have many runs. Run one against the base model and one against your fine-tune, then compare the aggregates.
+
+```python
+# Base model: deploy and run
+dep_base = client.deployments.create(
+    model="Qwen/Qwen2.5-0.5B-Instruct",
+    source="huggingface",
+    name="qwen-base",
+    gpu={"gpu_type": "A100-80GB", "gpu_count": 1},
+)
+dep_base.wait()
+
+run_base = client.evals.runs.create(eval_def.id, model=f"deployment:{dep_base.id}")
+run_base = client.evals.runs.wait(eval_def.id, run_base.id)
+
+# Fine-tuned model: deploy and run
+dep_ft = client.deployments.create(
+    model=fine_tune_job_id,         # from /quickstart/fine-tune
+    source="training_job",
+    name="qwen-finetuned",
+    gpu={"gpu_type": "A100-80GB", "gpu_count": 1},
+)
+dep_ft.wait()
+
+run_ft = client.evals.runs.create(eval_def.id, model=f"deployment:{dep_ft.id}")
+run_ft = client.evals.runs.wait(eval_def.id, run_ft.id)
+
+# Diff the aggregates
+def show(name, run):
+    print(f"{name}:")
+    for scorer, agg in run.results["scores"].items():
+        print(f"  {scorer}: mean={agg['mean']:.3f} std={agg['std']:.3f}")
+
+show("Base model", run_base)
+show("Fine-tuned", run_ft)
+
+# Stop both
+dep_base.stop()
+dep_ft.stop()
+```
+
+Built-in run comparison is on the Phase B roadmap (`veri evals compare run-a run-b`). Until then, inspect the aggregates manually as above.
+
+## Recipe 3 — Score with multiple scorers
+
+Run a single eval with several scorers — each contributes a column to the aggregate.
+
+```python
+eval_def = client.evals.create(
+    name="gsm8k-multi-criteria",
+    dataset_id=test_ds.id,
+    scorers=[
+        {"type": "exact_match", "name": "exact", "reference_field": "answer"},
+        {"type": "contains", "name": "mentions_answer", "reference_field": "answer"},
+        {"type": "contains", "name": "uses_format", "reference_field": "answer", "regex": True},  # would need actual pattern
+    ],
+)
+
+run = client.evals.runs.create(eval_def.id, model=f"deployment:{dep.id}")
+run = client.evals.runs.wait(eval_def.id, run.id)
+
+for scorer, agg in run.results["scores"].items():
+    print(f"{scorer:20} mean={agg['mean']:.3f}  median={agg['median']}  count={agg['count']}")
+```
+
+## Recipe 4 — Sample a subset deterministically
+
+For a 10K-row dataset, score 200 random rows instead of all of them:
+
+```python
+run = client.evals.runs.create(
+    eval_def.id,
+    model=f"deployment:{dep.id}",
+    num_samples=200,
+)
+```
+
+Sampling uses `Random(run_id)` so the same `run_id` always returns the same rows. New `runs.create()` calls produce new IDs and therefore new samples.
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="Scorers" icon="scale-balanced" href="/evaluations/scorers">
+    What's available now and what's coming.
+  </Card>
+  <Card title="Evaluations API" icon="play" href="/evaluations/api">
+    Endpoint reference.
+  </Card>
+  <Card title="Fine-tune to fix failures" icon="brain" href="/fine-tuning">
+    Train against the items the model got wrong.
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/quickstart/eval">
+    Shorter version of recipe 1.
+  </Card>
+</CardGroup>

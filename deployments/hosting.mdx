@@ -1,0 +1,116 @@
+---
+title: "Hosting & GPU sizing"
+sidebarTitle: "Hosting & GPU"
+description: "Pick the right GPU for the model size. Provider routing, cold-start expectations."
+keywords: ["GPU sizing", "hosting", "providers", "Lambda", "RunPod", "Prime Intellect", "cold start"]
+---
+
+A deployment is a pod on a GPU you control. Picking the GPU matters: too small and the model OOMs at load; too big and you're burning money for headroom you don't use.
+
+## GPU sizing by model size
+
+Rough sizing for **inference only** (training needs more headroom):
+
+| Model size | Minimum | Comfortable | Notes |
+| --- | --- | --- | --- |
+| ≤ 1B | A100-80GB ×1 | A100-80GB ×1 | Small models always fit on a single GPU. |
+| 3–8B | A100-80GB ×1 | H100 ×1 | A100-80GB works; H100 is faster per request. |
+| 14–34B | H100 ×2 | H100 ×4 | Tensor parallel; expect TP2 or TP4. |
+| 70B+ | H100 ×4 (quantized) | H100 ×8 | TP8 for full precision; quantized at TP4. |
+
+**Rule of thumb:** Serving uses ~half the GPU you trained on. A 7B model trained on 8×A100 typically serves on 1×A100.
+
+## Supported GPU types
+
+| `gpu_type` | Memory | Common use |
+| --- | --- | --- |
+| `A100-40GB` | 40 GB | Cheapest tier; only for ≤4B models |
+| `A100-80GB` | 80 GB | Default sweet spot |
+| `H100` | 80 GB | ~2x throughput vs A100-80GB |
+| `H200` | 141 GB | Largest single-GPU memory; needed for some 70B FP16 |
+
+MI300X is on the roadmap (Phase 2, requires bare-metal Ray) and not yet exposed.
+
+## Provider routing
+
+When you submit a deployment without specifying `provider`, Veri picks the cheapest available GPU across:
+
+| Provider | Notes |
+| --- | --- |
+| **Prime Intellect** (default fronts) | Routes to RunPod / DataCrunch / Lambda Labs / MassedCompute under the hood |
+| **Lambda Cloud** (direct) | Cheapest A100-80GB rate today |
+| **RunPod** (direct) | Often best for H100 spot |
+
+Force a specific provider:
+
+```python
+client.deployments.create(
+    model="Qwen/Qwen2.5-0.5B-Instruct",
+    source="huggingface",
+    name="my-deploy",
+    gpu={"gpu_type": "H100", "gpu_count": 1},
+    provider="lambda",
+)
+```
+
+Compare rates before deploying:
+
+<CodeGroup>
+```python SDK
+client.cost.compare(
+    gpu_type="H100",
+    gpu_count=1,
+    duration_minutes=60,
+)
+```
+
+```bash CLI
+veri gpu compare --type H100 --count 1 --hours 1
+```
+</CodeGroup>
+
+## Cold start
+
+Time from `POST /v1/deployments` to `serving`:
+
+| Source | Typical |
+| --- | --- |
+| `huggingface`, small model (≤3B) | 1–3 min |
+| `huggingface`, 7–13B | 3–6 min |
+| `huggingface`, 30B+ | 6–15 min (depends on cache hit) |
+| `training_job` (your fine-tune) | 1–3 min — checkpoint already on Veri-managed S3, no HF download |
+
+The slowest part is usually the model weight download from HF. Once a deployment is `serving`, individual chat requests have sub-second TTFB on small models.
+
+## Endpoint URL stability
+
+Once a deployment reaches `serving`, its `endpoint_url` doesn't change. Save it to your config — it stays valid until you `stop` the deployment.
+
+## OOM at load
+
+If the model fails to load (OOM during weight init, not a request failure), the deployment transitions to `failed` with `error.message` populated.
+
+```python
+dep = client.deployments.get(deployment_id)
+if dep.status == "failed":
+    print(dep.error)
+```
+
+Common fix: bump to a larger GPU (`A100-80GB` → `H100`) or add a second GPU (`gpu_count=2`).
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="Cost & pricing" icon="dollar-sign" href="/deployments/cost">
+    Per-hour rates and the idle-stop warning.
+  </Card>
+  <Card title="OpenAI compatibility" icon="code" href="/deployments/openai-compat">
+    What works, what doesn't.
+  </Card>
+  <Card title="Recommended models" icon="compass" href="/resources/models">
+    Full catalog with per-model GPU recommendations.
+  </Card>
+  <Card title="Deployments API" icon="play" href="/deployments/api">
+    Endpoint reference for `create` / `chat` / `stop`.
+  </Card>
+</CardGroup>

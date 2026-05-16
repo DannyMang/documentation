@@ -1,0 +1,225 @@
+---
+title: "CLI Reference"
+sidebarTitle: "Reference"
+description: "Global flags, environment variables, exit codes, gpu / cost / billing one-liners, and troubleshooting."
+keywords: ["veri cli reference", "exit codes", "env vars", "doctor", "gpu list", "billing balance"]
+---
+
+Reference material for the `veri` CLI: every global flag, every environment variable, the exit-code contract, the small `gpu` / `cost` / `billing` groups, and `veri doctor` for diagnostics.
+
+## Global flags
+
+Every command accepts these:
+
+| Flag | Effect |
+| --- | --- |
+| `--format <fmt>` / `-o` | Output format: `table`, `json`, `jsonl`, `csv`. Default `table`. |
+| `--json` | Documented alias for `--format json`. |
+| `--quiet` / `-q` | Suppress banners and progress text. List/create commands print just the ID. |
+| `-h` / `--help` | Show command help. |
+| `--install-completion` | Install shell completion (bash / zsh / fish). |
+| `--show-completion` | Print the completion script to stdout. |
+
+`--format` and `--quiet` work on the root, on groups, and on every leaf command — they are spliced into every command's parameter list by the `VeriTyper` base class.
+
+## Override syntax (`--set`)
+
+Available on every command that loads a TOML config (`jobs create`, `deployments create`, `evals create`, `run`, `jobs estimate`, `config set`).
+
+```bash
+--set <dotted.key>=<value>           # canonical
+--set-string <dotted.key>=<value>    # force string parsing
+```
+
+Type coercion uses TOML scalars; repeated flags build lists; scalar-vs-table conflicts error. See [the run-verb reference](/cli/run#override-toml-fields-from-the-cli) for the full rules.
+
+## Help-on-missing-args
+
+`veri` and every group (`veri jobs`, `veri datasets`, etc.) print help when invoked without a subcommand. Commands with required arguments print usage when those arguments are missing. Commands with no required arguments (`veri whoami`, `veri doctor`, `veri logout`, `veri billing balance`) just run.
+
+```bash
+veri                       # help
+veri jobs                  # group help
+veri jobs get              # usage: missing ID
+veri whoami                # runs
+```
+
+## Exit codes
+
+Deterministic across every command. Designed for shell scripting.
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Success. |
+| `1` | User error (validation failed, missing flag, bad config). |
+| `2` | API error (server returned 4xx or 5xx that isn't auth). |
+| `3` | Network error (timeout, DNS, connection refused). |
+| `4` | Auth error (401 / 403, missing credentials). |
+| `130` | SIGINT (Ctrl-C). |
+
+```bash
+veri jobs get job_doesnt_exist
+echo $?                    # 2
+```
+
+## Environment variables
+
+Highest priority overrides the config file.
+
+| Variable | Effect |
+| --- | --- |
+| `VERI_API_KEY` | API key. Overrides the file. |
+| `VERI_API_URL` | API base URL. Overrides the file. |
+| `VERI_CONFIG_PATH` | Path to the user config file. Overrides XDG. |
+| `XDG_CONFIG_HOME` | Standard XDG override. Config moves to `$XDG_CONFIG_HOME/veri/config.toml`. |
+| `VERI_PROFILE` | Reserved for Phase-2 multi-profile. Ignored today. |
+
+```bash
+# Override the active API key for one command (CI / scripts):
+VERI_API_KEY=vk_other_key veri jobs list
+
+# Use a non-default config (e.g., in CI):
+VERI_CONFIG_PATH=/tmp/ci-veri.toml veri login --token vk_ci_key
+```
+
+## Config file location
+
+Default: `~/.config/veri/config.toml` (XDG-correct on Linux/macOS; `%APPDATA%/veri/` on Windows via `platformdirs`).
+
+The CLI auto-migrates the legacy `~/.veri/credentials.json` on first run **only** when no `VERI_CONFIG_PATH` / `XDG_CONFIG_HOME` is set. The legacy file is renamed to `.json.bak`, not deleted.
+
+```toml
+# ~/.config/veri/config.toml
+active_profile = "default"
+
+[profiles.default]
+api_key = "vk_..."
+api_url = "https://api.veri.studio"
+```
+
+Edit programmatically with the `--set`-style syntax:
+
+```bash
+veri config show
+veri config show --format json
+veri config set profiles.default.api_key=vk_new_key
+```
+
+## `veri doctor` — diagnostics
+
+```bash
+veri doctor
+```
+
+Runs five checks and reports `pass` / `warn` / `fail` per row:
+
+| Check | What it verifies |
+| --- | --- |
+| `python` | Python interpreter version ≥ 3.10. |
+| `sdk` | `veri-sdk` is installed and importable. |
+| `config` | Config file exists and parses. |
+| `credentials` | An API key is set (file or env var). |
+| `network` | The API URL responds to `/health` with HTTP `< 500`. |
+
+`doctor` always exits `0` — it reports, doesn't gate. Read the table, act on warnings. Use `--format json` to consume from CI:
+
+```bash
+veri doctor --format json | jq -e '.[] | select(.status == "fail")' && exit 1
+```
+
+## `veri gpu` {#gpu}
+
+| Command | Purpose |
+| --- | --- |
+| `list` | Available GPU SKUs across providers with current `$/hr`. |
+| `compare --type X --count N --hours H` | Side-by-side provider prices for a config. |
+
+```bash
+veri gpu list
+veri gpu compare --type A100-80GB --count 2 --hours 4
+```
+
+## `veri cost` {#cost}
+
+| Command | Purpose |
+| --- | --- |
+| `estimate --gpu-type X --gpu-count N --hours H [--provider P]` | Quick cost calc. |
+| `summary [--days N]` | Recent spend rollup. |
+
+```bash
+veri cost estimate --gpu-type A100-80GB --gpu-count 2 --hours 1
+veri cost summary --days 30 --format json
+```
+
+## `veri billing` {#billing}
+
+| Command | Purpose |
+| --- | --- |
+| `balance` | Current credit balance. |
+| `burn-rate` | `$/day` plus estimated runway. |
+| `transactions [--limit N]` | Recent charges. |
+
+```bash
+veri billing balance
+veri billing burn-rate
+veri billing transactions --limit 50 --format jsonl
+```
+
+## Shell completion
+
+Typer ships completion for free:
+
+```bash
+# Install for your current shell (writes to your rc file):
+veri --install-completion
+
+# Print the script without installing:
+veri --show-completion
+```
+
+Supported shells: `bash`, `zsh`, `fish`, `powershell`.
+
+## Versioning
+
+```bash
+veri version
+veri version --format json
+```
+
+Prints SDK version, Python version, and platform string. The `--version` and `-v` root flags are aliases — they emit the same output and exit. From CI:
+
+```bash
+test "$(veri version --format json | jq -r .sdk_version)" = "0.2.0" || exit 1
+```
+
+## Phase-2 deferrals
+
+These are not in Phase-1 and will error or print a clear "deferred" note if attempted:
+
+| Feature | Gated on |
+| --- | --- |
+| `veri jobs logs --follow` | SDK log-streaming method. |
+| `veri jobs resume` | Resumable training-runner checkpoints. |
+| `veri jobs ssh` | SSH ingress into training containers. |
+| `veri jobs metrics --export wandb` | SDK metrics method. |
+| `veri deployments start` / `scale` / `rollback` / `history` | Server-side versioned deploy history. |
+| `veri deployments load-lora` / `unload-lora` | Multi-LoRA inference backend. |
+| `veri evals tui` | Textual TUI app. |
+| `veri evals compare` | Diff logic over two run results. |
+| `veri rewards test --dataset` | SDK dataset row iteration. |
+| Multi-profile (`veri profile use/new`) | Forward-compatible schema already in place. |
+| `veri secrets` | API secrets surface. |
+
+## What's next
+
+<CardGroup cols={3}>
+  <Card title="Overview" icon="terminal" href="/cli">
+    Install + login + first call.
+  </Card>
+  <Card title="The run verb" icon="play" href="/cli/run">
+    Hero verb + override syntax.
+  </Card>
+  <Card title="Datasets" icon="database" href="/cli/datasets">
+    Upload and connect.
+  </Card>
+</CardGroup>

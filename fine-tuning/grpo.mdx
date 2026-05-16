@@ -1,0 +1,141 @@
+---
+title: "GRPO algorithm"
+sidebarTitle: "GRPO"
+description: "Group Relative Policy Optimization — the RL algorithm behind DeepSeek R1. Intuition, hyperparameters, and how to read the metrics."
+keywords: ["GRPO", "reinforcement learning", "advantages", "KL divergence", "rollouts"]
+---
+
+GRPO (Group Relative Policy Optimization) is the algorithm that powers DeepSeek R1 and is Veri's default training method. It generates **K rollouts per prompt**, scores each with your reward function, and reinforces completions that scored above the group's average.
+
+This page covers the intuition + every hyperparameter Veri exposes.
+
+## The core loop
+
+For each prompt in a batch:
+
+1. **Sample** `rollouts_per_prompt` completions from the current policy
+2. **Score** every completion with your reward function
+3. **Compute advantage**: `(reward - group_mean) / (group_std + epsilon)`
+4. **Update policy** to make above-average completions more likely (bounded by KL distance from the reference model)
+
+The "group relative" part is what makes GRPO simpler than PPO — no value head, no separate critic, no GAE. The rollouts themselves provide the baseline.
+
+## Hyperparameters
+
+Every field of `GRPOHyperparameters`, defaults from `control_plane/schemas/training.py`:
+
+| Parameter | Default | What it does |
+| --- | --- | --- |
+| `learning_rate` | `1e-6` | AdamW step size. Stable for most LLM RL. |
+| `num_epochs` | `1` | Passes over the dataset. Overridden by `max_steps` if both set. |
+| `max_steps` | `null` | Total gradient steps. Set this to cap a long run. |
+| `rollouts_per_prompt` | `8` | Group size. Higher = better advantage estimates, more compute per step. |
+| `kl_coef` | `0.001` | KL penalty weight against the reference (frozen) model. Prevents drift. |
+| `max_prompt_length` | `1024` | Tokens. Truncate longer prompts. |
+| `max_response_length` | `2048` | Tokens. Truncate longer completions. Big OOM lever. |
+| `global_batch_size` | `64` | Total batch across all GPUs. Auto-split per device. |
+| `seed` | `42` | RNG seed for reproducibility. |
+| `use_unsloth` | `true` | Memory optimization (bf16 fallback). Leave on. |
+
+<Note>
+  `lora_rank` and `lora_alpha` exist in the schema but **must be `null` for GRPO** today — full fine-tuning only. LoRA for LLM GRPO is on the roadmap (blocked on upstream slime PR #1140). LoRA does work for [video gen SFT](/fine-tuning/examples).
+</Note>
+
+## Picking values
+
+**For first runs, change two things:**
+
+- `max_response_length` — drop to `512` if you're hitting OOM, raise to `4096` for tasks that need long outputs (reasoning, code)
+- `max_steps` — set to `50–100` for smoke tests, then drop the cap when the loop looks healthy
+
+**Everything else holds for most tasks:**
+
+- `learning_rate=1e-6` — stable across model sizes
+- `rollouts_per_prompt=8` — sweet spot for advantage signal vs. compute. Drop to `4` only if you're cost-constrained
+- `kl_coef=0.001` — conservative; raise to `0.01` if the model drifts too fast (incoherent outputs)
+
+## Common failure modes
+
+**Policy collapse** — `policy_entropy → 0`, model produces identical outputs for every prompt. Cause: KL coefficient too low, learning rate too high, or reward function gives the same score to too many completions. Lower learning_rate, raise kl_coef.
+
+**Reward hacking** — Reward goes up, but outputs become weird (gaming the reward function rather than solving the task). Tighten the reward — add format checks, length penalties, or a frontier judge as a sanity scorer.
+
+**Length explosion** — `response_length_mean` grows toward `max_response_length` without reward improving. Add a length penalty to the reward, or drop `max_response_length`.
+
+## Reading the metrics
+
+Pull metrics with `GET /v1/training_jobs/{id}/metrics` (or the dashboard if you're integrated with W&B):
+
+```python
+metrics = client.training_jobs.get(job_id).metrics  # latest sample
+# Or for the full series:
+# httpx.get(f"{base_url}/v1/training_jobs/{job_id}/metrics?keys=loss,kl_div,reward_mean")
+```
+
+| Metric | What healthy looks like |
+| --- | --- |
+| `reward_mean` | Climbs over training. Plateaus at the ceiling of your reward design. |
+| `reward_std` | Stays > 0. If it collapses to ~0, all completions look the same — policy collapse. |
+| `kl_div` | Stays bounded. If it grows unboundedly, the policy is drifting; raise `kl_coef`. |
+| `loss` | Decreases overall, but expect noise — RL loss is not as clean as supervised. |
+| `response_length_mean` | Stable or modestly growing. Steep growth = length explosion. |
+| `policy_entropy` | Slow decline as the model becomes more confident. Steep decline = collapse risk. |
+
+## Sample hyperparameter blocks
+
+**Smoke test (small model, quick iteration):**
+
+```python
+hyperparameters={
+    "learning_rate": 1e-6,
+    "rollouts_per_prompt": 4,
+    "max_response_length": 512,
+    "kl_coef": 0.001,
+    "max_steps": 50,
+}
+```
+
+**Production (Qwen2.5-7B class):**
+
+```python
+hyperparameters={
+    "learning_rate": 1e-6,
+    "rollouts_per_prompt": 8,
+    "max_response_length": 2048,
+    "kl_coef": 0.001,
+    "num_epochs": 1,
+}
+```
+
+**Reasoning-heavy task (long chain-of-thought):**
+
+```python
+hyperparameters={
+    "learning_rate": 5e-7,
+    "rollouts_per_prompt": 8,
+    "max_response_length": 4096,
+    "kl_coef": 0.005,
+    "num_epochs": 2,
+}
+```
+
+## When NOT to use GRPO
+
+If your model can't follow the *format* you want yet (e.g. won't wrap answers in `<answer>` tags), do an SFT pass first to teach the structure, then GRPO to reinforce correctness. RL works better when the policy already has non-zero probability of producing the right shape.
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="Reward functions" icon="scale-balanced" href="/fine-tuning/reward-functions">
+    Design rewards GRPO can actually optimize against.
+  </Card>
+  <Card title="Datasets" icon="database" href="/fine-tuning/datasets">
+    Get training data into Veri.
+  </Card>
+  <Card title="Submit a job" icon="play" href="/fine-tuning/api">
+    Wire it all into `training_jobs.create`.
+  </Card>
+  <Card title="Examples" icon="book" href="/fine-tuning/examples">
+    Math reasoning end-to-end with metrics interpretation.
+  </Card>
+</CardGroup>

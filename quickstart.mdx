@@ -1,163 +1,348 @@
 ---
 title: "Quickstart"
-description: "Get started with Mintlify by deploying your documentation site in minutes and making your first content change with the web editor or Git."
-keywords: ["quickstart", "deploy", "get started", "first steps", "tutorial", "setup", "onboarding"]
-boost: 3
+description: "Train your own reasoning model in minutes"
 ---
 
-import SkillMcpPrompt from "/snippets/skill-mcp-prompt.mdx";
+# Quickstart
 
-After you complete this guide, you'll have a live documentation site ready to customize and update.
+> Train a math reasoning model using GRPO — the same technique behind DeepSeek R1
 
-## Before you begin
-
-Mintlify uses a docs-as-code approach to manage your documentation. Every page on your site has a corresponding file stored in your documentation <Tooltip tip="Your documentation's source code where all files and their history are stored. The web editor connects to your documentation repository to access and modify content, or you can edit files locally in your preferred IDE.">repository</Tooltip>.
-
-When you connect your documentation repository to your project, you can work on your documentation locally or in the web editor and sync any changes to your remote repository.
+In this quickstart, you'll fine-tune **Qwen 2.5 7B** on the [GSM8K](https://huggingface.co/datasets/openai/gsm8k) dataset to produce a model that reasons step-by-step through grade school math problems. Veri handles GPU provisioning, job orchestration, and checkpoint delivery — you just provide the dataset and reward function.
 
 <Tip>
-  Using an AI coding tool?
-
-  Copy the following prompt to add the Mintlify [skill](/ai/skillmd) and [MCP server](/ai/model-context-protocol) for better results when updating your documentation.
+  Want the full script instead? Grab [`quickstart.py`](https://github.com/DannyMang/veri_examples/blob/main/quickstart.py) from the [examples repo](https://github.com/DannyMang/veri_examples) — a single self-contained Python file that walks through the entire flow with detailed comments.
 </Tip>
 
-<SkillMcpPrompt />
+## Step 1: Get your API key
 
-## Deploy your documentation site
-
-Go to [mintlify.com/start](https://mintlify.com/start) and complete the onboarding process. During onboarding, you'll connect your GitHub account, create or select a repository for your documentation, and install the GitHub App to enable automatic deployments.
-
-After onboarding, your documentation site deploys and is accessible at your `.mintlify.app` URL.
-
-<AccordionGroup>
-  <Accordion title="Optional: Skip connecting a Git provider during onboarding">
-    If you want to get started quickly without connecting your own repository, you can skip the Git provider connection during onboarding. Mintlify creates a private repository in a private organization and automatically configures the GitHub App for you.
-
-    This lets you use the web editor immediately. If you want to use your own repository later, go to [Git Settings](https://dashboard.mintlify.com/settings/deployment/git-settings) in your dashboard to migrate your content using the Git setup wizard. See [Clone to your own repository](/deploy/github#clone-to-your-own-repository) for details.
-  </Accordion>
-</AccordionGroup>
-
-## View your deployed site
-
-Your documentation site is now deployed at `https://<your-project-name>.mintlify.app`.
-
-Find your exact URL on the **Overview** page of your [dashboard](https://dashboard.mintlify.com/).
-
-<Frame>
-  <img
-    alt="Overview page of the Mintlify dashboard."
-    className="block dark:hidden"
-    src="/images/quickstart/mintlify-domain-light.png"
-  />
-  <img
-    alt="Overview page of the Mintlify dashboard."
-    className="hidden dark:block"
-    src="/images/quickstart/mintlify-domain-dark.png"
-  />
-</Frame>
-
-<Tip>
-  Your site is ready to view immediately. Use this URL for testing and sharing with your team. Before sharing with your users, you may want to add a [custom domain](/customize/custom-domain).
-</Tip>
-
-## Make your first change
+Create an API key from the [Veri dashboard](https://veri.studio/dashboard/settings) and export it:
 
 <Tabs>
-  <Tab title="CLI">
-    <Steps>
-      <Step title="Install the CLI">
-        The CLI requires [Node.js](https://nodejs.org/en) v20.17.0 or higher. Use an LTS version for stability.
-
-        <CodeGroup>
-
-        ```bash npm
-        npm i -g mint
-        ```
-
-        ```bash pnpm
-        pnpm add -g mint
-        ```
-
-        </CodeGroup>
-
-        See [Install the CLI](/cli/install) for full details and troubleshooting.
-      </Step>
-      <Step title="Clone your repository">
-        If you haven't already cloned your repository locally, follow the instructions in [Clone your repository](/cli/install#clone-your-repository).
-      </Step>
-      <Step title="Edit a page">
-        Open `index.mdx` in your preferred editor and update the description in the frontmatter:
-
-        ```mdx
-        ---
-        title: "Introduction"
-        description: "Your custom description here"
-        ---
-        ```
-      </Step>
-      <Step title="Preview locally">
-        Run the following command from your documentation directory:
-
-        ```bash
-        mint dev
-        ```
-
-        View your preview at `http://localhost:3000`.
-      </Step>
-      <Step title="Push your changes">
-        Commit and push your changes to trigger a deployment:
-
-        ```bash
-        git add .
-        git commit -m "Update description"
-        git push
-        ```
-
-        Mintlify automatically deploys your changes. View your deployment status on the [Overview](https://dashboard.mintlify.com/) page of your dashboard.
-      </Step>
-    </Steps>
+  <Tab title="macOS / Linux">
+    ```bash
+    export VERI_API_KEY="vk_your_api_key"
+    ```
   </Tab>
-  <Tab title="Web editor">
-    <Steps>
-      <Step title="Open the web editor">
-        Navigate to the [web editor](https://dashboard.mintlify.com/editor) in your dashboard.
-      </Step>
-      <Step title="Edit a page">
-        Open the **Introduction** page and update the description.
 
-        <Frame>
-          <img
-            alt="Introduction page open in the web editor with the description edited to say Hello world!."
-            className="block dark:hidden"
-            src="/images/quickstart/hello-world-light.png"
-          />
-          <img
-            alt="Introduction page open in the web editor with the description edited to say Hello world!."
-            className="hidden dark:block"
-            src="/images/quickstart/hello-world-dark.png"
-          />
-        </Frame>
-      </Step>
-      <Step title="Publish">
-        Click **Publish** in the top-right of the web editor toolbar.
-      </Step>
-      <Step title="View live">
-        On the [Overview](https://dashboard.mintlify.com/) page of your dashboard, you can see your site's deployment status. When it finishes deploying, refresh your documentation site to see your changes live.
-      </Step>
-    </Steps>
+  <Tab title="Windows">
+    ```powershell
+    setx VERI_API_KEY "vk_your_api_key"
+    ```
   </Tab>
 </Tabs>
 
+## Step 2: Connect the GSM8K dataset
+
+[GSM8K](https://huggingface.co/datasets/openai/gsm8k) is OpenAI's dataset of 8,800 grade school math problems with step-by-step solutions. It's the standard benchmark for training reasoning models.
+
+Veri can connect directly to Hugging Face — no download needed:
+
+<Tabs>
+  <Tab title="Python SDK">
+    ```python
+    from veri_sdk import Client
+
+    client = Client()
+
+    dataset = client.datasets.connect(
+        name="gsm8k-train",
+        source_type="hf",
+        huggingface_dataset="openai/gsm8k",
+        huggingface_config={
+            "config_name": "main",
+            "split": "train",
+            "column_mapping": {
+                "question": "prompt",
+                "answer": "label",
+            },
+        },
+    )
+    print(f"Dataset ID: {dataset.id}")
+    ```
+  </Tab>
+
+  <Tab title="curl">
+    ```bash
+    curl -X POST https://api.veri.studio/v1/datasets/connect \
+      -H "Authorization: Bearer $VERI_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "name": "gsm8k-train",
+        "source_type": "hf",
+        "huggingface_dataset": "openai/gsm8k",
+        "huggingface_config": {
+          "config_name": "main",
+          "split": "train",
+          "column_mapping": {
+            "question": "prompt",
+            "answer": "label"
+          }
+        }
+      }'
+    ```
+  </Tab>
+</Tabs>
+
+The `column_mapping` tells Veri that GSM8K's `question` field is the prompt and `answer` is the label your reward function can check against.
+
+## Step 3: Write a reward function
+
+GRPO works by generating multiple completions per prompt, scoring each one, and reinforcing the better responses. Your reward function defines what "better" means.
+
+For math reasoning, we want to reward two things:
+1. **Correct answers** — did the model get the right number?
+2. **Structured reasoning** — did it show its work in a clear format?
+
+Save this as `reward.py`:
+
+```python
+import re
+
+def reward(completions, answer=None, **kwargs):
+    """Score completions on correctness and reasoning format.
+
+    Rewards:
+      +1.0  correct final answer
+      +0.5  structured <reasoning>...</reasoning><answer>...</answer> format
+      +0.25 any numeric answer attempted (even if wrong)
+    """
+    scores = []
+    for completion in completions:
+        score = 0.0
+
+        # Check for structured reasoning format
+        has_reasoning = bool(re.search(
+            r"<reasoning>.*?</reasoning>", completion, re.DOTALL
+        ))
+        has_answer_tag = bool(re.search(
+            r"<answer>.*?</answer>", completion, re.DOTALL
+        ))
+        if has_reasoning and has_answer_tag:
+            score += 0.5
+
+        # Extract the numeric answer
+        answer_match = re.search(r"<answer>\s*([\d,.]+)\s*</answer>", completion)
+        if answer_match:
+            predicted = answer_match.group(1).replace(",", "")
+        else:
+            # Fallback: grab the last number in the completion
+            numbers = re.findall(r"[\d,.]+", completion)
+            predicted = numbers[-1].replace(",", "") if numbers else None
+
+        if predicted:
+            score += 0.25  # attempted a numeric answer
+
+            # Check correctness against the label
+            if answer:
+                # GSM8K answers have format "#### 42" — extract the number
+                ref_match = re.search(r"####\s*([\d,.]+)", str(answer))
+                ref = ref_match.group(1).replace(",", "") if ref_match else str(answer).strip()
+                if predicted == ref:
+                    score += 1.0
+
+        scores.append(score)
+    return scores
+```
+
+This reward function gives partial credit — the model learns structured reasoning first, then improves on correctness. The scoring breakdown:
+
+| Behavior | Reward |
+|---|---|
+| Random/empty response | 0.0 |
+| Attempted a numeric answer | 0.25 |
+| Used `<reasoning>` + `<answer>` format | 0.5 |
+| Correct final answer | +1.0 |
+| Perfect (correct + structured) | 1.75 |
+
+Upload it:
+
+<Tabs>
+  <Tab title="Python SDK">
+    ```python
+    reward_fn = client.reward_functions.upload("reward.py", format="trl")
+    print(f"Reward ID: {reward_fn.id}")
+    ```
+  </Tab>
+
+  <Tab title="curl">
+    ```bash
+    curl -X POST https://api.veri.studio/v1/reward_functions \
+      -H "Authorization: Bearer $VERI_API_KEY" \
+      -F "name=gsm8k_math_reward" \
+      -F "format=trl" \
+      -F "file=@reward.py"
+    ```
+  </Tab>
+</Tabs>
+
+## Step 4: Launch training
+
+Now submit the GRPO training job. Veri automatically provisions the GPU, loads the dataset, and starts training.
+
+<Tabs>
+  <Tab title="Python SDK">
+    ```python
+    job = client.training_jobs.create(
+        base_model="Qwen/Qwen2.5-7B-Instruct",
+        dataset_id=dataset.id,
+        reward_function_id=reward_fn.id,
+        output_name="qwen2.5-7b-math-reasoning",
+        hyperparameters={
+            "learning_rate": 1e-6,
+            "rollouts_per_prompt": 8,
+            "max_response_length": 2048,
+            "kl_coef": 0.001,
+        },
+        gpu={"type": "A100-80GB", "count": 1},
+    )
+
+    print(f"Job ID: {job.id}")
+    print(f"Status: {job.status}")
+    ```
+  </Tab>
+
+  <Tab title="curl">
+    ```bash
+    curl -X POST https://api.veri.studio/v1/training_jobs \
+      -H "Authorization: Bearer $VERI_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "base_model": "Qwen/Qwen2.5-7B-Instruct",
+        "dataset_id": "YOUR_DATASET_ID",
+        "reward_function_id": "YOUR_REWARD_ID",
+        "output_name": "qwen2.5-7b-math-reasoning",
+        "hyperparameters": {
+          "learning_rate": 1e-6,
+          "rollouts_per_prompt": 8,
+          "max_response_length": 2048,
+          "kl_coef": 0.001
+        },
+        "gpu": {
+          "type": "A100-80GB",
+          "count": 1
+        }
+      }'
+    ```
+  </Tab>
+</Tabs>
+
+### What happens during training
+
+For each prompt in GSM8K, GRPO:
+1. Generates 8 completions from the model
+2. Scores each with your reward function
+3. Computes relative advantages — completions that scored above the group mean get reinforced
+4. Updates the model weights while staying close to the original (controlled by `kl_coef`)
+
+Over time, the model learns to produce structured reasoning that arrives at correct answers.
+
+## Step 5: Monitor and download
+
+<Tabs>
+  <Tab title="Python SDK">
+    ```python
+    # Wait for completion (polls automatically)
+    job.wait()
+    print(f"Status: {job.status}")
+
+    # Download the fine-tuned model
+    if job.download_url:
+        print(f"Checkpoint: {job.download_url}")
+    ```
+  </Tab>
+
+  <Tab title="curl">
+    Poll the job status:
+
+    ```bash
+    curl https://api.veri.studio/v1/training_jobs/$JOB_ID \
+      -H "Authorization: Bearer $VERI_API_KEY"
+    ```
+
+    When the job reaches `completed`, download the checkpoint:
+
+    ```bash
+    curl https://api.veri.studio/v1/training_jobs/$JOB_ID/model \
+      -H "Authorization: Bearer $VERI_API_KEY"
+    ```
+  </Tab>
+</Tabs>
+
+## Step 6: Use your model
+
+The output is a standard HuggingFace checkpoint. Load it directly:
+
+```python
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+model = AutoModelForCausalLM.from_pretrained("./qwen2.5-7b-math-reasoning")
+tokenizer = AutoTokenizer.from_pretrained("./qwen2.5-7b-math-reasoning")
+
+prompt = "Natalia sold clips to 48 of her friends in April, and then she sold half as many clips in May. How many clips did Natalia sell altogether in April and May?"
+
+inputs = tokenizer(prompt, return_tensors="pt")
+outputs = model.generate(**inputs, max_new_tokens=512)
+print(tokenizer.decode(outputs[0], skip_special_tokens=True))
+```
+
+After training, you should see structured reasoning like:
+
+```
+<reasoning>
+Natalia sold 48 clips in April.
+In May, she sold half as many: 48 / 2 = 24 clips.
+Total clips sold: 48 + 24 = 72
+</reasoning>
+<answer>72</answer>
+```
+
+## What to try next
+
+### Customize the reward function
+
+The reward function above is a starting point. You can add more signals:
+- **Penalize** overly long responses (`-0.5` if over 500 tokens)
+- **Reward** step-by-step arithmetic (`+0.25` per intermediate calculation)
+- **Check** unit consistency or mathematical notation
+
+### Try different models
+
+Start small for fast iteration, scale up for quality:
+
+| Model | Best for |
+|---|---|
+| `Qwen/Qwen2.5-1.5B-Instruct` | Fast experimentation, validating reward functions |
+| `Qwen/Qwen2.5-7B-Instruct` | Good balance of quality and cost |
+| `meta-llama/Llama-3.1-8B-Instruct` | Strong general reasoning baseline |
+
+### Try video generation
+
+Veri also supports LoRA SFT for video generation models like CogVideoX, Wan2.1, and LTX Video. See [Video Gen Fine-Tuning](/supervised-finetuning).
+
 ## Next steps
 
-<Card title="Use the web editor" icon="mouse-pointer-2" horizontal href="/editor/index">
-  Edit documentation in your browser and preview how your pages look when published.
-</Card>
+<CardGroup cols={3}>
+  <Card title="Reward Functions" icon="star" href="/concepts/reward-functions">
+    Design better reward signals
+  </Card>
 
-<Card title="Explore CLI commands" icon="terminal" horizontal href="/cli/index">
-  Find broken links, check accessibility, validate OpenAPI specs, and more.
-</Card>
+  <Card title="GRPO Training" icon="brain" href="/concepts/grpo-training">
+    Understand GRPO hyperparameters
+  </Card>
 
-<Card title="Add a custom domain" icon="globe" horizontal href="/customize/custom-domain">
-  Use your own domain for your documentation site.
-</Card>
+  <Card title="API Reference" icon="code" href="/api-reference/introduction">
+    Complete API documentation
+  </Card>
+
+  <Card title="Python SDK" icon="python" href="/sdks/python">
+    Full SDK reference
+  </Card>
+
+  <Card title="Model Catalog" icon="books" href="/recommended-models">
+    Browse 95+ supported models
+  </Card>
+
+  <Card title="Deployment" icon="cloud" href="/deployment">
+    Serve your fine-tuned model
+  </Card>
+</CardGroup>

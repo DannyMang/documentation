@@ -1,0 +1,128 @@
+---
+title: "Cost & pricing"
+sidebarTitle: "Cost & pricing"
+description: "Per-hour serving rates, billing cadence, and the idle-stop warning."
+keywords: ["cost", "pricing", "billing", "serving", "idle", "auto-stop"]
+---
+
+Deployments are billed by the hour while they're running. There's no idle auto-stop today — **if you forget to call `stop`, the deployment keeps charging.**
+
+## The formula
+
+```
+hourly_rate = gpu_rate(provider, gpu_type) × gpu_count × markup
+total_cost  = hourly_rate × hours_serving
+```
+
+Default markup is **1.3** (30%). The marked-up rate is what shows up on your `cost_per_hour_usd` field at deployment creation.
+
+## Per-hour rates
+
+Pulled from `control_plane/core/pricing.py`. These can change — verify with `client.cost.rates()` for the live values.
+
+| GPU | Lambda | RunPod | Prime Intellect | AWS on-demand |
+| --- | --- | --- | --- | --- |
+| A100-80GB | $1.10 | $1.64 | $2.20 | $5.12 |
+| H100 | $2.49 | $3.49 | $2.49 | $12.29 |
+| H200 | — | — | $3.50 | $14.50 |
+
+These are **raw provider rates** before Veri's 1.3× markup. Your `cost_per_hour_usd` = raw × `gpu_count` × 1.3.
+
+## Billing cadence
+
+Cost ticks **hourly**. The first tick is one hour after the deployment reaches `serving`; subsequent ticks every 3600 seconds while `serving` or `unhealthy`.
+
+When you call `stop`, a final partial-hour tick settles the bill. `total_cost_usd` on the deployment row reflects the full spend.
+
+## Cost states
+
+| Status | Charging? |
+| --- | --- |
+| `queued` | No |
+| `provisioning` | No |
+| `serving` | **Yes** |
+| `unhealthy` | **Yes** (transient state during health failure) |
+| `stopped` | No |
+| `failed` | No |
+
+## Estimate before deploying
+
+<CodeGroup>
+```python SDK
+client.cost.estimate(
+    gpu_type="H100",
+    gpu_count=1,
+    duration_minutes=60,
+)
+# → {"hourly_rate": 3.24, "total": 3.24, ...}
+```
+
+```bash CLI
+veri cost estimate --gpu-type H100 --gpu-count 1 --hours 1
+```
+</CodeGroup>
+
+## Compare across providers
+
+```python
+client.cost.compare(
+    gpu_type="H100",
+    gpu_count=1,
+    duration_minutes=60,
+)
+```
+
+Returns the same config priced through each provider, sorted cheapest first.
+
+## Live spend
+
+The deployment object exposes:
+
+```python
+dep = client.deployments.get(deployment_id)
+dep.cost_per_hour_usd   # rate (constant once set)
+dep.total_cost_usd      # cumulative spend
+dep.total_requests      # requests served
+```
+
+## Idle-stop warning
+
+There is **no idle auto-stop**. A deployment that's `serving` with zero requests for 24 hours will still bill for 24 hours.
+
+Patterns to avoid surprise bills:
+
+1. **Wrap deployments in try/finally** — guarantees `stop` even if your code errors:
+   ```python
+   dep = client.deployments.create(...)
+   try:
+       dep.wait()
+       # ...do work...
+   finally:
+       dep.stop()
+   ```
+
+2. **Monitor burn rate** — `client.billing.burn_rate()` returns active deployments + per-hour spend
+3. **Set up the low-balance webhook** — Stripe will email at configurable balance thresholds
+
+## Comparison vs training cost
+
+Training jobs run for a fixed duration and stop themselves. Deployments run **until you stop them**. A 1-hour training job on H100 costs ~$3; a deployment on the same GPU left running for a week costs ~$540.
+
+If you only need to evaluate a fine-tune, consider running an eval (which uses an existing deployment briefly) and stopping the deployment immediately after.
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="Hosting & GPU sizing" icon="server" href="/deployments/hosting">
+    Pick the right GPU before deploying.
+  </Card>
+  <Card title="Billing & credits" icon="credit-card" href="/account/billing">
+    Top up, view transactions, monitor burn rate.
+  </Card>
+  <Card title="Pricing reference" icon="dollar-sign" href="/resources/security">
+    Full provider rates table.
+  </Card>
+  <Card title="Deployments API" icon="play" href="/deployments/api">
+    `create` / `stop` endpoints.
+  </Card>
+</CardGroup>

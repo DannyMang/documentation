@@ -1,8 +1,8 @@
 ---
 title: "Introduction"
-description: "Mintlify is an AI-native documentation platform built for developers, with beautiful defaults, interactive API playgrounds, and smart search."
+description: "Veri is a platform for post-training, deploying, and evaluating language models."
 mode: "frame"
-keywords: ["overview", "platform", "getting started", "features"]
+keywords: ["overview", "platform", "getting started", "fine-tuning", "deployments", "evaluations"]
 boost: 3
 ---
 
@@ -28,12 +28,12 @@ export const HeroCard = ({ filename, title, description, href }) => {
 <div className="relative">
   <div className="absolute -top-14 left-0 right-0 opacity-80">
     <img
-      src="/images/hero/background-light.svg"
+      src="https://raw.githubusercontent.com/mintlify/docs/refs/heads/main/images/hero/background-light.svg"
       className="block dark:hidden pointer-events-none w-full h-auto"
       alt="Decorative background image."
     />
     <img
-      src="/images/hero/background-dark.svg"
+      src="https://raw.githubusercontent.com/mintlify/docs/refs/heads/main/images/hero/background-dark.svg"
       className="hidden dark:block pointer-events-none w-full h-auto"
       alt="Decorative background image."
     />
@@ -41,35 +41,40 @@ export const HeroCard = ({ filename, title, description, href }) => {
 
   <div className="relative z-10 px-4 py-16 lg:py-48 lg:pb-24 max-w-3xl mx-auto">
     <h1 className="block text-4xl font-medium text-center text-gray-900 dark:text-zinc-50 tracking-tight">
-      Documentation
+      Veri Documentation
     </h1>
 
     <div className="max-w-xl mx-auto px-4 mt-4 text-lg text-center text-gray-500 dark:text-zinc-500">
-      Meet the next generation of documentation. AI-native, beautiful out-of-the-box, and built for developers and teams.
+      Post-train and deploy any model easily. Veri gives you a complete pipeline for fine-tuning, serving, and evaluating language models.
     </div>
 
     <div className="px-6 lg:px-0 mt-12 lg:mt-24 grid sm:grid-cols-2 gap-x-6 gap-y-4">
-      <HeroCard filename="rocket" title="Quickstart" description="Deploy your first docs site in minutes with our step-by-step guide" href="/quickstart" />
+      <HeroCard
+        filename="rocket"
+        title="Quickstart"
+        description="Install, log in, and make your first API call in 3 minutes — zero GPU spend"
+        href="/quickstart"
+      />
 
       <HeroCard
         filename="cli"
-        title="CLI installation"
-        description="Install the CLI to preview and develop your docs locally"
-        href="/installation"
+        title="Fine-tune a model"
+        description="End-to-end GRPO fine-tune on a tiny model in ~15 minutes"
+        href="/quickstart/fine-tune"
       />
 
       <HeroCard
         filename="editor"
-        title="Web editor"
-        description="Make quick updates and manage content with our browser-based editor"
-        href="/editor/index"
+        title="Deploy a model"
+        description="Serve any base or fine-tuned model with an OpenAI-compatible API"
+        href="/quickstart/deploy"
       />
 
       <HeroCard
         filename="components"
-        title="Components"
-        description="Build rich, interactive documentation with our ready-to-use components"
-        href="/components/accordions"
+        title="Evaluate a model"
+        description="Score a deployment against a held-out dataset with composable scorers"
+        href="/quickstart/eval"
       />
     </div>
   </div>
