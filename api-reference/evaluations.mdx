@@ -1,9 +1,10 @@
 ---
 title: "Evaluations"
 description: "Score deployed models against a dataset with reusable scorers"
+keywords: ["evaluations", "api", "scorers", "eval runs", "exact match", "contains"]
 ---
 
-Evaluations let you score a SERVING deployment against a dataset using one or more scorers, then read back per-sample results and aggregate stats.
+Evaluations let you score a `serving` deployment against a dataset using one or more scorers, then read back per-sample results and aggregate stats.
 
 An **Eval** is a definition (dataset + scorers). An **EvalRun** is one execution of that definition against a model target.
 
@@ -33,7 +34,12 @@ An **Eval** is a definition (dataset + scorers). An **EvalRun** is one execution
 </ParamField>
 
 <ParamField body="generation_params" type="object">
-  Default inference settings (forwarded to the deployment): `max_tokens`, `temperature`, `top_p`, `stop`. Can be overridden per run.
+  Default inference settings (forwarded to the deployment). Can be overridden per run.
+
+  - `max_tokens` (integer, default `2048`)
+  - `temperature` (number, default `0.7`)
+  - `top_p` (number, default `1.0`)
+  - `stop` (array of strings or null, default `null`)
 </ParamField>
 
 ### Scorer config shapes
@@ -138,6 +144,20 @@ Returns `204 No Content`. Existing runs are preserved unless explicitly deleted.
 
 ---
 
+## Run lifecycle
+
+Run status values:
+
+| Status | Meaning |
+|--------|---------|
+| `queued` | Created. The eval worker has not started yet. |
+| `running` | A worker has claimed the run. Items are being scored. |
+| `completed` | All items scored. `results` is populated. |
+| `failed` | Worker hit an unrecoverable error. See `error_message`. |
+| `cancelled` | Caller cancelled the run before it completed. |
+
+---
+
 ## Create Eval Run
 
 Run the eval against a specific model target. Returns immediately in `queued` status; the eval worker picks it up within a few seconds.
@@ -184,6 +204,37 @@ curl -X POST https://api.veri.studio/v1/evals/ev_xyz789/runs \
   "completed_at": null,
   "created_at": "2026-05-11T10:00:00Z",
   "updated_at": "2026-05-11T10:00:00Z"
+}
+```
+
+---
+
+## List Eval Runs
+
+<ParamField query="limit" type="integer" default="20">
+  Max results per page (1–100).
+</ParamField>
+
+<ParamField query="after" type="string">
+  Cursor: pass the ID of the last item from the previous page.
+</ParamField>
+
+### Request
+
+```bash
+curl https://api.veri.studio/v1/evals/ev_xyz789/runs \
+  -H "Authorization: Bearer vk_your_api_key"
+```
+
+### Response
+
+```json
+{
+  "object": "list",
+  "data": [
+    { "id": "run_abc123", "object": "eval_run", "status": "completed", ... }
+  ],
+  "has_more": false
 }
 ```
 
@@ -279,6 +330,17 @@ curl -X POST https://api.veri.studio/v1/evals/ev_xyz789/runs/run_abc123/cancel \
 ```
 
 Marks the run as `cancelled`. The worker bails on its next status-write cycle.
+
+---
+
+## Delete Eval Run
+
+```bash
+curl -X DELETE https://api.veri.studio/v1/evals/ev_xyz789/runs/run_abc123 \
+  -H "Authorization: Bearer vk_your_api_key"
+```
+
+Returns `204 No Content`. Items are deleted alongside the run.
 
 ---
 

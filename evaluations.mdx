@@ -1,9 +1,10 @@
 ---
 title: "Evaluations"
 description: "Score deployed models against a dataset using reusable scorers"
+keywords: ["evaluations", "scorers", "exact match", "contains", "model evaluation"]
 ---
 
-Evaluations are live for Phase A — `exact_match` and `contains` scorers against any SERVING [deployment](/api-reference/deployments).
+Evaluations are live for Phase A — `exact_match` and `contains` scorers against any `serving` [deployment](/api-reference/deployments).
 
 <CardGroup cols={2}>
   <Card title="Concept guide" icon="book-open" href="/concepts/evaluations">
@@ -37,11 +38,11 @@ print(f"Mean score: {run.results['scores']['em']['mean']:.3f}")
 
 - `exact_match` scorer — case-insensitive by default, strips whitespace, coerces non-string references.
 - `contains` scorer — substring or regex match against a dataset reference field.
-- Model target: `deployment:<id>` against a SERVING deployment.
+- Model target: `deployment:<id>` against a `serving` deployment.
 - Dataset support: JSONL uploads.
 - Full run lifecycle with per-sample item rows + aggregate `mean/median/std/min/max/count/error_count` per scorer.
 
 ## Coming next
 
-- **Phase B:** `reward_function` (reuse your training reward), `llm_judge`, `python` (custom Python), BYOK frontier comparators (OpenAI/Anthropic/Google), and ephemeral deployments for `job:<id>` targets.
+- **Phase B:** `reward_function` (reuse your training reward), `llm_judge`, `python` (custom Python), BYOK frontier comparators (OpenAI/Anthropic/Google), and additional model targets — `hf:<model>` (HuggingFace direct) and ephemeral deployments for `job:<id>` (training-job checkpoint).
 - **Phase C:** curated public benchmarks (MMLU, GPQA, HumanEval, IFEval, MATH-500, GSM8K, AIME, HellaSwag, ARC, TruthfulQA) via [Inspect AI](https://inspect.aisi.org.uk/).

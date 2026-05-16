@@ -1,6 +1,7 @@
 ---
 title: "Training Jobs"
 description: "Create, monitor, and manage training jobs"
+keywords: ["training jobs", "api", "grpo", "fine-tuning"]
 ---
 
 ## Create Training Job
@@ -99,7 +100,7 @@ description: "Create, monitor, and manage training jobs"
 </ParamField>
 
 <ParamField body="gpu" type="object" required>
-  Explicit GPU configuration. Include both `type` and `count`.
+  Explicit GPU configuration. Object with `gpu_type` (one of `A100-40GB`, `A100-80GB`, `H100`, `L40S`) and `gpu_count` (1–8).
 </ParamField>
 
 <ParamField body="provider" type="string">
@@ -144,8 +145,8 @@ curl -X POST https://api.veri.studio/v1/training_jobs \
       "global_batch_size": 64
     },
     "gpu": {
-      "type": "A100-80GB",
-      "count": 1
+      "gpu_type": "A100-80GB",
+      "gpu_count": 1
     },
     "checkpoint_destination": {
       "type": "veri"
@@ -174,8 +175,8 @@ curl -X POST https://api.veri.studio/v1/training_jobs \
       "max_response_length": 2048
     },
     "gpu": {
-      "type": "A100-80GB",
-      "count": 1
+      "gpu_type": "A100-80GB",
+      "gpu_count": 1
     }
   }'
 ```
@@ -201,8 +202,8 @@ curl -X POST https://api.veri.studio/v1/training_jobs \
       "lora_rank": 64
     },
     "gpu": {
-      "type": "A100-80GB",
-      "count": 1
+      "gpu_type": "A100-80GB",
+      "gpu_count": 1
     }
   }'
 ```
@@ -235,8 +236,8 @@ curl -X POST https://api.veri.studio/v1/training_jobs \
   "error": null,
   "gpu": null,
   "gpu_requested": {
-    "type": "A100-80GB",
-    "count": 1
+      "gpu_type": "A100-80GB",
+      "gpu_count": 1
   },
   "provider": null,
   "duration_seconds": null,
@@ -335,12 +336,12 @@ curl https://api.veri.studio/v1/training_jobs/job_xyz789 \
   "download_url": null,
   "error": null,
   "gpu": {
-    "type": "A100-80GB",
-    "count": 1
+      "gpu_type": "A100-80GB",
+      "gpu_count": 1
   },
   "gpu_requested": {
-    "type": "A100-80GB",
-    "count": 1
+      "gpu_type": "A100-80GB",
+      "gpu_count": 1
   },
   "provider": "prime_intellect",
   "cost_usd": null,

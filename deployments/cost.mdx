@@ -14,19 +14,20 @@ hourly_rate = gpu_rate(provider, gpu_type) × gpu_count × markup
 total_cost  = hourly_rate × hours_serving
 ```
 
-Default markup is **1.3** (30%). The marked-up rate is what shows up on your `cost_per_hour_usd` field at deployment creation.
+Default markup is **1.3** (30%).
 
 ## Per-hour rates
 
-Pulled from `control_plane/core/pricing.py`. These can change — verify with `client.cost.rates()` for the live values.
+Pulled from `control_plane/pricing.json`. These can change — use `client.cost.estimate(...)` for the live values.
 
 | GPU | Lambda | RunPod | Prime Intellect | AWS on-demand |
 | --- | --- | --- | --- | --- |
 | A100-80GB | $1.10 | $1.64 | $2.20 | $5.12 |
 | H100 | $2.49 | $3.49 | $2.49 | $12.29 |
 | H200 | — | — | $3.50 | $14.50 |
+| L40S | — | $0.79 | — | $2.05 |
 
-These are **raw provider rates** before Veri's 1.3× markup. Your `cost_per_hour_usd` = raw × `gpu_count` × 1.3.
+These are **raw provider rates** before Veri's 1.3× markup. The user-facing hourly rate is `raw × gpu_count × 1.3`.
 
 ## Billing cadence
 
@@ -70,9 +71,10 @@ client.cost.compare(
     gpu_count=1,
     duration_minutes=60,
 )
+# → {"lambda": 3.24, "runpod": 4.54, "prime_intellect": 3.24, "aws": 15.98}
 ```
 
-Returns the same config priced through each provider, sorted cheapest first.
+Returns a `dict[provider, total_usd]` for the same config priced through each available provider.
 
 ## Live spend
 
@@ -80,10 +82,13 @@ The deployment object exposes:
 
 ```python
 dep = client.deployments.get(deployment_id)
-dep.cost_per_hour_usd   # rate (constant once set)
-dep.total_cost_usd      # cumulative spend
+dep.total_cost_usd      # cumulative spend (updated at each hourly tick)
 dep.total_requests      # requests served
 ```
+
+<Note>
+  `cost_per_hour_usd` is published on the deployment shape but is not yet populated by the control plane. Use `client.cost.estimate(...)` to read the rate for the GPU you provisioned.
+</Note>
 
 ## Idle-stop warning
 
@@ -116,13 +121,13 @@ If you only need to evaluate a fine-tune, consider running an eval (which uses a
   <Card title="Hosting & GPU sizing" icon="server" href="/deployments/hosting">
     Pick the right GPU before deploying.
   </Card>
-  <Card title="Billing & credits" icon="credit-card" href="/account/billing">
-    Top up, view transactions, monitor burn rate.
+  <Card title="OpenAI compatibility" icon="code" href="/deployments/openai-compat">
+    What works, what doesn't.
   </Card>
-  <Card title="Pricing reference" icon="dollar-sign" href="/resources/security">
-    Full provider rates table.
-  </Card>
-  <Card title="Deployments API" icon="play" href="/deployments/api">
+  <Card title="Deployments API" icon="play" href="/api-reference/deployments">
     `create` / `stop` endpoints.
+  </Card>
+  <Card title="Examples" icon="book" href="/deployments/examples">
+    Deploy + chat + stop recipes.
   </Card>
 </CardGroup>

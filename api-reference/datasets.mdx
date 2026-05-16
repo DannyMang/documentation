@@ -1,6 +1,7 @@
 ---
 title: "Datasets"
 description: "Upload and manage training datasets"
+keywords: ["datasets", "api", "jsonl", "huggingface", "volumes"]
 ---
 
 ## Upload Dataset
@@ -46,32 +47,28 @@ curl -X POST https://api.veri.studio/v1/datasets \
 </ParamField>
 
 <ParamField body="source_type" type="string" required>
-  One of `s3`, `gs`, `az`, `hf`, `postgres`, `mysql`, `snowflake`, or `bigquery`.
-</ParamField>
-
-<ParamField body="source_uri" type="string">
-  Required for `s3`, `gs`, and `az` sources.
+  One of `hf` or `volume`. (Direct file uploads use `POST /v1/datasets`, not this endpoint.)
 </ParamField>
 
 <ParamField body="huggingface_dataset" type="string">
-  Required for `hf` sources.
+  Required for `hf` sources. The Hugging Face dataset slug (e.g. `openai/gsm8k`).
 </ParamField>
 
 <ParamField body="huggingface_config" type="object">
-  Optional Hugging Face config, including `split`, `column_mapping`, and `token`.
+  Required for `hf` sources. Object containing `config_name` (optional, for multi-config datasets), `split` (e.g. `train`), and `column_mapping` (a dict mapping source columns to `prompt` / `answer` / `label`).
 </ParamField>
 
-<ParamField body="db_connection" type="string">
-  Required for SQL, Snowflake, and BigQuery-backed sources.
+<ParamField body="volume" type="string">
+  Required for `volume` sources. The volume name.
 </ParamField>
 
-<ParamField body="db_query" type="string">
-  Required for database-backed sources.
+<ParamField body="volume_path" type="string">
+  Required for `volume` sources. Absolute path to the JSONL file inside the volume (e.g. `/train.jsonl`).
 </ParamField>
 
-<ParamField body="credentials" type="object">
-  Optional source credentials for validation. These are used to test the connection but are **not stored** — you will need to provide them again at training time if the source requires authentication.
-</ParamField>
+<Note>
+  Connecting two datasets with the same `name` but a different source config returns `409 dataset_name_conflict`. The same name + same config is idempotent (the existing dataset is returned).
+</Note>
 
 ### Request
 
@@ -112,7 +109,7 @@ curl -X POST https://api.veri.studio/v1/datasets/connect \
 
 ## Validate Dataset Connection
 
-This endpoint tests a source and returns preview metadata without creating a dataset row.
+This endpoint tests a Hugging Face source and returns preview metadata without creating a dataset row. Only `source_type: "hf"` is supported by the validator.
 
 ### Request
 
@@ -121,8 +118,13 @@ curl -X POST https://api.veri.studio/v1/datasets/connect/validate \
   -H "Authorization: Bearer vk_your_api_key" \
   -H "Content-Type: application/json" \
   -d '{
-    "source_type": "s3",
-    "source_uri": "s3://my-bucket/prompts.jsonl"
+    "source_type": "hf",
+    "huggingface_dataset": "openai/gsm8k",
+    "huggingface_config": {
+      "config_name": "main",
+      "split": "train",
+      "column_mapping": {"question": "prompt", "answer": "answer"}
+    }
   }'
 ```
 

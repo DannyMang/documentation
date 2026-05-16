@@ -24,22 +24,28 @@ Rough sizing for **inference only** (training needs more headroom):
 
 | `gpu_type` | Memory | Common use |
 | --- | --- | --- |
-| `A100-40GB` | 40 GB | Cheapest tier; only for ≤4B models |
+| `A100-40GB` | 40 GB | Smallest sizes; available on AWS only today |
 | `A100-80GB` | 80 GB | Default sweet spot |
+| `L40S` | 48 GB | Cost-efficient for 3–8B models on RunPod / AWS |
 | `H100` | 80 GB | ~2x throughput vs A100-80GB |
 | `H200` | 141 GB | Largest single-GPU memory; needed for some 70B FP16 |
 
-MI300X is on the roadmap (Phase 2, requires bare-metal Ray) and not yet exposed.
+MI300X is priced (TensorWave) but the serving backend is not yet wired — it's on the roadmap.
 
 ## Provider routing
 
-When you submit a deployment without specifying `provider`, Veri picks the cheapest available GPU across:
+When you submit a deployment without specifying `provider`, Veri picks the cheapest available GPU across the priced backends in `control_plane/pricing.json`:
 
-| Provider | Notes |
+| Provider | Typical strength |
 | --- | --- |
-| **Prime Intellect** (default fronts) | Routes to RunPod / DataCrunch / Lambda Labs / MassedCompute under the hood |
-| **Lambda Cloud** (direct) | Cheapest A100-80GB rate today |
-| **RunPod** (direct) | Often best for H100 spot |
+| **Lambda Cloud** | Cheapest A100-80GB today |
+| **RunPod** | Often best for A100-80GB / L40S |
+| **Prime Intellect** | Broad GPU availability |
+| **AWS** | Reliable capacity, premium pricing |
+
+<Note>
+  The default serving backend on the Veri control plane today is an in-memory stub used during private beta. Direct provider routing for serving is being rolled out — the GPU types and rates above are the published surface; the live backend assignment may differ during early access. The control plane still bills against the chosen `provider` rate.
+</Note>
 
 Force a specific provider:
 
@@ -71,16 +77,16 @@ veri gpu compare --type H100 --count 1 --hours 1
 
 ## Cold start
 
-Time from `POST /v1/deployments` to `serving`:
+Time from `POST /v1/deployments` to `serving` depends on the provider's pod-lease time plus the model weight download. **Expected** ranges:
 
 | Source | Typical |
 | --- | --- |
-| `huggingface`, small model (≤3B) | 1–3 min |
-| `huggingface`, 7–13B | 3–6 min |
-| `huggingface`, 30B+ | 6–15 min (depends on cache hit) |
-| `training_job` (your fine-tune) | 1–3 min — checkpoint already on Veri-managed S3, no HF download |
+| `huggingface`, small model (≤3B) | ~1–3 min |
+| `huggingface`, 7–13B | ~3–6 min |
+| `huggingface`, 30B+ | ~6–15 min (depends on cache hit) |
+| `training_job` (your fine-tune) | ~1–3 min — checkpoint already on Veri-managed S3, no HF download |
 
-The slowest part is usually the model weight download from HF. Once a deployment is `serving`, individual chat requests have sub-second TTFB on small models.
+These are operational expectations, not contractual. The slowest part is usually the model weight download from HF. Once a deployment is `serving`, individual chat requests have sub-second TTFB on small models.
 
 ## Endpoint URL stability
 
@@ -110,7 +116,7 @@ Common fix: bump to a larger GPU (`A100-80GB` → `H100`) or add a second GPU (`
   <Card title="Recommended models" icon="compass" href="/resources/models">
     Full catalog with per-model GPU recommendations.
   </Card>
-  <Card title="Deployments API" icon="play" href="/deployments/api">
+  <Card title="Deployments API" icon="play" href="/api-reference/deployments">
     Endpoint reference for `create` / `chat` / `stop`.
   </Card>
 </CardGroup>

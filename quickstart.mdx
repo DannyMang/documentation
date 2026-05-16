@@ -1,348 +1,145 @@
 ---
 title: "Quickstart"
-description: "Train your own reasoning model in minutes"
+description: "Install Veri, log in, and make your first API call — zero GPU spend"
+keywords: ["quickstart", "install", "login", "veri sdk", "first call"]
 ---
 
-# Quickstart
+This page proves the platform works end-to-end before you spend a cent on GPUs. Total time: about 3 minutes.
 
-> Train a math reasoning model using GRPO — the same technique behind DeepSeek R1
+By the end of it you'll have:
+- The `veri` CLI installed locally.
+- An authenticated session.
+- A successful `client.billing.balance()` round-trip against `https://api.veri.studio`.
 
-In this quickstart, you'll fine-tune **Qwen 2.5 7B** on the [GSM8K](https://huggingface.co/datasets/openai/gsm8k) dataset to produce a model that reasons step-by-step through grade school math problems. Veri handles GPU provisioning, job orchestration, and checkpoint delivery — you just provide the dataset and reward function.
+When you're ready to spend real GPU time, jump to one of the three workflow quickstarts at the bottom of this page.
+
+## Install
+
+The CLI ships the Python SDK and CLI together.
+
+<CodeGroup>
+```bash uv (recommended)
+uv tool install veri-sdk
+```
+
+```bash pipx
+pipx install veri-sdk
+```
+
+```bash pip
+pip install veri-sdk
+```
+</CodeGroup>
+
+Verify:
+
+```bash
+veri version
+```
+
+<Note>
+  The CLI uses `~/.config/veri/config.toml` on Linux/macOS (or `$XDG_CONFIG_HOME/veri/config.toml`) for credentials and defaults.
+</Note>
+
+## Log in
+
+Create an API key from the [Veri dashboard](https://veri.studio/dashboard/settings), then:
+
+<CodeGroup>
+```bash Browser flow (default)
+veri login
+```
+
+```bash Paste an existing key
+veri login --paste
+```
+
+```bash Non-interactive
+veri login --token vk_your_api_key
+```
+</CodeGroup>
+
+Confirm:
+
+```bash
+veri whoami
+```
+
+Output:
+
+```text
+user_id:    usr_abc123
+api_url:    https://api.veri.studio
+config:     /Users/you/.config/veri/config.toml
+```
 
 <Tip>
-  Want the full script instead? Grab [`quickstart.py`](https://github.com/DannyMang/veri_examples/blob/main/quickstart.py) from the [examples repo](https://github.com/DannyMang/veri_examples) — a single self-contained Python file that walks through the entire flow with detailed comments.
+  Prefer environment variables? Set `VERI_API_KEY=vk_...` and any CLI call will pick it up. Env vars take precedence over the config file.
 </Tip>
 
-## Step 1: Get your API key
+## Make your first call
 
-Create an API key from the [Veri dashboard](https://veri.studio/dashboard/settings) and export it:
+The cheapest possible round-trip — read your credit balance. No GPU work, no inference cost.
 
-<Tabs>
-  <Tab title="macOS / Linux">
-    ```bash
-    export VERI_API_KEY="vk_your_api_key"
-    ```
-  </Tab>
+<CodeGroup>
+```python Python SDK
+from veri_sdk import Client
 
-  <Tab title="Windows">
-    ```powershell
-    setx VERI_API_KEY "vk_your_api_key"
-    ```
-  </Tab>
-</Tabs>
+client = Client()
 
-## Step 2: Connect the GSM8K dataset
+balance = client.billing.balance()
+print(f"Available credit: ${balance.available_usd:.2f}")
+```
 
-[GSM8K](https://huggingface.co/datasets/openai/gsm8k) is OpenAI's dataset of 8,800 grade school math problems with step-by-step solutions. It's the standard benchmark for training reasoning models.
+```bash curl
+curl https://api.veri.studio/v1/billing/balance \
+  -H "Authorization: Bearer vk_your_api_key"
+```
+</CodeGroup>
 
-Veri can connect directly to Hugging Face — no download needed:
-
-<Tabs>
-  <Tab title="Python SDK">
-    ```python
-    from veri_sdk import Client
-
-    client = Client()
-
-    dataset = client.datasets.connect(
-        name="gsm8k-train",
-        source_type="hf",
-        huggingface_dataset="openai/gsm8k",
-        huggingface_config={
-            "config_name": "main",
-            "split": "train",
-            "column_mapping": {
-                "question": "prompt",
-                "answer": "label",
-            },
-        },
-    )
-    print(f"Dataset ID: {dataset.id}")
-    ```
-  </Tab>
-
-  <Tab title="curl">
-    ```bash
-    curl -X POST https://api.veri.studio/v1/datasets/connect \
-      -H "Authorization: Bearer $VERI_API_KEY" \
-      -H "Content-Type: application/json" \
-      -d '{
-        "name": "gsm8k-train",
-        "source_type": "hf",
-        "huggingface_dataset": "openai/gsm8k",
-        "huggingface_config": {
-          "config_name": "main",
-          "split": "train",
-          "column_mapping": {
-            "question": "prompt",
-            "answer": "label"
-          }
-        }
-      }'
-    ```
-  </Tab>
-</Tabs>
-
-The `column_mapping` tells Veri that GSM8K's `question` field is the prompt and `answer` is the label your reward function can check against.
-
-## Step 3: Write a reward function
-
-GRPO works by generating multiple completions per prompt, scoring each one, and reinforcing the better responses. Your reward function defines what "better" means.
-
-For math reasoning, we want to reward two things:
-1. **Correct answers** — did the model get the right number?
-2. **Structured reasoning** — did it show its work in a clear format?
-
-Save this as `reward.py`:
+Now ask the cost API what a training job would cost — still no spend, just a quote.
 
 ```python
-import re
-
-def reward(completions, answer=None, **kwargs):
-    """Score completions on correctness and reasoning format.
-
-    Rewards:
-      +1.0  correct final answer
-      +0.5  structured <reasoning>...</reasoning><answer>...</answer> format
-      +0.25 any numeric answer attempted (even if wrong)
-    """
-    scores = []
-    for completion in completions:
-        score = 0.0
-
-        # Check for structured reasoning format
-        has_reasoning = bool(re.search(
-            r"<reasoning>.*?</reasoning>", completion, re.DOTALL
-        ))
-        has_answer_tag = bool(re.search(
-            r"<answer>.*?</answer>", completion, re.DOTALL
-        ))
-        if has_reasoning and has_answer_tag:
-            score += 0.5
-
-        # Extract the numeric answer
-        answer_match = re.search(r"<answer>\s*([\d,.]+)\s*</answer>", completion)
-        if answer_match:
-            predicted = answer_match.group(1).replace(",", "")
-        else:
-            # Fallback: grab the last number in the completion
-            numbers = re.findall(r"[\d,.]+", completion)
-            predicted = numbers[-1].replace(",", "") if numbers else None
-
-        if predicted:
-            score += 0.25  # attempted a numeric answer
-
-            # Check correctness against the label
-            if answer:
-                # GSM8K answers have format "#### 42" — extract the number
-                ref_match = re.search(r"####\s*([\d,.]+)", str(answer))
-                ref = ref_match.group(1).replace(",", "") if ref_match else str(answer).strip()
-                if predicted == ref:
-                    score += 1.0
-
-        scores.append(score)
-    return scores
+estimate = client.cost.estimate(
+    gpu_type="A100-80GB",
+    gpu_count=1,
+    hours=0.25,
+)
+print(f"Estimated 15-min A100 run: ${estimate.total_usd:.2f}")
 ```
 
-This reward function gives partial credit — the model learns structured reasoning first, then improves on correctness. The scoring breakdown:
+If both calls succeed, the platform is healthy and your account is wired up.
 
-| Behavior | Reward |
-|---|---|
-| Random/empty response | 0.0 |
-| Attempted a numeric answer | 0.25 |
-| Used `<reasoning>` + `<answer>` format | 0.5 |
-| Correct final answer | +1.0 |
-| Perfect (correct + structured) | 1.75 |
+## Where to next
 
-Upload it:
-
-<Tabs>
-  <Tab title="Python SDK">
-    ```python
-    reward_fn = client.reward_functions.upload("reward.py", format="trl")
-    print(f"Reward ID: {reward_fn.id}")
-    ```
-  </Tab>
-
-  <Tab title="curl">
-    ```bash
-    curl -X POST https://api.veri.studio/v1/reward_functions \
-      -H "Authorization: Bearer $VERI_API_KEY" \
-      -F "name=gsm8k_math_reward" \
-      -F "format=trl" \
-      -F "file=@reward.py"
-    ```
-  </Tab>
-</Tabs>
-
-## Step 4: Launch training
-
-Now submit the GRPO training job. Veri automatically provisions the GPU, loads the dataset, and starts training.
-
-<Tabs>
-  <Tab title="Python SDK">
-    ```python
-    job = client.training_jobs.create(
-        base_model="Qwen/Qwen2.5-7B-Instruct",
-        dataset_id=dataset.id,
-        reward_function_id=reward_fn.id,
-        output_name="qwen2.5-7b-math-reasoning",
-        hyperparameters={
-            "learning_rate": 1e-6,
-            "rollouts_per_prompt": 8,
-            "max_response_length": 2048,
-            "kl_coef": 0.001,
-        },
-        gpu={"type": "A100-80GB", "count": 1},
-    )
-
-    print(f"Job ID: {job.id}")
-    print(f"Status: {job.status}")
-    ```
-  </Tab>
-
-  <Tab title="curl">
-    ```bash
-    curl -X POST https://api.veri.studio/v1/training_jobs \
-      -H "Authorization: Bearer $VERI_API_KEY" \
-      -H "Content-Type: application/json" \
-      -d '{
-        "base_model": "Qwen/Qwen2.5-7B-Instruct",
-        "dataset_id": "YOUR_DATASET_ID",
-        "reward_function_id": "YOUR_REWARD_ID",
-        "output_name": "qwen2.5-7b-math-reasoning",
-        "hyperparameters": {
-          "learning_rate": 1e-6,
-          "rollouts_per_prompt": 8,
-          "max_response_length": 2048,
-          "kl_coef": 0.001
-        },
-        "gpu": {
-          "type": "A100-80GB",
-          "count": 1
-        }
-      }'
-    ```
-  </Tab>
-</Tabs>
-
-### What happens during training
-
-For each prompt in GSM8K, GRPO:
-1. Generates 8 completions from the model
-2. Scores each with your reward function
-3. Computes relative advantages — completions that scored above the group mean get reinforced
-4. Updates the model weights while staying close to the original (controlled by `kl_coef`)
-
-Over time, the model learns to produce structured reasoning that arrives at correct answers.
-
-## Step 5: Monitor and download
-
-<Tabs>
-  <Tab title="Python SDK">
-    ```python
-    # Wait for completion (polls automatically)
-    job.wait()
-    print(f"Status: {job.status}")
-
-    # Download the fine-tuned model
-    if job.download_url:
-        print(f"Checkpoint: {job.download_url}")
-    ```
-  </Tab>
-
-  <Tab title="curl">
-    Poll the job status:
-
-    ```bash
-    curl https://api.veri.studio/v1/training_jobs/$JOB_ID \
-      -H "Authorization: Bearer $VERI_API_KEY"
-    ```
-
-    When the job reaches `completed`, download the checkpoint:
-
-    ```bash
-    curl https://api.veri.studio/v1/training_jobs/$JOB_ID/model \
-      -H "Authorization: Bearer $VERI_API_KEY"
-    ```
-  </Tab>
-</Tabs>
-
-## Step 6: Use your model
-
-The output is a standard HuggingFace checkpoint. Load it directly:
-
-```python
-from transformers import AutoModelForCausalLM, AutoTokenizer
-
-model = AutoModelForCausalLM.from_pretrained("./qwen2.5-7b-math-reasoning")
-tokenizer = AutoTokenizer.from_pretrained("./qwen2.5-7b-math-reasoning")
-
-prompt = "Natalia sold clips to 48 of her friends in April, and then she sold half as many clips in May. How many clips did Natalia sell altogether in April and May?"
-
-inputs = tokenizer(prompt, return_tensors="pt")
-outputs = model.generate(**inputs, max_new_tokens=512)
-print(tokenizer.decode(outputs[0], skip_special_tokens=True))
-```
-
-After training, you should see structured reasoning like:
-
-```
-<reasoning>
-Natalia sold 48 clips in April.
-In May, she sold half as many: 48 / 2 = 24 clips.
-Total clips sold: 48 + 24 = 72
-</reasoning>
-<answer>72</answer>
-```
-
-## What to try next
-
-### Customize the reward function
-
-The reward function above is a starting point. You can add more signals:
-- **Penalize** overly long responses (`-0.5` if over 500 tokens)
-- **Reward** step-by-step arithmetic (`+0.25` per intermediate calculation)
-- **Check** unit consistency or mathematical notation
-
-### Try different models
-
-Start small for fast iteration, scale up for quality:
-
-| Model | Best for |
-|---|---|
-| `Qwen/Qwen2.5-1.5B-Instruct` | Fast experimentation, validating reward functions |
-| `Qwen/Qwen2.5-7B-Instruct` | Good balance of quality and cost |
-| `meta-llama/Llama-3.1-8B-Instruct` | Strong general reasoning baseline |
-
-### Try video generation
-
-Veri also supports LoRA SFT for video generation models like CogVideoX, Wan2.1, and LTX Video. See [Video Gen Fine-Tuning](/supervised-finetuning).
-
-## Next steps
+Pick the workflow you came for. Each one is end-to-end against `https://api.veri.studio` and spends about a dollar of GPU credit.
 
 <CardGroup cols={3}>
-  <Card title="Reward Functions" icon="star" href="/concepts/reward-functions">
-    Design better reward signals
+  <Card title="Fine-tune a model" icon="graduation-cap" href="/quickstart/fine-tune">
+    End-to-end GRPO on a tiny model in ~15 minutes
   </Card>
 
-  <Card title="GRPO Training" icon="brain" href="/concepts/grpo-training">
-    Understand GRPO hyperparameters
+  <Card title="Deploy a model" icon="rocket" href="/quickstart/deploy">
+    Serve any base or fine-tuned model in ~10 minutes
   </Card>
 
-  <Card title="API Reference" icon="code" href="/api-reference/introduction">
-    Complete API documentation
-  </Card>
-
-  <Card title="Python SDK" icon="python" href="/sdks/python">
-    Full SDK reference
-  </Card>
-
-  <Card title="Model Catalog" icon="books" href="/recommended-models">
-    Browse 95+ supported models
-  </Card>
-
-  <Card title="Deployment" icon="cloud" href="/deployment">
-    Serve your fine-tuned model
+  <Card title="Evaluate a model" icon="chart-line" href="/quickstart/eval">
+    Score a deployment against a held-out dataset
   </Card>
 </CardGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="veri login can't open a browser">
+    Use `veri login --paste` (paste a key you create in the dashboard) or `veri login --token vk_...` for fully non-interactive flows.
+  </Accordion>
+
+  <Accordion title="401 Unauthorized">
+    Either the key was revoked from the dashboard, or `VERI_API_KEY` in your shell points at a stale value. Run `veri whoami` to see which key the CLI is using, and `veri logout` then `veri login` to refresh.
+  </Accordion>
+
+  <Accordion title="Connection errors / DNS failures">
+    Confirm `https://api.veri.studio` is reachable from your network. Veri does not run a self-hosted control plane — every CLI call hits the production API.
+  </Accordion>
+</AccordionGroup>

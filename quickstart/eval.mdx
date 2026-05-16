@@ -60,7 +60,7 @@ We score against a small held-out GSM8K subset using the `exact_match` scorer.
         name="gsm8k-smoke",
         dataset_id=eval_dataset.id,
         scorers=[
-            {"type": "exact_match", "field": "label"},
+            {"type": "exact_match", "name": "exact_match", "reference_field": "label"},
         ],
     )
 

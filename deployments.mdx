@@ -40,7 +40,7 @@ There is **no idle auto-stop today**. If you forget to call `stop`, the deployme
 
 ## Calling a deployment
 
-Once a deployment is `serving`, it accepts OpenAI-shaped requests at `dep.endpoint_url`. Three equivalent ways to call:
+Once a deployment is `serving`, it accepts OpenAI-shaped requests at `https://api.veri.studio/v1/deployments/{dep.id}/chat/completions`. Three equivalent ways to call:
 
 <CodeGroup>
 ```python Veri SDK
@@ -51,7 +51,10 @@ response = dep.chat([
 
 ```python OpenAI SDK
 from openai import OpenAI
-oai = OpenAI(base_url=dep.endpoint_url, api_key="vk_your_key_here")
+oai = OpenAI(
+    base_url=f"https://api.veri.studio/v1/deployments/{dep.id}",
+    api_key="vk_your_api_key",
+)
 response = oai.chat.completions.create(
     model=dep.name,
     messages=[{"role": "user", "content": "Hello"}],
@@ -59,8 +62,8 @@ response = oai.chat.completions.create(
 ```
 
 ```bash curl
-curl "$ENDPOINT_URL/chat/completions" \
-  -H "Authorization: Bearer vk_your_key_here" \
+curl https://api.veri.studio/v1/deployments/$DEPLOYMENT_ID/chat/completions \
+  -H "Authorization: Bearer vk_your_api_key" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "your-deployment-name",
@@ -69,7 +72,7 @@ curl "$ENDPOINT_URL/chat/completions" \
 ```
 </CodeGroup>
 
-Anything that already talks OpenAI works without changes — just swap `base_url`.
+Anything that already talks OpenAI works without changes — point `base_url` at `https://api.veri.studio/v1/deployments/{id}` (the OpenAI SDK appends `/chat/completions` for you).
 
 <Warning>
   Today's chat surface supports basic completions only. **Not yet supported:** streaming (`stream=true` is accepted but ignored — you always get the full response), `tool_calls` / `tools`, `top_p`, `frequency_penalty`, `presence_penalty`, structured outputs, and vision. Tools / streaming are on the roadmap.

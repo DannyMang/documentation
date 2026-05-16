@@ -5,7 +5,11 @@ description: "What works with the OpenAI SDK, LangChain, LlamaIndex, etc. — an
 keywords: ["OpenAI compatible", "LangChain", "LlamaIndex", "interop", "chat completions"]
 ---
 
-A Veri deployment exposes the OpenAI Chat Completions API at `dep.endpoint_url`. Anything that already speaks OpenAI works — point `base_url` at the deployment and pass your Veri API key.
+A Veri deployment exposes the OpenAI Chat Completions API at `https://api.veri.studio/v1/deployments/{deployment_id}`. Anything that already speaks OpenAI works — point `base_url` at the deployment and pass your Veri API key.
+
+<Note>
+  Use the full URL `https://api.veri.studio/v1/deployments/{dep.id}` as `base_url`. The OpenAI client appends `/chat/completions` for you. The `dep.endpoint_url` field on the SDK response is a relative path that already includes `/chat/completions` — it's for direct curl-style calls, not for the OpenAI SDK's `base_url`.
+</Note>
 
 ## What works
 
@@ -23,8 +27,8 @@ Basic chat with one or more messages, returning a completion. Works in:
 from openai import OpenAI
 
 oai = OpenAI(
-    base_url=dep.endpoint_url,
-    api_key="vk_your_key_here",
+    base_url=f"https://api.veri.studio/v1/deployments/{dep.id}",
+    api_key="vk_your_api_key",
 )
 
 response = oai.chat.completions.create(
@@ -104,8 +108,8 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage
 
 llm = ChatOpenAI(
-    base_url=dep.endpoint_url,
-    api_key="vk_your_key_here",
+    base_url=f"https://api.veri.studio/v1/deployments/{dep.id}",
+    api_key="vk_your_api_key",
     model=dep.name,
     temperature=0.7,
 )
@@ -120,8 +124,8 @@ print(result.content)
 from llama_index.llms.openai import OpenAI as LlamaOpenAI
 
 llm = LlamaOpenAI(
-    api_base=dep.endpoint_url,
-    api_key="vk_your_key_here",
+    api_base=f"https://api.veri.studio/v1/deployments/{dep.id}",
+    api_key="vk_your_api_key",
     model=dep.name,
     temperature=0.7,
 )
@@ -132,8 +136,8 @@ print(llm.complete("What is 12 + 7?"))
 ## curl
 
 ```bash
-curl "$ENDPOINT_URL/chat/completions" \
-  -H "Authorization: Bearer vk_your_key_here" \
+curl https://api.veri.studio/v1/deployments/$DEPLOYMENT_ID/chat/completions \
+  -H "Authorization: Bearer vk_your_api_key" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "your-deployment-name",
@@ -148,7 +152,7 @@ Not supported — Veri serves chat completions only, not embeddings. Use a dedic
 ## Where to go next
 
 <CardGroup cols={2}>
-  <Card title="Deployments API" icon="play" href="/deployments/api">
+  <Card title="Deployments API" icon="play" href="/api-reference/deployments">
     `create` / `chat` / `stop` endpoint reference.
   </Card>
   <Card title="Examples" icon="book" href="/deployments/examples">

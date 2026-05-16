@@ -26,6 +26,7 @@ from veri_sdk import training_job
 @training_job(
     base_model="Qwen/Qwen2.5-0.5B-Instruct",
     dataset="hf:openai/gsm8k",
+    dataset_config="main",
     column_mapping={"question": "prompt", "answer": "label"},
     gpu_type="A100-80GB",
     gpu_count=1,

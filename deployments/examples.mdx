@@ -46,7 +46,7 @@ assert job.status == "completed", f"Job not done: {job.status}"
 dep = client.deployments.create(
     model=job.id,                # the training job ID
     source="training_job",       # not huggingface
-    name=f"{job.output_name}-serving",
+    name=f"ft-{job.id[:8]}",
     gpu={"gpu_type": "A100-80GB", "gpu_count": 1},  # often smaller than training GPU
 )
 
@@ -84,8 +84,8 @@ dep.wait()
 
 # Swap in the OpenAI client — same shape, different base_url
 oai = OpenAI(
-    base_url=dep.endpoint_url,
-    api_key="vk_your_key_here",
+    base_url=f"https://api.veri.studio/v1/deployments/{dep.id}",
+    api_key="vk_your_api_key",
 )
 
 # All your existing OpenAI-shaped code works unchanged

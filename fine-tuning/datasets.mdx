@@ -1,14 +1,15 @@
 ---
 title: "Datasets"
 sidebarTitle: "Datasets"
-description: "JSONL upload + 9 source-type connectors. Validation, encryption, dedup."
-keywords: ["datasets", "jsonl", "huggingface", "s3", "postgres", "snowflake", "bigquery"]
+description: "JSONL upload + Hugging Face connect + Veri Volumes. Validation, dedup."
+keywords: ["datasets", "jsonl", "huggingface", "volumes", "fine-tuning data"]
 ---
 
-A dataset is a collection of training examples Veri reads at job submission time. Two ways to get one in:
+A dataset is a collection of training examples Veri reads at job submission time. Three ways to get one in:
 
 1. **Upload** a JSONL file directly
-2. **Connect** an external source — Veri pulls from cloud storage, Hugging Face, or your warehouse
+2. **Connect** a Hugging Face dataset — Veri pulls from the Hub
+3. **Point at a [Veri Volume](/volumes)** — train from a JSONL file you already uploaded to a managed volume
 
 Either way, the result is a dataset record with an `id` you reference in `client.training_jobs.create(dataset_id=...)`.
 
@@ -30,15 +31,9 @@ The validation step at upload rejects any row missing `prompt`.
 
 | `source_type` | Required fields | Notes |
 | --- | --- | --- |
-| `upload` | multipart `file` + `name` | JSONL only; one row per line |
-| `s3` | `source_uri` (`s3://bucket/path.jsonl`), `credentials` (optional with IAM role) | AWS S3 |
-| `gs` | `source_uri` (`gs://bucket/path.jsonl`), `credentials` (service account JSON) | Google Cloud Storage |
-| `az` | `source_uri` (`az://container/path.jsonl`), `credentials` (account name + key) | Azure Blob Storage |
-| `hf` | `huggingface_dataset`, `huggingface_config` (split + column_mapping) | Hugging Face Hub |
-| `postgres` | `db_connection`, `db_query` | SQL must produce `prompt` + `answer` columns |
-| `mysql` | `db_connection`, `db_query` | Same |
-| `snowflake` | `db_connection`, `db_query` | Same |
-| `bigquery` | `db_connection`, `db_query` | Same |
+| `upload` | multipart `file` + `name` (via `POST /v1/datasets`) | JSONL only; one row per line |
+| `hf` | `huggingface_dataset`, `huggingface_config` (split + column_mapping; optional `config_name` for multi-config datasets like GSM8K) | Hugging Face Hub |
+| `volume` | `volume` (name), `volume_path` (absolute path inside the volume, e.g. `/train.jsonl`) | Train from a file in a managed [Veri Volume](/volumes) |
 
 ## Connect from Hugging Face
 
@@ -69,7 +64,21 @@ veri datasets connect-hf openai/gsm8k \
 ```
 </CodeGroup>
 
-For private HF datasets, set up a [Hugging Face integration](/account/integrations) first; the token is encrypted and applied automatically.
+For private HF datasets, set the Hugging Face token via your integrations settings; the token is encrypted at rest and applied automatically.
+
+## Connect from a Veri Volume
+
+If your data is already in a [Veri Volume](/volumes), point a dataset at a JSONL file inside it:
+
+```python
+dataset = client.datasets.from_volume(
+    volume="my-corpus",
+    path="/train.jsonl",
+    name="my-corpus-train",
+)
+```
+
+The dataset stays linked to the volume — re-uploading the file inside the volume updates the data for the next training run.
 
 ## Validate before connecting
 
@@ -116,13 +125,11 @@ This means you can re-run a script that uploads the same dataset without worryin
 
 ## Lifecycle
 
-Datasets are kept until you delete them.
+Datasets persist until you delete them from the dashboard. There is no API delete endpoint today — programmatic delete is on the roadmap.
 
-```python
-client.datasets.delete(dataset_id)
-```
+## Name conflicts
 
-Delete fails with HTTP 400 if any training job still references the dataset. Delete the jobs first.
+Connecting two datasets with the same `name` but different source config returns `409 dataset_name_conflict`. Either pick a unique name or reuse the existing dataset (the identity hash on the source config means the same config returns the same `id`).
 
 ## Where to go next
 
@@ -130,7 +137,7 @@ Delete fails with HTTP 400 if any training job still references the dataset. Del
   <Card title="Reward functions" icon="scale-balanced" href="/fine-tuning/reward-functions">
     Score completions with TRL or Miles-format functions.
   </Card>
-  <Card title="Submit a training job" icon="brain" href="/fine-tuning/api">
+  <Card title="Submit a training job" icon="brain" href="/api-reference/training-jobs">
     Use your dataset_id in `training_jobs.create`.
   </Card>
   <Card title="Quickstart" icon="rocket" href="/quickstart/fine-tune">
