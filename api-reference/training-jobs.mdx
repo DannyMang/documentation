@@ -57,6 +57,30 @@ keywords: ["training jobs", "api", "grpo", "fine-tuning"]
     <ParamField body="seed" type="integer" default="42">
       Random seed.
     </ParamField>
+    <ParamField body="use_unsloth" type="boolean" default="true">
+      Use the Unsloth optimized GRPO trainer.
+    </ParamField>
+    <ParamField body="lora_rank" type="integer | null" default="null">
+      Must be `null`. LoRA fine-tuning is not yet supported for GRPO — the API accepts the field but the trainer requires `null`.
+    </ParamField>
+    <ParamField body="lora_alpha" type="integer | null" default="null">
+      Must be `null`. See `lora_rank` above.
+    </ParamField>
+  </Expandable>
+
+  <Expandable title="Agentic GRPO hyperparameters (method: grpo_agentic)">
+    Inherits every GRPO field above. Adds:
+
+    <ParamField body="max_turns" type="integer" default="5">
+      Maximum number of agent turns per rollout.
+    </ParamField>
+    <ParamField body="max_seq_len" type="integer" default="8192">
+      Maximum total sequence length across all turns.
+    </ParamField>
+
+    <Note>
+      `grpo_agentic` requires H100 GPUs and the `environments` reward source (mutually exclusive with `reward_function_id`).
+    </Note>
   </Expandable>
 
   <Expandable title="Video Gen SFT hyperparameters (method: sft_video_gen)">
@@ -492,9 +516,48 @@ curl -N https://api.veri.studio/v1/training_jobs/job_xyz789/logs \
 
 ### Response (SSE stream)
 
+The endpoint emits an SSE stream of `data:` lines while the job is still running. When the runner has not yet attached or only bootstrap output is available, the stream falls back to a one-shot `bootstrap.log` + `worker_status.log_tail` payload. For completed runs, prefer `GET /v1/training_jobs/{id}/logs/full` instead.
+
+---
+
+## Get Full Logs
+
+Returns the full plain-text log for a finished (or partially finished) job. Useful when SSE has dropped or for post-mortems.
+
+### Request
+
+```bash
+curl https://api.veri.studio/v1/training_jobs/job_xyz789/logs/full \
+  -H "Authorization: Bearer vk_your_api_key"
 ```
-data: Logs available at: https://Training in progress
+
+Response: `200 OK` with `Content-Type: text/plain` and the log body. Returns `206 Partial Content` if the log is still streaming (more lines will follow once the run finishes), or `404 Not Found` if no log exists yet.
+
+---
+
+## Heartbeat
+
+Worker liveness signal. Called by the runner — clients generally do not invoke this.
+
+### Request
+
+```bash
+curl -X POST https://api.veri.studio/v1/training_jobs/job_xyz789/heartbeat \
+  -H "Authorization: Bearer vk_your_api_key"
 ```
+
+Returns `204 No Content`. Used by the SDK's job-tracking helpers to detect stuck workers.
+
+---
+
+## Delete Training Job
+
+```bash
+curl -X DELETE https://api.veri.studio/v1/training_jobs/job_xyz789 \
+  -H "Authorization: Bearer vk_your_api_key"
+```
+
+Returns `204 No Content`. Only valid for jobs in terminal states (`completed`, `failed`, `cancelled`) **and** with no active deployments referencing them.
 
 ---
 

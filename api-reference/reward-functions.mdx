@@ -4,6 +4,10 @@ description: "Upload and manage Python reward functions"
 keywords: ["reward functions", "api", "trl", "miles"]
 ---
 
+<Note>
+  There is no DELETE endpoint for reward functions in this release. Reward functions are content-addressed — uploading the same file twice returns the same id, so duplicates are not a problem in practice.
+</Note>
+
 ## Upload Reward Function
 
 <ParamField body="name" type="string" required>

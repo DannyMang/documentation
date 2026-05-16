@@ -196,7 +196,7 @@ The server completes the multipart upload, HEADs the final object for size + ETa
 ```
 
 <Note>
-  Abandoned multipart uploads (your client crashed before completion) are reaped by an S3 lifecycle rule after 7 days. You don't need to clean them up manually, but if you want to abort one yourself the Python SDK does it on any part failure.
+  Abandoned multipart uploads are reaped by an S3 lifecycle rule after 7 days — that rule is the load-bearing cleanup. The Python SDK also best-effort-aborts on any part failure (no separate HTTP endpoint), but you can rely on the lifecycle rule even if the SDK crashes mid-upload.
 </Note>
 
 ---

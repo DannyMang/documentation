@@ -7,6 +7,14 @@ keywords: ["veri jobs", "veri rewards", "training", "GRPO", "checkpoint download
 
 Training a model on Veri is a two-step CLI flow: register a reward function with `veri rewards upload`, then submit a job with `veri jobs create` (or `veri run`). Once submitted, manage the job through completion with `list / get / cancel / download`.
 
+<Tip>
+  For a script-driven flow, you can also use `veri train <file.py>` — it reads a `@training_job(...)`-decorated function from the file, bundles the reward, resolves the dataset, and submits the job in one call. See [`veri run`](/cli/run) for the full decorator + TOML reference.
+</Tip>
+
+<Note>
+  `veri rewards` does not have a server-side DELETE today. The CLI's `delete` subcommand removes the reward from your local config, not from the control plane. Reward functions are content-addressed, so re-uploading the same file returns the same id.
+</Note>
+
 ## Reward functions
 
 | Command | Purpose |

@@ -41,7 +41,7 @@ What happens at each transition:
 - **`queued`** — job row written, balance pre-checked (HTTP 402 if insufficient credit). No spend yet.
 - **`provisioning`** — Veri calls the compute provider, leases a GPU, deploys the worker agent over SSH. `started_at` is still `null`.
 - **`running`** — worker reports its first step. `started_at` populates. Metrics start streaming. Cost accrues.
-- **`completed | failed | cancelled`** — pod auto-terminates. Cost is attributed (`cost_attributed_at`). Stripe credit is deducted (`billing_deducted_at`). The full stdout is uploaded to S3 and accessible via `client.training_jobs.get(id).logs_url` (or `GET /v1/training_jobs/{id}/logs/full`).
+- **`completed | failed | cancelled`** — pod auto-terminates. Cost is attributed (`cost_attributed_at`). Stripe credit is deducted (`billing_deducted_at`). The full stdout is uploaded to S3 and available via `GET /v1/training_jobs/{id}/logs/full`.
 
 Cancellation is **cooperative**: the worker terminates at the next checkpoint boundary, not instantly.
 

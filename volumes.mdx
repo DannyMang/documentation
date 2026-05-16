@@ -28,10 +28,12 @@ For one-off experiments against small public data, the dataset upload (`veri dat
 
 | Tier | Rate |
 | --- | --- |
-| First 512 GiB per user (averaged over the month) | Free |
+| First 512 GiB per user (averaged across the month) | Free |
 | Above 512 GiB | $0.085 per GiB-month |
 
-The free tier is per **user**, not per volume — your usage is summed across every volume you own, averaged across the calendar month, and the first 512 GiB of that average is free. Storage is billed monthly via Stripe credit deduction on the 1st of the following month.
+The free tier is per **user**, not per volume — your usage is summed across every volume you own, averaged across the calendar month, and the first 512 GiB of that average is free.
+
+Size is measured by **hourly snapshot**: the reconciler records each volume's `total_bytes` every hour, and at month-end the settlement job takes the per-volume mean (not the peak), sums to a user total, subtracts the 512 GiB free tier, and charges the remainder. Settlement runs once per day, but only the run on the 1st of the month UTC actually debits Stripe.
 
 A user averaging 600 GiB across the month pays $0.085 × (600 − 512) = **$7.48** for that month.
 
