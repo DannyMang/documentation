@@ -1,15 +1,12 @@
 ---
 title: "Quickstart"
-description: "Install Veri, log in, and make your first API call — zero GPU spend"
-keywords: ["quickstart", "install", "login", "veri sdk", "first call"]
+description: "Setting up Veri in under a minute"
+keywords: ["quickstart", "install", "login", "veri sdk"]
 ---
 
-This page proves the platform works end-to-end before you spend a cent on GPUs. Total time: about 3 minutes.
-
-By the end of it you'll have:
+By the end of this you'll have:
 - The `veri` CLI installed locally.
 - An authenticated session.
-- A successful `client.billing.balance()` round-trip against `https://api.veri.studio`.
 
 When you're ready to spend real GPU time, jump to one of the three workflow quickstarts at the bottom of this page.
 
@@ -77,39 +74,6 @@ config:     /Users/you/.config/veri/config.toml
   Prefer environment variables? Set `VERI_API_KEY=vk_...` and any CLI call will pick it up. Env vars take precedence over the config file.
 </Tip>
 
-## Make your first call
-
-The cheapest possible round-trip — read your credit balance. No GPU work, no inference cost.
-
-<CodeGroup>
-```python Python SDK
-from veri_sdk import Client
-
-client = Client()
-
-balance = client.billing.balance()
-print(f"Available credit: ${balance.available_usd:.2f}")
-```
-
-```bash curl
-curl https://api.veri.studio/v1/billing/balance \
-  -H "Authorization: Bearer vk_your_api_key"
-```
-</CodeGroup>
-
-Now ask the cost API what a training job would cost — still no spend, just a quote.
-
-```python
-estimate = client.cost.estimate(
-    gpu_type="A100-80GB",
-    gpu_count=1,
-    hours=0.25,
-)
-print(f"Estimated 15-min A100 run: ${estimate.total_usd:.2f}")
-```
-
-If both calls succeed, the platform is healthy and your account is wired up.
-
 ## Where to next
 
 Pick the workflow you came for. Each one is end-to-end against `https://api.veri.studio` and spends about a dollar of GPU credit.
@@ -128,18 +92,11 @@ Pick the workflow you came for. Each one is end-to-end against `https://api.veri
   </Card>
 </CardGroup>
 
-## Troubleshooting
+## Stuck? Book a 15-minute call
 
-<AccordionGroup>
-  <Accordion title="veri login can't open a browser">
-    Use `veri login --paste` (paste a key you create in the dashboard) or `veri login --token vk_...` for fully non-interactive flows.
-  </Accordion>
+A 15-minute call gets you unblocked faster than a docs page. Tell us what broke and we'll fix it.
 
-  <Accordion title="401 Unauthorized">
-    Either the key was revoked from the dashboard, or `VERI_API_KEY` in your shell points at a stale value. Run `veri whoami` to see which key the CLI is using, and `veri logout` then `veri login` to refresh.
-  </Accordion>
-
-  <Accordion title="Connection errors / DNS failures">
-    Confirm `https://api.veri.studio` is reachable from your network. Veri does not run a self-hosted control plane — every CLI call hits the production API.
-  </Accordion>
-</AccordionGroup>
+<Card title="Book a 15-min beta call" icon="calendar" href="https://cal.com/veri.studio">
+    Pick any time. If you're hitting a specific issue, share your account email and any
+      failing job IDs.
+</Card>
