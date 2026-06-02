@@ -27,7 +27,8 @@ stateDiagram-v2
     [*] --> queued
     queued --> provisioning : reconciler picks up
     provisioning --> running : worker deployed, first step ran
-    provisioning --> failed : provisioning_error (out of capacity, deploy retry budget exhausted)
+    provisioning --> failed : capacity_unavailable (no GPU capacity in any zone)
+    provisioning --> failed : provisioning_error (worker failed to come up)
     running --> completed : reached max_steps or num_epochs
     running --> failed : OOM / dependency / timeout / network
     running --> cancelled : user called cancel
@@ -39,8 +40,8 @@ stateDiagram-v2
 What happens at each transition:
 
 - **`queued`** — job row written, balance pre-checked (HTTP 402 if insufficient credit). No spend yet.
-- **`provisioning`** — Veri calls the compute provider, leases a GPU, deploys the worker agent over SSH. `started_at` is still `null`.
-- **`running`** — worker reports its first step. `started_at` populates. Metrics start streaming. Cost accrues.
+- **`provisioning`** — Veri leases a GPU and the instance boots and self-configures the worker. `started_at` is still `null`. Once the instance boots, the GPU is rented and **cost accrues from this point**, even before the first training step (a job that boots but never trains is still billed for the GPU it held). A job that never secures a GPU (for example `CAPACITY_UNAVAILABLE`) rents nothing and is not billed.
+- **`running`** — worker reports its first step. `started_at` populates. Metrics start streaming.
 - **`completed | failed | cancelled`** — pod auto-terminates. Cost is attributed (`cost_attributed_at`). Stripe credit is deducted (`billing_deducted_at`). The full stdout is uploaded to S3 and available via `GET /v1/training_jobs/{id}/logs/full`.
 
 Cancellation is **cooperative**: the worker terminates at the next checkpoint boundary, not instantly.
@@ -52,7 +53,8 @@ When a job ends in `failed`, `error.code` carries one of:
 | `error.code` | Common cause | What to do |
 | --- | --- | --- |
 | `oom` | Model too large for the chosen GPU | Drop to a smaller base, raise `gpu_count`, or shrink `max_response_length` |
-| `provisioning_error` | SSH deploy failed, retry budget exhausted (5 attempts), provider out of capacity | Re-submit; if persistent, switch provider |
+| `CAPACITY_UNAVAILABLE` | No GPU capacity for the requested type in any availability zone, after trying every capable zone (`max_launch_attempts`) | Retry later, or pick a different `gpu_type`. Capacity is provider-side and not pre-checkable |
+| `provisioning_error` | The instance booted but the worker did not come up in time | Re-submit; if persistent, try a different `gpu_type` |
 | `training_error` | Worker crash, reward function error, dataset loading error — generic catch-all | Read `error.message` + the full log via `GET /v1/training_jobs/{id}/logs/full` |
 | `worker_heartbeat_timeout` | Worker stopped reporting status for >15 minutes (likely OOM-killed or SSH dropped) | Re-submit; if persistent, raise `gpu_count` |
 
