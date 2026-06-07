@@ -92,12 +92,13 @@ Kick off a run.
 
 Per-row results. Cursor pagination via `after` (integer item index).
 
-**Query params:** `limit` (1–100), `after` (item index).
+**Query params:** `limit` (1–200, default 50), `after` (item index).
 
 **Response:**
 
 ```json
 {
+  "object": "list",
   "data": [
     {
       "object": "eval_run_item",
