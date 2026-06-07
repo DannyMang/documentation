@@ -35,7 +35,7 @@ Every field of `GRPOHyperparameters`, defaults from `control_plane/schemas/train
 | `max_response_length` | `2048` | Tokens. Truncate longer completions. Big OOM lever. |
 | `global_batch_size` | `64` | Total batch across all GPUs. Auto-split per device. |
 | `seed` | `42` | RNG seed for reproducibility. |
-| `use_unsloth` | `true` | Memory optimization (bf16 fallback). Leave on. |
+| `use_unsloth` | `false` | Opt-in Unsloth memory optimization. Off by default; vanilla TRL is the base path. Single-GPU only. |
 
 <Note>
   `lora_rank` and `lora_alpha` exist in the schema but **must be `null` for GRPO** today — full fine-tuning only. LoRA for LLM GRPO is on the roadmap (blocked on upstream slime PR #1140). LoRA does work for [video gen SFT](/fine-tuning/examples).

@@ -43,7 +43,7 @@ Create a job. Returns immediately with status `queued`.
     "kl_coef": 0.001
   },
   "output_name": "qwen-7b-math",
-  "gpu": {"gpu_type": "H100", "gpu_count": 2},
+  "gpu": {"gpu_type": "H100-80GB", "gpu_count": 2},
   "provider": "lambda",
   "checkpoint_destination": {"type": "veri"}
 }
@@ -54,7 +54,7 @@ Create a job. Returns immediately with status `queued`.
 **Validation rules:**
 - `method=grpo` or `grpo_agentic` → `reward_function_id` OR `environments` (mutually exclusive)
 - `method=sft_video_gen` → `reward_function_id` must be `null`
-- `gpu.gpu_type` must be one of: `A100-40GB`, `A100-80GB`, `H100`, `H200`
+- `gpu.gpu_type` must be one of: `A100-40GB`, `A100-80GB`, `H100-80GB`
 - `gpu.gpu_count` in `[1, 8]`
 
 **Errors:**
@@ -75,7 +75,7 @@ Create a job. Returns immediately with status `queued`.
   "method": "grpo",
   "hyperparameters": {...},
   "output_name": "qwen-7b-math",
-  "gpu_requested": {"type": "H100", "count": 2},
+  "gpu_requested": {"type": "H100-80GB", "count": 2},
   "gpu": null,
   "provider": null,
   "error": null,
@@ -189,7 +189,7 @@ max_prompt_length: int = 1024
 max_response_length: int = 2048
 global_batch_size: int = 64
 seed: int = 42
-use_unsloth: bool = True
+use_unsloth: bool = False
 lora_rank: int | None = None  # must be null for GRPO
 lora_alpha: int | None = None # must be null for GRPO
 ```
@@ -203,7 +203,7 @@ max_turns: int = 5
 max_seq_len: int = 8192
 ```
 
-H100 GPUs only. Requires `environments` (an OpenReward env config) instead of `reward_function_id`.
+H100-80GB GPUs only. Requires `environments` (an OpenReward env config) instead of `reward_function_id`.
 
 ### SFTVideoGenHyperparameters (method=sft_video_gen)
 
@@ -225,10 +225,10 @@ seed: int = 42
 ## GPU config schema
 
 ```python
-gpu = {"gpu_type": "H100", "gpu_count": 2}
+gpu = {"gpu_type": "H100-80GB", "gpu_count": 2}
 ```
 
-Supported `gpu_type` values: `A100-40GB`, `A100-80GB`, `H100`, `H200`. (MI300X is roadmap.)
+Supported `gpu_type` values: `A100-40GB`, `A100-80GB`, `H100-80GB`. (H200 and MI300X are roadmap.)
 
 ## Checkpoint destination schema
 

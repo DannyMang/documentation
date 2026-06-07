@@ -78,7 +78,7 @@ dep = client.deployments.create(
     model="meta-llama/Llama-3.1-8B-Instruct",
     source="huggingface",
     name="llama-8b",
-    gpu={"gpu_type": "H100", "gpu_count": 1},
+    gpu={"gpu_type": "H100-80GB", "gpu_count": 1},
 )
 dep.wait()
 
@@ -123,7 +123,7 @@ dep_big = client.deployments.create(
     model="Qwen/Qwen2.5-7B-Instruct",
     source="huggingface",
     name="qwen-big",
-    gpu={"gpu_type": "H100", "gpu_count": 1},
+    gpu={"gpu_type": "H100-80GB", "gpu_count": 1},
 )
 
 dep_small.wait()

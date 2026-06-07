@@ -15,7 +15,7 @@ The smallest viable example is in the [Quickstart](/quickstart/fine-tune). This 
 | Method | What it trains | Reward function? | Backend |
 | --- | --- | --- | --- |
 | `grpo` | LLMs (Qwen, Llama, DeepSeek, …) | Required | TRL GRPOTrainer |
-| `grpo_agentic` | LLMs with multi-turn agent traces (H100 only) | Forbidden — uses OpenReward environments instead | TRL + OpenReward |
+| `grpo_agentic` | LLMs with multi-turn agent traces (H100-80GB only) | Forbidden — uses OpenReward environments instead | TRL + OpenReward |
 | `sft_video_gen` | Video-gen models (CogVideoX, Wan2.1, LTX, Mochi) | Forbidden — uses the dataset's video pairs directly | diffusers + LoRA via accelerate |
 
 GRPO is the default. SFT for text and DPO are on the roadmap.
@@ -54,9 +54,11 @@ When a job ends in `failed`, `error.code` carries one of:
 | --- | --- | --- |
 | `oom` | Model too large for the chosen GPU | Drop to a smaller base, raise `gpu_count`, or shrink `max_response_length` |
 | `CAPACITY_UNAVAILABLE` | No GPU capacity for the requested type in any availability zone, after trying every capable zone (`max_launch_attempts`) | Retry later, or pick a different `gpu_type`. Capacity is provider-side and not pre-checkable |
-| `provisioning_error` | The instance booted but the worker did not come up in time | Re-submit; if persistent, try a different `gpu_type` |
-| `training_error` | Worker crash, reward function error, dataset loading error — generic catch-all | Read `error.message` + the full log via `GET /v1/training_jobs/{id}/logs/full` |
-| `worker_heartbeat_timeout` | Worker stopped reporting status for >15 minutes (likely OOM-killed or SSH dropped) | Re-submit; if persistent, raise `gpu_count` |
+| `provisioning_error` | The instance booted but the worker did not come up | Re-submit; if persistent, try a different `gpu_type` |
+| `provisioning_timeout` | The instance never reached a running worker within the provisioning deadline | Re-submit; capacity or boot was too slow |
+| `configuring_timeout` | The worker booted but made no training progress within the configuring deadline | Re-submit; if persistent, check the full log via `GET /v1/training_jobs/{id}/logs/full` |
+| `heartbeat_timeout` | Worker stopped reporting status for longer than `heartbeat_timeout_seconds` (default 300s; likely OOM-killed or network dropped) | Re-submit; if persistent, raise `gpu_count` |
+| `training_error` | Worker crash, reward function error, or dataset loading error (generic catch-all) | Read `error.message` + the full log via `GET /v1/training_jobs/{id}/logs/full` |
 
 The last 200 log lines from the worker are surfaced in `error.log_tail` for fast triage; the full stdout is uploaded to S3 and accessible via `GET /v1/training_jobs/{id}/logs/full`.
 

@@ -57,8 +57,8 @@ keywords: ["training jobs", "api", "grpo", "fine-tuning"]
     <ParamField body="seed" type="integer" default="42">
       Random seed.
     </ParamField>
-    <ParamField body="use_unsloth" type="boolean" default="true">
-      Use the Unsloth optimized GRPO trainer.
+    <ParamField body="use_unsloth" type="boolean" default="false">
+      Opt in to the Unsloth-optimized GRPO trainer. Off by default; the base path is vanilla TRL. Not supported with `gpu_count` > 1.
     </ParamField>
     <ParamField body="lora_rank" type="integer | null" default="null">
       Must be `null`. LoRA fine-tuning is not yet supported for GRPO — the API accepts the field but the trainer requires `null`.
@@ -79,7 +79,7 @@ keywords: ["training jobs", "api", "grpo", "fine-tuning"]
     </ParamField>
 
     <Note>
-      `grpo_agentic` requires H100 GPUs and the `environments` reward source (mutually exclusive with `reward_function_id`).
+      `grpo_agentic` requires H100-80GB GPUs and the `environments` reward source (mutually exclusive with `reward_function_id`).
     </Note>
   </Expandable>
 
@@ -124,11 +124,11 @@ keywords: ["training jobs", "api", "grpo", "fine-tuning"]
 </ParamField>
 
 <ParamField body="gpu" type="object" required>
-  Explicit GPU configuration. Object with `gpu_type` (one of `A100-40GB`, `A100-80GB`, `H100`, `L40S`) and `gpu_count` (1–8).
+  Explicit GPU configuration. Object with `gpu_type` (one of `A100-40GB`, `A100-80GB`, `H100-80GB`) and `gpu_count` (1–8).
 </ParamField>
 
 <ParamField body="provider" type="string">
-  Compute provider: `prime_intellect`, `lambda`, `runpod`. Omit to auto-select the cheapest available.
+  Compute provider. Currently `aws` (the only provider). Omit to auto-select.
 </ParamField>
 
 <ParamField body="checkpoint_destination" type="object">
@@ -312,7 +312,7 @@ curl "https://api.veri.studio/v1/training_jobs?status=running&method=grpo&limit=
       "base_model": "Qwen/Qwen3-4B",
       "method": "grpo",
       "output_name": "qwen3-4b-math",
-      "provider": "prime_intellect",
+      "provider": "aws",
       "dashboard_url": "https://Training in progress",
       "created_at": "2026-04-14T12:10:00Z",
       "started_at": "2026-04-14T12:11:00Z"
@@ -367,7 +367,7 @@ curl https://api.veri.studio/v1/training_jobs/job_xyz789 \
       "gpu_type": "A100-80GB",
       "gpu_count": 1
   },
-  "provider": "prime_intellect",
+  "provider": "aws",
   "cost_usd": null,
   "created_at": "2026-04-14T12:10:00Z",
   "started_at": "2026-04-14T12:11:00Z",

@@ -78,7 +78,7 @@ job = client.training_jobs.create(
     base_model="Qwen/Qwen2.5-0.5B-Instruct",
     dataset_id=dataset.id,
     output_name="my-run",
-    gpu_type="H100",
+    gpu_type="H100-80GB",
     gpu_count=1,
 )
 ```

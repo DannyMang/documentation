@@ -44,7 +44,7 @@ job = client.training_jobs.create(
         "kl_coef": 0.001,
         "num_epochs": 1,  # full pass over GSM8K (~7.5K rows)
     },
-    gpu_type="H100",
+    gpu_type="H100-80GB",
     gpu_count=2,
 )
 
@@ -65,7 +65,7 @@ dep = client.deployments.create(
     model=job.id,
     source="training_job",
     name="qwen-7b-gsm8k-eval",
-    gpu={"gpu_type": "H100", "gpu_count": 1},
+    gpu={"gpu_type": "H100-80GB", "gpu_count": 1},
 )
 dep.wait()
 

@@ -37,7 +37,7 @@ curl -X POST https://api.veri.studio/v1/deployments \
     "source": "training_job",
     "name": "my-math-model",
     "gpu": {
-      "gpu_type": "H100",
+      "gpu_type": "H100-80GB",
       "gpu_count": 1
     }
   }'
@@ -55,8 +55,8 @@ curl -X POST https://api.veri.studio/v1/deployments \
   "source": "training_job",
   "endpoint_url": null,
   "gpu": {
-    "gpu_type": "H100",
-    "gpu_count": 1
+    "type": "H100-80GB",
+    "count": 1
   },
   "provider": "in_memory",
   "cost_per_hour_usd": null,

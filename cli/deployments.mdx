@@ -94,10 +94,10 @@ veri deployments stop dep_abc
 veri deployments metrics dep_abc
 ```
 
-Returns RPS, p50/p95 latency, GPU utilization. JSON output is dict-shaped (suitable for `jq`):
+Returns aggregate counters: `total_requests`, `total_prompt_tokens`, `total_completion_tokens`, `total_cost_usd`, `avg_latency_ms`, `error_rate`, `uptime_seconds`. JSON output is dict-shaped (suitable for `jq`):
 
 ```bash
-veri deployments metrics dep_abc --format json | jq .p95_latency_ms
+veri deployments metrics dep_abc --format json | jq .avg_latency_ms
 ```
 
 Recent requests:
