@@ -1,0 +1,116 @@
+---
+title: "Direct Preference Optimization (DPO)"
+sidebarTitle: "DPO"
+description: "Align a base model to your preferences with Direct Preference Optimization on chosen/rejected pairs, using TRL's DPOTrainer. Optional LoRA and QLoRA."
+keywords: ["DPO", "direct preference optimization", "dpo", "DPOTrainer", "preference tuning", "RLHF", "LoRA", "QLoRA"]
+---
+
+Direct Preference Optimization (`method="dpo"`) tunes a model on preference pairs: for the same prompt, one completion is `chosen` and one is `rejected`. The model learns to widen the gap between them, relative to a reference copy of the starting model. DPO is a simpler, more stable alternative to reward-model RLHF, and a common pass after [SFT](/training/sft) to align style and helpfulness.
+
+Veri runs DPO on TRL's `DPOTrainer`. You provide a preference dataset; Veri provisions the GPU, runs the loop, streams metrics, and uploads the checkpoint. DPO takes no reward function — the preference pairs are the training signal.
+
+## Dataset format
+
+Each row is a preference pair. The explicit-prompt form is recommended; the trainer applies the model's chat template automatically for conversational rows.
+
+```python
+# Standard, explicit prompt (recommended)
+{"prompt": "The sky is", "chosen": " blue.", "rejected": " green."}
+
+# Implicit prompt (prompt baked into both completions)
+{"chosen": "The sky is blue.", "rejected": "The sky is green."}
+
+# Conversational — chat template applied automatically
+{"prompt": [{"role": "user", "content": "What color is the sky?"}],
+ "chosen": [{"role": "assistant", "content": "It is blue."}],
+ "rejected": [{"role": "assistant", "content": "It is green."}]}
+```
+
+Every row needs a `chosen` and a `rejected` completion. A dataset missing the `rejected` column is rejected before the GPU starts.
+
+## Submitting a job
+
+This mirrors TRL's DPO quickstart (a small Qwen model on the UltraFeedback preference dataset), run on Veri:
+
+```python
+from veri_sdk import Client
+
+client = Client()
+
+dataset = client.datasets.connect(
+    name="ultrafeedback",
+    source_type="hf",
+    huggingface_dataset="trl-lib/ultrafeedback_binarized",
+)
+
+job = client.training_jobs.create(
+    base_model="Qwen/Qwen3-0.6B",
+    dataset_id=dataset.id,
+    output_name="qwen-0.6b-dpo",
+    method="dpo",
+    hyperparameters={
+        "learning_rate": 5e-6,
+        "num_epochs": 1,
+        "beta": 0.1,
+    },
+    gpu_type="L4-24GB",
+    gpu_count=1,
+)
+
+job.wait(poll_interval=15)
+job.download(output_dir="./checkpoints")
+```
+
+## Hyperparameters
+
+| Parameter | Default | What it does |
+| --- | --- | --- |
+| `learning_rate` | `5e-6` | AdamW step size. Use `≈1e-5` for LoRA adapters; full finetunes go lower (`≈1e-6`). |
+| `num_epochs` | `1` | Passes over the dataset. Overridden by `max_steps` if both set. |
+| `max_steps` | `null` | Total gradient steps. Set this to cap a long run or smoke-test. |
+| `beta` | `0.1` | Strength of the preference signal (KL penalty against the reference policy). Lower stays closer to the base model. |
+| `loss_type` | `"sigmoid"` | DPO loss variant. `"sigmoid"` is the original; `"hinge"`, `"ipo"`, and others are supported. |
+| `max_length` | model default | Total tokens per example (prompt + completion). Big OOM lever. |
+| `max_prompt_length` | model default | Tokens reserved for the prompt before the completion. |
+| `lora_rank` | `null` | Train LoRA adapters of this rank instead of full finetuning. `null` means full finetune. |
+| `lora_alpha` | `null` | LoRA scaling factor. Defaults to `lora_rank` when unset. |
+| `load_in_4bit` | `false` | QLoRA: load the base in 4-bit (NF4) and train LoRA adapters on top. Requires `lora_rank`. Single-GPU. |
+| `use_unsloth` | `false` | Opt-in Unsloth memory optimization. Off by default; single-GPU only. |
+
+## LoRA and QLoRA
+
+DPO uses the same adapter path as GRPO and SFT. Set `lora_rank` to train low-rank adapters instead of the full model, and add `load_in_4bit` for QLoRA (a 4-bit NF4 base with adapters on top), which fits larger models on a single GPU.
+
+```python
+# QLoRA DPO on a single GPU
+hyperparameters={
+    "learning_rate": 1e-5,
+    "beta": 0.1,
+    "lora_rank": 16,
+    "lora_alpha": 32,
+    "load_in_4bit": True,
+}
+```
+
+See [LoRA and QLoRA](/training/grpo#lora-and-qlora) for the full rules (4-bit requires `lora_rank`; QLoRA is single-GPU; 16-bit LoRA is multi-GPU capable).
+
+<Note>
+  DPO compares the policy against a frozen reference copy of the starting model. With LoRA or QLoRA, that reference is the same base with the adapter disabled, so there is no extra copy. A full finetune (no `lora_rank`) instead holds a second reference model in memory, roughly doubling the VRAM needed versus SFT or GRPO on the same base. On tight VRAM, prefer LoRA or QLoRA for DPO.
+</Note>
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="SFT" icon="dna" href="/training/sft">
+    Supervised finetune first, then align with DPO.
+  </Card>
+  <Card title="Datasets" icon="database" href="/training/datasets">
+    Connect a preference dataset.
+  </Card>
+  <Card title="Submit a job" icon="play" href="/api-reference/training-jobs">
+    The full `training_jobs.create` schema.
+  </Card>
+  <Card title="Deploy your checkpoint" icon="cloud" href="/deployments">
+    Serve the trained model with an OpenAI-compatible API.
+  </Card>
+</CardGroup>
