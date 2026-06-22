@@ -1,135 +1,27 @@
 ---
-title: "Fine-tuning"
-sidebarTitle: "Fine-tuning"
-description: "Post-train open-source models with your own datasets and reward functions. Veri handles the GPUs, orchestration, and checkpoint delivery."
-keywords: ["fine-tuning", "training", "GRPO", "SFT", "post-training"]
+title: "Training"
+sidebarTitle: "Training"
+description: "Choose between custom training code and Veri-managed training loops."
+keywords: ["training", "custom training", "managed training", "GRPO", "SFT", "DPO"]
 boost: 3
 ---
 
-Fine-tuning on Veri is **dataset + reward function + base model → fine-tuned checkpoint**. You submit a training job; Veri provisions the GPU, runs the loop, streams metrics, and uploads the result. You either download the checkpoint or [deploy it](/deployments) directly.
-
-The smallest viable example is in the [Quickstart](/quickstart/fine-tune). This page is the mental model and the surface map.
-
-## Methods
-
-| Method | What it trains | Reward function? | Backend |
-| --- | --- | --- | --- |
-| `grpo` | LLMs (Qwen, Llama, DeepSeek, …) | Required | TRL GRPOTrainer |
-| `grpo_agentic` | LLMs with multi-turn agent traces (H100-80GB only) | Forbidden — uses OpenReward environments instead | TRL + OpenReward |
-| `sft_video_gen` | Video-gen models (CogVideoX, Wan2.1, LTX, Mochi) | Forbidden — uses the dataset's video pairs directly | diffusers + LoRA via accelerate |
-
-GRPO is the default. SFT for text and DPO are on the roadmap.
-
-## The training loop
-
-```mermaid
-stateDiagram-v2
-    [*] --> queued
-    queued --> provisioning : reconciler picks up
-    provisioning --> running : worker deployed, first step ran
-    provisioning --> failed : capacity_unavailable (no GPU capacity in any zone)
-    provisioning --> failed : provisioning_error (worker failed to come up)
-    running --> completed : reached max_steps or num_epochs
-    running --> failed : OOM / dependency / timeout / network
-    running --> cancelled : user called cancel
-    completed --> [*]
-    failed --> [*]
-    cancelled --> [*]
-```
-
-What happens at each transition:
-
-- **`queued`** — job row written, balance pre-checked (HTTP 402 if insufficient credit). No spend yet.
-- **`provisioning`** — Veri leases a GPU and the instance boots and self-configures the worker. `started_at` is still `null`. Once the instance boots, the GPU is rented and **cost accrues from this point**, even before the first training step (a job that boots but never trains is still billed for the GPU it held). A job that never secures a GPU (for example `CAPACITY_UNAVAILABLE`) rents nothing and is not billed.
-- **`running`** — worker reports its first step. `started_at` populates. Metrics start streaming.
-- **`completed | failed | cancelled`** — pod auto-terminates. Cost is attributed (`cost_attributed_at`). Stripe credit is deducted (`billing_deducted_at`). The full stdout is uploaded to S3 and available via `GET /v1/training_jobs/{id}/logs/full`.
-
-Cancellation is **cooperative**: the worker terminates at the next checkpoint boundary, not instantly.
-
-## Failure modes
-
-When a job ends in `failed`, `error.code` carries one of:
-
-| `error.code` | Common cause | What to do |
-| --- | --- | --- |
-| `oom` | Model too large for the chosen GPU | Drop to a smaller base, raise `gpu_count`, or shrink `max_response_length` |
-| `CAPACITY_UNAVAILABLE` | No GPU capacity for the requested type in any availability zone, after trying every capable zone (`max_launch_attempts`) | Retry later, or pick a different `gpu_type`. Capacity is provider-side and not pre-checkable |
-| `provisioning_error` | The instance booted but the worker did not come up | Re-submit; if persistent, try a different `gpu_type` |
-| `provisioning_timeout` | The instance never reached a running worker within the provisioning deadline | Re-submit; capacity or boot was too slow |
-| `configuring_timeout` | The worker booted but made no training progress within the configuring deadline | Re-submit; if persistent, check the full log via `GET /v1/training_jobs/{id}/logs/full` |
-| `heartbeat_timeout` | Worker stopped reporting status for longer than `heartbeat_timeout_seconds` (default 300s; likely OOM-killed or network dropped) | Re-submit; if persistent, raise `gpu_count` |
-| `training_error` | Worker crash, reward function error, or dataset loading error (generic catch-all) | Read `error.message` + the full log via `GET /v1/training_jobs/{id}/logs/full` |
-
-The last 200 log lines from the worker are surfaced in `error.log_tail` for fast triage; the full stdout is uploaded to S3 and accessible via `GET /v1/training_jobs/{id}/logs/full`.
-
-## Submitting a job
-
-```python
-from veri_sdk import Client
-client = Client()
-
-job = client.training_jobs.create(
-    base_model="Qwen/Qwen2.5-0.5B-Instruct",
-    dataset_id=dataset.id,
-    reward_function_id=reward_fn.id,
-    output_name="qwen-0.5b-math",
-    method="grpo",
-    hyperparameters={
-        "learning_rate": 1e-6,
-        "rollouts_per_prompt": 4,
-        "max_response_length": 512,
-        "kl_coef": 0.001,
-        "max_steps": 50,
-    },
-    gpu_type="A100-80GB",
-    gpu_count=1,
-)
-
-job.wait(poll_interval=15)
-job.download(output_dir="./checkpoints")
-```
-
-Same shape from the CLI:
-
-```bash
-veri run configs/grpo.toml
-```
-
-with `kind = "train"` in the TOML config. See the [CLI training reference](/cli/training) for the full schema.
-
-## Cost
-
-Cost is `gpu_rate × duration × gpu_count × markup`. Default markup is 1.3. You can preview before submission:
-
-<CodeGroup>
-```python SDK
-client.cost.estimate(
-    gpu_type="A100-80GB",
-    gpu_count=1,
-    duration_minutes=30,
-)
-```
-
-```bash CLI
-veri cost estimate --gpu-type A100-80GB --gpu-count 1 --hours 0.5
-```
-</CodeGroup>
-
-The job-creation endpoint refuses with HTTP 402 if your credit balance is below the worst-case estimate.
-
-## Where to go next
+Training on Veri has two paths:
 
 <CardGroup cols={2}>
-  <Card title="Quickstart: fine-tune a model" icon="rocket" href="/quickstart/fine-tune">
-    End-to-end on a small model in ~15 minutes.
+  <Card title="Custom Training" icon="code" href="/training/custom-script">
+    Bring your own training code, framework, entrypoint, and dependencies. Veri provisions the GPU and runs it.
   </Card>
-  <Card title="Deploy your checkpoint" icon="cloud" href="/deployments">
-    Skip downloading — serve from Veri with an OpenAI-compatible API.
-  </Card>
-  <Card title="Evaluate it" icon="chart-line" href="/evaluations">
-    Score the fine-tune on a held-out dataset.
-  </Card>
-  <Card title="CLI training commands" icon="terminal" href="/cli/training">
-    `veri run`, `veri jobs`, `veri rewards`.
+  <Card title="Managed Training" icon="graduation-cap" href="/training/managed">
+    Use Veri-managed GRPO, SFT, or DPO loops. You provide data, model, rewards or preferences, and hyperparameters.
   </Card>
 </CardGroup>
+
+## Which should I use?
+
+| Path | Use it when |
+| --- | --- |
+| Custom Training | You already have a `torchrun`, OpenRLHF, slime, verl, or custom Python training loop. |
+| Managed Training | You want Veri to own the trainer and orchestration for GRPO, SFT, or DPO. |
+
+Both paths run on Veri-provisioned GPUs, stream logs and metrics, and capture checkpoints into your account.

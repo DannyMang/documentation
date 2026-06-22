@@ -1,7 +1,7 @@
 ---
 title: "Training Jobs"
 description: "Create, monitor, and manage training jobs"
-keywords: ["training jobs", "api", "grpo", "fine-tuning"]
+keywords: ["training jobs", "api", "grpo", "training"]
 ---
 
 ## Create Training Job
@@ -61,7 +61,7 @@ keywords: ["training jobs", "api", "grpo", "fine-tuning"]
       Opt in to the Unsloth-optimized GRPO trainer. Off by default; the base path is vanilla TRL. Not supported with `gpu_count` > 1.
     </ParamField>
     <ParamField body="lora_rank" type="integer | null" default="null">
-      Must be `null`. LoRA fine-tuning is not yet supported for GRPO — the API accepts the field but the trainer requires `null`.
+      Must be `null`. LoRA training is not yet supported for GRPO — the API accepts the field but the trainer requires `null`.
     </ParamField>
     <ParamField body="lora_alpha" type="integer | null" default="null">
       Must be `null`. See `lora_rank` above.
@@ -79,7 +79,7 @@ keywords: ["training jobs", "api", "grpo", "fine-tuning"]
     </ParamField>
 
     <Note>
-      `grpo_agentic` requires H100-80GB GPUs and the `environments` reward source (mutually exclusive with `reward_function_id`).
+      `grpo_agentic` is being rebuilt and is not currently available. For environment-based RL today, use a [custom script](/training/custom-script).
     </Note>
   </Expandable>
 
@@ -124,7 +124,7 @@ keywords: ["training jobs", "api", "grpo", "fine-tuning"]
 </ParamField>
 
 <ParamField body="gpu" type="object" required>
-  Explicit GPU configuration. Object with `gpu_type` (one of `A100-40GB`, `A100-80GB`, `H100-80GB`) and `gpu_count` (1–8).
+  Explicit GPU configuration. Object with `gpu_type` and `gpu_count`. Single-GPU shapes: `L4-24GB` and `A10G-24GB` (`gpu_count=1`). `A100-80GB` and `H100-80GB` are sold only as 8-GPU nodes on AWS (`gpu_count=8`).
 </ParamField>
 
 <ParamField body="provider" type="string">
@@ -136,16 +136,10 @@ keywords: ["training jobs", "api", "grpo", "fine-tuning"]
 </ParamField>
 
 <ParamField body="environments" type="object">
-  OpenReward environments to use as the reward signal. Mutually exclusive with `reward_function_id` — pick one reward source. Each key is an environment ID, and the value contains configuration for that environment.
-
-  ```json
-  {
-    "coding_sandbox": { "splits": ["train"] }
-  }
-  ```
+  Environments to use as the reward signal, mutually exclusive with `reward_function_id`. Each key is an environment ID, and the value contains configuration for that environment.
 
   <Note>
-  Requires OpenReward integration to be configured first via `PUT /v1/settings/integrations/openreward`.
+  Environment-based reward (the `grpo_agentic` method) is being rebuilt and is not currently available. To run environment-based RL today, use a [custom script](/training/custom-script).
   </Note>
 </ParamField>
 
@@ -177,37 +171,6 @@ curl -X POST https://api.veri.studio/v1/training_jobs \
     }
   }'
 ```
-
-### Request (GRPO with OpenReward Environment)
-
-```bash
-curl -X POST https://api.veri.studio/v1/training_jobs \
-  -H "Authorization: Bearer vk_your_api_key" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "base_model": "Qwen/Qwen3-4B",
-    "dataset_id": "ds_abc123",
-    "environments": {
-      "coding_sandbox": { "splits": ["train"] }
-    },
-    "method": "grpo",
-    "output_name": "qwen3-4b-coding",
-    "hyperparameters": {
-      "learning_rate": 1e-6,
-      "num_epochs": 1,
-      "rollouts_per_prompt": 8,
-      "max_response_length": 2048
-    },
-    "gpu": {
-      "gpu_type": "A100-80GB",
-      "gpu_count": 1
-    }
-  }'
-```
-
-<Note>
-When using `environments`, omit `reward_function_id`. The environment provides the reward signal via OpenReward's evaluate endpoint. You must configure your OpenReward API key first via Settings → Integrations.
-</Note>
 
 ### Request (Video Gen SFT)
 
@@ -265,7 +228,6 @@ curl -X POST https://api.veri.studio/v1/training_jobs \
   },
   "provider": null,
   "duration_seconds": null,
-  "cost_usd": null,
   "started_at": null,
   "completed_at": null,
   "created_at": "2026-04-14T12:10:00Z"
@@ -368,7 +330,6 @@ curl https://api.veri.studio/v1/training_jobs/job_xyz789 \
       "gpu_count": 1
   },
   "provider": "aws",
-  "cost_usd": null,
   "created_at": "2026-04-14T12:10:00Z",
   "started_at": "2026-04-14T12:11:00Z",
   "completed_at": null

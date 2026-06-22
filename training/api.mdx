@@ -44,7 +44,7 @@ Create a job. Returns immediately with status `queued`.
   },
   "output_name": "qwen-7b-math",
   "gpu": {"gpu_type": "H100-80GB", "gpu_count": 2},
-  "provider": "lambda",
+  "provider": "aws",
   "checkpoint_destination": {"type": "veri"}
 }
 ```
@@ -52,13 +52,13 @@ Create a job. Returns immediately with status `queued`.
 **Required:** `base_model`, `dataset_id`, `output_name`, `gpu`. **Required for `method=grpo`:** `reward_function_id`.
 
 **Validation rules:**
-- `method=grpo` or `grpo_agentic` → `reward_function_id` OR `environments` (mutually exclusive)
-- `method=sft_video_gen` → `reward_function_id` must be `null`
-- `gpu.gpu_type` must be one of: `A100-40GB`, `A100-80GB`, `H100-80GB`
+- `method=grpo` → `reward_function_id` (required). `grpo_agentic` is being rebuilt and is not currently available.
+- `method=sft_text`, `dpo`, or `sft_video_gen` → `reward_function_id` must be `null` (these learn from the dataset)
+- `gpu.gpu_type` must be one of: `A100-80GB`, `H100-80GB`, `L4-24GB`, `A10G-24GB`
 - `gpu.gpu_count` in `[1, 8]`
 
 **Errors:**
-- `402 Payment Required` — credit balance below the worst-case estimate (see [Billing](/account/billing))
+- `402 Payment Required` — credit balance too low for the requested resources (see [Billing](/account/billing))
 - `404 Not Found` — `dataset_id` or `reward_function_id` doesn't exist or belongs to another user
 - `422 Unprocessable Entity` — schema validation failed
 
@@ -85,7 +85,6 @@ Create a job. Returns immediately with status `queued`.
   "current_step": null,
   "total_steps": null,
   "current_loss": null,
-  "cost_usd": null,
   "duration_seconds": null,
   "created_at": "2026-05-12T10:23:45Z",
   "updated_at": "2026-05-12T10:23:45Z",
@@ -96,7 +95,7 @@ Create a job. Returns immediately with status `queued`.
 
 ## GET /v1/training_jobs
 
-List your jobs. Filter by `status` (queued / provisioning / running / completed / failed / cancelled) or `method` (grpo / grpo_agentic / sft_video_gen).
+List your jobs. Filter by `status` (queued / provisioning / running / completed / failed / cancelled) or `method` (grpo / grpo_agentic / sft_text / dpo / sft_video_gen).
 
 ```bash
 curl "https://api.veri.studio/v1/training_jobs?status=running&limit=10" \
@@ -107,7 +106,7 @@ Response is `PaginatedList[TrainingJobResponse]` with `data` + `has_more`.
 
 ## GET /v1/training_jobs/{id}
 
-Single job. Same shape as the create response, but with timestamps + cost populated as the job progresses.
+Single job. Same shape as the create response, but with timestamps populated as the job progresses.
 
 ## GET /v1/training_jobs/{id}/metrics
 
@@ -177,7 +176,7 @@ URL expires in 1 hour; re-call to get a fresh one.
 
 ### GRPOHyperparameters (method=grpo)
 
-See [GRPO algorithm](/fine-tuning/grpo) for the full walkthrough. Schema fields with defaults:
+See [GRPO algorithm](/training/grpo) for the full walkthrough. Schema fields with defaults:
 
 ```python
 learning_rate: float = 1e-6
@@ -203,7 +202,7 @@ max_turns: int = 5
 max_seq_len: int = 8192
 ```
 
-H100-80GB GPUs only. Requires `environments` (an OpenReward env config) instead of `reward_function_id`.
+This method is being rebuilt and is not currently available. For environment-based RL today, use a [custom script](/training/custom-script).
 
 ### SFTVideoGenHyperparameters (method=sft_video_gen)
 
@@ -228,7 +227,7 @@ seed: int = 42
 gpu = {"gpu_type": "H100-80GB", "gpu_count": 2}
 ```
 
-Supported `gpu_type` values: `A100-40GB`, `A100-80GB`, `H100-80GB`. (H200 and MI300X are roadmap.)
+Supported `gpu_type` values: `A100-80GB`, `H100-80GB`, `L4-24GB`, `A10G-24GB`. (H200 and MI300X are roadmap.) On AWS, `A100-80GB` and `H100-80GB` launch as 8-GPU nodes; `L4-24GB` and `A10G-24GB` are the single-GPU shapes.
 
 ## Checkpoint destination schema
 
@@ -261,16 +260,16 @@ These are documented for completeness; the worker SDK handles them.
 ## Related
 
 <CardGroup cols={2}>
-  <Card title="Datasets" icon="database" href="/fine-tuning/datasets">
+  <Card title="Datasets" icon="database" href="/training/datasets">
     `dataset_id` setup before submitting.
   </Card>
-  <Card title="Reward functions" icon="scale-balanced" href="/fine-tuning/reward-functions">
+  <Card title="Reward functions" icon="scale-balanced" href="/training/reward-functions">
     `reward_function_id` setup.
   </Card>
-  <Card title="Cost" icon="dollar-sign" href="/deployments/cost">
-    Pricing formula and balance check.
+  <Card title="Billing" icon="dollar-sign" href="/deployments/cost">
+    Billing states and balance checks.
   </Card>
-  <Card title="Quickstart" icon="rocket" href="/quickstart/fine-tune">
+  <Card title="Quickstart" icon="rocket" href="/training">
     Full SDK + CLI walkthrough.
   </Card>
 </CardGroup>

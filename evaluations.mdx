@@ -1,48 +1,21 @@
 ---
 title: "Evaluations"
 description: "Score deployed models against a dataset using reusable scorers"
-keywords: ["evaluations", "scorers", "exact match", "contains", "model evaluation"]
+keywords: ["evaluations", "scorers", "model evaluation"]
 ---
 
-Evaluations are live for Phase A — `exact_match` and `contains` scorers against any `serving` [deployment](/api-reference/deployments).
+<Note>
+  **Work in progress.** Evaluations are planned for a later release and are not available yet. There is no SDK, CLI, or API for evals today. This page describes the planned direction so you know what is coming.
+</Note>
 
-<CardGroup cols={2}>
-  <Card title="Concept guide" icon="book-open" href="/concepts/evaluations">
-    What an eval is, the fine-tune-vs-base workflow, when to use which scorer, run lifecycle, and cost notes.
-  </Card>
-  <Card title="API reference" icon="code" href="/api-reference/evaluations">
-    Endpoint-by-endpoint reference: create, list, runs, items, cancel, plus the scorer-config shapes.
-  </Card>
-</CardGroup>
+## What evaluations will do
 
-## Quick start
+Evaluations will let you score a deployed model against a held-out dataset and read both an aggregate score and per-sample results, so you can see exactly which inputs a model gets wrong.
 
-```python
-from veri_sdk import Client
+## Planned scorers
 
-client = Client()
+- `exact_match`: case-insensitive comparison against a dataset reference field.
+- `contains`: substring or regex match against a reference field.
+- `llm_judge`, custom `python` scorers, and curated public benchmarks (MMLU, GPQA, HumanEval, and similar) are planned for later stages.
 
-eval = client.evals.create(
-    name="math accuracy",
-    dataset_id="ds_abc123",
-    scorers=[{"type": "exact_match", "name": "em", "reference_field": "label"}],
-)
-
-run = client.evals.runs.create(eval.id, model=f"deployment:{dep_id}", num_samples=200)
-run = run.wait()
-
-print(f"Mean score: {run.results['scores']['em']['mean']:.3f}")
-```
-
-## What's shipped (Phase A)
-
-- `exact_match` scorer — case-insensitive by default, strips whitespace, coerces non-string references.
-- `contains` scorer — substring or regex match against a dataset reference field.
-- Model target: `deployment:<id>` against a `serving` deployment.
-- Dataset support: JSONL uploads.
-- Full run lifecycle with per-sample item rows + aggregate `mean/median/std/min/max/count/error_count` per scorer.
-
-## Coming next
-
-- **Phase B:** `reward_function` (reuse your training reward), `llm_judge`, `python` (custom Python), BYOK frontier comparators (OpenAI/Anthropic/Google), and additional model targets — `hf:<model>` (HuggingFace direct) and ephemeral deployments for `job:<id>` (training-job checkpoint).
-- **Phase C:** curated public benchmarks (MMLU, GPQA, HumanEval, IFEval, MATH-500, GSM8K, AIME, HellaSwag, ARC, TruthfulQA) via [Inspect AI](https://inspect.aisi.org.uk/).
+The SDK, CLI, and API surface for evaluations will be documented here once the feature ships.

@@ -1,7 +1,7 @@
 ---
 title: "Reward Functions"
 description: "Upload and manage Python reward functions"
-keywords: ["reward functions", "api", "trl", "miles"]
+keywords: ["reward functions", "api", "trl"]
 ---
 
 <Note>
@@ -19,7 +19,7 @@ keywords: ["reward functions", "api", "trl", "miles"]
 </ParamField>
 
 <ParamField body="format" type="string" required>
-  The reward function format. Supported values: `trl` and `miles`.
+  The reward function format. Supported value: `trl`.
 </ParamField>
 
 ### Request
@@ -113,17 +113,6 @@ curl https://api.veri.studio/v1/reward_functions/rf_def456 \
 ```python
 def reward(completions, answer=None, **kwargs):
     return [1.0 if answer and str(answer) in c else 0.0 for c in completions]
-```
-
-### `miles`
-
-`miles` reward files must contain `async def reward(`:
-
-```python
-async def reward(args, sample, **kwargs) -> float:
-    if sample.label and str(sample.label) in sample.response:
-        return 1.0
-    return 0.0
 ```
 
 <Note>

@@ -1,8 +1,8 @@
 ---
 title: "Examples"
 sidebarTitle: "Examples"
-description: "Recipes: deploy + chat + stop, serve a fine-tune, swap models, capture cost."
-keywords: ["examples", "deploy", "chat", "fine-tune", "OpenAI SDK"]
+description: "Recipes: deploy + chat + stop, serve a trained model, and swap models."
+keywords: ["examples", "deploy", "chat", "train", "OpenAI SDK"]
 ---
 
 Three runnable recipes. All assume `from veri_sdk import Client; client = Client()` and `veri login` already done.
@@ -28,17 +28,17 @@ try:
 finally:
     dep.stop()
     final = client.deployments.get(dep.id)
-    print(f"Cost: ${final.total_cost_usd:.4f}, Requests: {final.total_requests}")
+    print(f"Requests: {final.total_requests}")
 ```
 
 The `try/finally` is the pattern that prevents accidental long-running deployments.
 
-## Recipe 2 — Serve your fine-tuned model
+## Recipe 2 — Serve your trained model
 
 After a training job completes, deploy it directly — no checkpoint download needed.
 
 ```python
-# Assume job is a completed training_job from /quickstart/fine-tune
+# Assume job is a completed training_job from /training
 job = client.training_jobs.get("tj_your_completed_job")
 
 assert job.status == "completed", f"Job not done: {job.status}"
@@ -150,10 +150,10 @@ For a structured comparison with scoring, use [Evaluations](/evaluations) instea
   <Card title="Run an eval" icon="chart-line" href="/evaluations">
     Score a deployment against a held-out dataset.
   </Card>
-  <Card title="Cost & pricing" icon="dollar-sign" href="/deployments/cost">
-    Per-hour rates and the idle warning.
+  <Card title="Billing" icon="dollar-sign" href="/deployments/cost">
+    Billing states and the idle warning.
   </Card>
-  <Card title="Quickstart" icon="rocket" href="/quickstart/deploy">
+  <Card title="Quickstart" icon="rocket" href="/deployments">
     Shorter version of recipe 1.
   </Card>
 </CardGroup>

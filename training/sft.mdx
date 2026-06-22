@@ -1,0 +1,106 @@
+---
+title: "Supervised fine-tuning (SFT)"
+sidebarTitle: "SFT (text)"
+description: "Teach a base model to follow your data with supervised fine-tuning on text or chat datasets, using TRL's SFTTrainer. Optional LoRA and QLoRA."
+keywords: ["SFT", "supervised fine-tuning", "sft_text", "SFTTrainer", "LoRA", "QLoRA", "instruction tuning"]
+---
+
+Supervised fine-tuning (`method="sft_text"`) trains a model to imitate your labeled examples. It is the simplest way to adapt a base model to a task or style, and a common first pass before [GRPO](/training/grpo): teach the format with SFT, then reinforce correctness with RL.
+
+Veri runs SFT on TRL's `SFTTrainer`. You provide a dataset of text or chat examples; Veri provisions the GPU, runs the loop, streams metrics, and uploads the checkpoint.
+
+## Dataset format
+
+SFT accepts either plain text or conversational rows. For chat data, the trainer applies the model's chat template automatically.
+
+```python
+# Plain text (the `dataset_text_field`, default "text")
+{"text": "The sky is blue."}
+
+# Conversational — chat template applied automatically
+{"messages": [{"role": "user", "content": "What color is the sky?"},
+              {"role": "assistant", "content": "It is blue."}]}
+```
+
+## Submitting a job
+
+This mirrors TRL's SFT quickstart (a small Qwen model on the Capybara chat dataset), run on Veri:
+
+```python
+from veri_sdk import Client
+
+client = Client()
+
+dataset = client.datasets.connect(
+    name="capybara",
+    source_type="hf",
+    huggingface_dataset="trl-lib/Capybara",
+)
+
+job = client.training_jobs.create(
+    base_model="Qwen/Qwen3-0.6B",
+    dataset_id=dataset.id,
+    output_name="qwen-0.6b-capybara",
+    method="sft_text",
+    hyperparameters={
+        "learning_rate": 2e-5,
+        "num_epochs": 1,
+        "max_seq_length": 2048,
+    },
+    gpu_type="L4-24GB",
+    gpu_count=1,
+)
+
+job.wait(poll_interval=15)
+job.download(output_dir="./checkpoints")
+```
+
+SFT takes no reward function — the labeled completions are the training signal.
+
+## Hyperparameters
+
+| Parameter | Default | What it does |
+| --- | --- | --- |
+| `learning_rate` | `2e-5` | AdamW step size. Higher than RL; `≈1e-4` is common when training LoRA adapters. |
+| `num_epochs` | `1` | Passes over the dataset. Overridden by `max_steps` if both set. |
+| `max_steps` | `null` | Total gradient steps. Set this to cap a long run or smoke-test. |
+| `max_seq_length` | model default | Tokens per example. Truncate longer sequences. Big OOM lever. |
+| `packing` | `false` | Pack multiple short examples into one sequence for throughput. |
+| `dataset_text_field` | `"text"` | Column holding the text, for plain-text datasets. Ignored for chat data. |
+| `lora_rank` | `null` | Train LoRA adapters of this rank instead of full finetuning. `null` means full finetune. |
+| `lora_alpha` | `null` | LoRA scaling factor. Defaults to `lora_rank` when unset. |
+| `load_in_4bit` | `false` | QLoRA: load the base in 4-bit (NF4) and train LoRA adapters on top. Requires `lora_rank`. Single-GPU. |
+| `use_unsloth` | `false` | Opt-in Unsloth memory optimization. Off by default; single-GPU only. |
+
+## LoRA and QLoRA
+
+SFT uses the same adapter path as GRPO. Set `lora_rank` to train low-rank adapters instead of the full model, and add `load_in_4bit` for QLoRA (a 4-bit NF4 base with adapters on top), which fits larger models on a single GPU.
+
+```python
+# QLoRA SFT on a single GPU
+hyperparameters={
+    "learning_rate": 1e-4,
+    "lora_rank": 16,
+    "lora_alpha": 32,
+    "load_in_4bit": True,
+}
+```
+
+See [LoRA and QLoRA](/training/grpo#lora-and-qlora) for the full rules (4-bit requires `lora_rank`; QLoRA is single-GPU; 16-bit LoRA is multi-GPU capable).
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="GRPO" icon="dna" href="/training/grpo">
+    Reinforce correctness with RL after an SFT pass.
+  </Card>
+  <Card title="Datasets" icon="database" href="/training/datasets">
+    Connect a text or chat dataset.
+  </Card>
+  <Card title="Submit a job" icon="play" href="/api-reference/training-jobs">
+    The full `training_jobs.create` schema.
+  </Card>
+  <Card title="Deploy your checkpoint" icon="cloud" href="/deployments">
+    Serve the trained model with an OpenAI-compatible API.
+  </Card>
+</CardGroup>

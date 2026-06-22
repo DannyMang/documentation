@@ -31,7 +31,7 @@ Create a deployment from a base HF model or a completed training job.
   "source": "huggingface",
   "name": "my-deploy",
   "gpu": {"gpu_type": "A100-80GB", "gpu_count": 1},
-  "provider": "lambda"
+  "provider": "aws"
 }
 ```
 
@@ -41,7 +41,7 @@ Create a deployment from a base HF model or a completed training job.
 | `source` | yes | `huggingface` or `training_job` |
 | `name` | yes | Human label; appears in dashboard + as the OpenAI `model` field default |
 | `gpu` | yes | `{"gpu_type": "...", "gpu_count": 1-8}` |
-| `provider` | no | Auto-selects cheapest if omitted |
+| `provider` | no | Defaults to `aws` (the only serving provider today) |
 
 **Validation:** When `source=training_job`, the job must exist, belong to you, and be `completed`. Otherwise `404` or `400`.
 
@@ -57,9 +57,7 @@ Create a deployment from a base HF model or a completed training job.
   "source": "huggingface",
   "endpoint_url": null,
   "gpu": {"type": "A100-80GB", "count": 1},
-  "provider": "lambda",
-  "cost_per_hour_usd": 1.43,
-  "total_cost_usd": 0.0,
+  "provider": "aws",
   "total_requests": 0,
   "error": null,
   "started_at": null,
@@ -84,7 +82,7 @@ Returns `PaginatedList[DeploymentResponse]`.
 
 ## GET /v1/deployments/{id}
 
-Single deployment. Same shape as create response, with timestamps + cost populated as it runs.
+Single deployment. Same shape as create response, with timestamps populated as it runs.
 
 ## POST /v1/deployments/{id}/stop
 
@@ -92,7 +90,7 @@ Transition to `stopped`. A final billing tick settles the partial-hour spend. Re
 
 ```python
 final = client.deployments.stop(deployment_id)
-print(f"Total cost: ${final.total_cost_usd:.4f}")
+print(final.status)
 ```
 
 ## POST /v1/deployments/{id}/chat/completions
@@ -164,7 +162,6 @@ Aggregated counters across all requests:
   "total_requests": 42,
   "total_prompt_tokens": 5230,
   "total_completion_tokens": 1840,
-  "total_cost_usd": 0.82,
   "avg_latency_ms": 1240.5,
   "error_rate": 0.024,
   "uptime_seconds": 3600.0
@@ -183,7 +180,7 @@ queued → provisioning → serving → stopped
 
 `unhealthy` is a transient state when health checks fail; it returns to `serving` if the pod recovers.
 
-Cost accrues during `serving` and `unhealthy` only.
+Billing applies during `serving` and `unhealthy` only.
 
 ## Worker-only endpoints
 
@@ -210,13 +207,13 @@ These all hit the endpoints above.
   <Card title="OpenAI compatibility" icon="code" href="/deployments/openai-compat">
     What chat fields are supported.
   </Card>
-  <Card title="Cost & pricing" icon="dollar-sign" href="/deployments/cost">
-    Pricing formula and idle warning.
+  <Card title="Billing" icon="dollar-sign" href="/deployments/cost">
+    Billing states and idle warning.
   </Card>
   <Card title="Hosting & GPU sizing" icon="server" href="/deployments/hosting">
     Pick the right GPU.
   </Card>
-  <Card title="Examples" icon="book" href="/deployments/examples">
-    End-to-end recipes.
+  <Card title="Deployment analytics demo" icon="book" href="/demos/deployment-analytics">
+    Planned walkthrough for request, token, latency, and replica metrics.
   </Card>
 </CardGroup>

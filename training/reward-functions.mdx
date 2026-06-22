@@ -1,32 +1,27 @@
 ---
 title: "Reward functions"
 sidebarTitle: "Reward functions"
-description: "Score model completions for GRPO training. TRL or Miles formats, with sandbox limits and validation rules."
-keywords: ["reward functions", "TRL", "Miles", "GRPO", "scoring"]
+description: "Score model completions for GRPO training. TRL-format functions, with sandbox limits and validation rules."
+keywords: ["reward functions", "TRL", "GRPO", "scoring"]
 ---
 
 A reward function turns a model completion into a number. GRPO uses these scores to compute advantages — completions above the group mean get reinforced, completions below get penalized.
 
 You upload a `.py` file once and reference its `id` from any number of training jobs.
 
-## Two formats
+## Format
 
-Veri accepts two reward function shapes. Pick based on the runner you'll use:
+Veri runs reward functions in the `trl` shape — the format the production GRPO runner uses.
 
 | Format | Signature | When to use |
 | --- | --- | --- |
-| `trl` | `def reward(completions, answer, **kwargs) -> list[float]` | Default. Used by TRL GRPOTrainer (today's runner on NVIDIA). |
-| `miles` | `async def reward(args, sample, **kwargs) -> float` | Used by Miles RL loop (future AMD bare metal). |
+| `trl` | `def reward(completions, answer, **kwargs) -> list[float]` | Used by TRL GRPOTrainer (today's runner on NVIDIA). |
 
 The validator checks the function signature on upload — wrong shape rejects with HTTP 422.
 
-<Note>
-  TRL is the format the production runner uses today. Miles-format rewards are accepted by the API and wire up the upcoming AMD bare-metal runtime — use them when you're explicitly targeting that runner.
-</Note>
-
 ## TRL format
 
-Used by today's primary runner. Receives a batch of completions, returns one score per completion.
+Receives a batch of completions, returns one score per completion.
 
 ```python
 import re
@@ -49,29 +44,6 @@ def reward(completions, answer, **kwargs):
 - `completions` — list of strings OR list of message-dict lists (depending on how the runner formats prompts)
 - `answer` — list of ground-truth strings (from the dataset's `answer` column)
 - Return — list of floats, **same length as `completions`**
-
-## Miles format
-
-Async-per-rollout interface, used by the upcoming AMD runner.
-
-```python
-import re
-
-async def reward(args, sample, **kwargs) -> float:
-    response = sample.response
-    label = sample.label or ""
-
-    format_ok = bool(re.search(r"<answer>.*?</answer>", response, re.DOTALL))
-
-    m = re.search(r"<answer>(.*?)</answer>", response, re.DOTALL)
-    correct = bool(m and label.strip() in m.group(1).strip())
-
-    return 0.5 * float(format_ok) + 0.5 * float(correct)
-```
-
-- `sample.response` — model completion
-- `sample.label` — ground truth
-- Return — single float
 
 ## Upload
 
@@ -123,6 +95,41 @@ def reward(completions, answer, **kwargs):
 
 Keep each component bounded so the total stays in a stable range — `[0, 1]` is conventional. GRPO normalizes scores within a group, so the absolute scale matters less than the spread.
 
+## Multiple weighted reward functions
+
+Instead of summing signals inside one function, you can upload several reward functions and let GRPO combine them with weights. TRL's GRPOTrainer scores each completion with every function and sums the results, scaled by `reward_weights`. This keeps each signal in its own file (reusable and independently testable) and lets you retune the mix without editing code.
+
+Each function has the standard `trl` signature and returns one score per completion. Upload each file, then pass the ids and matching weights:
+
+```python
+# correctness.py
+def reward(completions, answer, **kwargs):
+    return [1.0 if c == a else 0.0 for c, a in zip(completions, answer)]
+
+# format.py
+import re
+def reward(completions, **kwargs):
+    return [1.0 if re.search(r"<answer>.*?</answer>", str(c), re.DOTALL) else 0.0
+            for c in completions]
+```
+
+```python
+correctness = client.reward_functions.upload("correctness.py")
+format_fn = client.reward_functions.upload("format.py")
+
+job = client.training_jobs.create(
+    base_model="Qwen/Qwen2.5-0.5B-Instruct",
+    dataset_id=ds.id,
+    method="grpo",
+    reward_function_ids=[correctness.id, format_fn.id],
+    reward_weights=[1.0, 0.5],
+    gpu_type="L4-24GB",
+    gpu_count=1,
+)
+```
+
+`reward_weights` is optional; omit it to weight every function equally. When provided, its length must match `reward_function_ids` (the SDK and API reject a mismatch). A single `reward_function_id` still works for the one-reward case.
+
 ## Reuse across jobs
 
 Once uploaded, a reward function is reusable. The same `id` can drive any number of training jobs.
@@ -154,16 +161,16 @@ Reward functions are deduped by content hash — uploading the same file twice r
 ## Where to go next
 
 <CardGroup cols={2}>
-  <Card title="GRPO algorithm" icon="brain" href="/fine-tuning/grpo">
+  <Card title="GRPO algorithm" icon="brain" href="/training/grpo">
     What the score actually does inside the training loop.
   </Card>
-  <Card title="Custom reward example" icon="book" href="/fine-tuning/examples">
-    Walkthrough of a non-trivial reward.
+  <Card title="Tool Calling SFT demo" icon="book" href="/demos/tool-calling-sft">
+    Placeholder for a structured-output training walkthrough.
   </Card>
   <Card title="Submit a job" icon="play" href="/api-reference/training-jobs">
     Wire the reward into `training_jobs.create`.
   </Card>
-  <Card title="Quickstart" icon="rocket" href="/quickstart/fine-tune">
+  <Card title="Quickstart" icon="rocket" href="/training">
     End-to-end with the example math reward.
   </Card>
 </CardGroup>

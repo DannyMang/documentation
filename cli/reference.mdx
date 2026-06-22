@@ -131,24 +131,10 @@ veri doctor --format json | jq -e '.[] | select(.status == "fail")' && exit 1
 
 | Command | Purpose |
 | --- | --- |
-| `list` | Available GPU SKUs across providers with current `$/hr`. |
-| `compare --type X --count N --hours H` | Side-by-side provider prices for a config. |
+| `list` | Available GPU SKUs across providers. |
 
 ```bash
 veri gpu list
-veri gpu compare --type A100-80GB --count 2 --hours 4
-```
-
-## `veri cost` {#cost}
-
-| Command | Purpose |
-| --- | --- |
-| `estimate --gpu-type X --gpu-count N --hours H [--provider P]` | Quick cost calc. |
-| `summary [--days N]` | Recent spend rollup. |
-
-```bash
-veri cost estimate --gpu-type A100-80GB --gpu-count 2 --hours 1
-veri cost summary --days 30 --format json
 ```
 
 ## `veri billing` {#billing}
@@ -156,12 +142,10 @@ veri cost summary --days 30 --format json
 | Command | Purpose |
 | --- | --- |
 | `balance` | Current credit balance. |
-| `burn-rate` | `$/day` plus estimated runway. |
-| `transactions [--limit N]` | Recent charges. |
+| `transactions [--limit N]` | Recent billing entries. |
 
 ```bash
 veri billing balance
-veri billing burn-rate
 veri billing transactions --limit 50 --format jsonl
 ```
 

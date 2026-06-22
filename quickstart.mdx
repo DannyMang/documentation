@@ -8,7 +8,7 @@ By the end of this you'll have:
 - The `veri` CLI installed locally.
 - An authenticated session.
 
-When you're ready to spend real GPU time, jump to one of the three workflow quickstarts at the bottom of this page.
+When you're ready to spend real GPU time, jump to the workflow docs at the bottom of this page.
 
 ## Install
 
@@ -76,19 +76,19 @@ config:     /Users/you/.config/veri/config.toml
 
 ## Where to next
 
-Pick the workflow you came for. Each one is end-to-end against `https://api.veri.studio` and spends about a dollar of GPU credit.
+Pick the workflow you came for. Each guide covers the path against `https://api.veri.studio` and may spend GPU credit.
 
 <CardGroup cols={3}>
-  <Card title="Fine-tune a model" icon="graduation-cap" href="/quickstart/fine-tune">
-    End-to-end GRPO on a tiny model in ~15 minutes
+  <Card title="Train a model" icon="graduation-cap" href="/training">
+    Configure and run hosted training jobs
   </Card>
 
-  <Card title="Deploy a model" icon="rocket" href="/quickstart/deploy">
-    Serve any base or fine-tuned model in ~10 minutes
+  <Card title="Deploy a model" icon="rocket" href="/deployments">
+    Serve base or trained models behind an endpoint
   </Card>
 
-  <Card title="Evaluate a model" icon="chart-line" href="/quickstart/eval">
-    Score a deployment against a held-out dataset
+  <Card title="Evaluate a model" icon="chart-line" href="/evaluations">
+    Score models and deployments against datasets
   </Card>
 </CardGroup>
 
@@ -100,3 +100,7 @@ A 15-minute call gets you unblocked faster than a docs page. Tell us what broke 
     Pick any time. If you're hitting a specific issue, share your account email and any
       failing job IDs.
 </Card>
+
+### Spot a bug?
+
+Email [daniel@veri.studio](mailto:daniel@veri.studio) with what you expected, what happened, and any failing job IDs.

@@ -1,0 +1,149 @@
+---
+title: "RFT with environments (prime-rl)"
+sidebarTitle: "RFT with prime-rl"
+description: "Reinforcement fine-tuning against a verifiers environment using prime-rl, run as a Veri custom script."
+keywords: ["RFT", "reinforcement fine-tuning", "prime-rl", "verifiers", "environments", "custom script", "RL"]
+---
+
+Train a model with reinforcement fine-tuning (RFT) where the reward comes from an [environment](https://github.com/PrimeIntellect-ai/verifiers) rather than a reward function you write. This demo uses [prime-rl](https://github.com/PrimeIntellect-ai/prime-rl) as the trainer and runs as a [custom script](/training/custom-script), so Veri provisions the GPU and streams logs, checkpoints, and metrics while prime-rl owns the RL loop.
+
+<Note>
+Preview: this demo is pending an end-to-end verification run. The configuration is ported verbatim from prime-rl's `reverse_text` example, but the Veri launch wiring has not yet been confirmed on a live GPU. Treat the exact install and GPU-split details as provisional until this note is removed.
+</Note>
+
+## What you build
+
+A single-node RFT run that trains an SFT-warmed `Qwen3-0.6B` on the bundled `reverse-text` environment. The environment supplies the reward, prime-rl runs the trainer plus an in-process vLLM inference server, and the resulting checkpoint is uploaded to Veri.
+
+Because this is a custom script, the framework is your choice. Swap the two files below to run [slime](/demos/slime-glm-4-7-flash-8xh100), [verl](/demos/verl-gsm8k-ppo), or TRL instead; nothing about the Veri platform changes.
+
+## Prerequisites
+
+- A Veri API key.
+- An H100-80GB box with at least 2 GPUs (one for inference, one for the trainer).
+- Optional: a Weights & Biases API key for full RL observability (reward, KL, entropy, and sample-completion tables). Set it as `WANDB_API_KEY` and the run links to your W&B project automatically.
+
+## The run config
+
+prime-rl is driven by a single TOML. This is the upstream `reverse_text` example, kept verbatim so your first run reproduces a known-good prime-rl run.
+
+```toml rl.toml
+max_steps = 20
+seq_len = 2048
+
+[model]
+name = "PrimeIntellect/Qwen3-0.6B-Reverse-Text-SFT"
+
+[wandb]
+project = "reverse-text"
+name = "reverse-text"
+
+[orchestrator]
+batch_size = 128
+group_size = 16
+
+[orchestrator.train.sampling]
+max_completion_tokens = 128
+
+[[orchestrator.train.env]]
+id = "reverse-text"
+
+[trainer.optim]
+lr = 3e-6
+
+[ckpt] # Checkpoint at the end of training
+
+[inference]
+
+# Model not in MODEL_RENDERER_MAP — opt into DefaultRenderer (apply_chat_template).
+[orchestrator.renderer]
+name = "default"
+```
+
+## The entrypoint
+
+The entrypoint installs prime-rl plus the verifiers environments, then launches a single-node run. `uv run rl` runs the trainer, orchestrator, and inference server together locally. Checkpoints land in `$VERI_OUTPUT_DIR`, which Veri uploads.
+
+```bash run.sh
+#!/usr/bin/env bash
+set -euo pipefail
+
+OUT_ROOT="${VERI_OUTPUT_DIR:-./output}"
+RUN_DIR="${OUT_ROOT}/run"
+ENV_ID="${VERI_RFT_ENV_ID:-reverse-text}"
+MAX_STEPS="${VERI_RFT_MAX_STEPS:-20}"
+
+# Install uv + prime-rl (install-in-entrypoint; multi-minute cold start).
+export UV_LINK_MODE=copy
+command -v uv >/dev/null 2>&1 || curl -LsSf https://astral.sh/uv/install.sh | sh
+export PATH="${HOME}/.local/bin:${PATH}"
+
+if [ ! -d prime-rl ]; then
+  git clone --depth 1 https://github.com/PrimeIntellect-ai/prime-rl.git
+fi
+cd prime-rl
+git submodule update --init -- deps/verifiers deps/renderers deps/pydantic-config
+uv sync --all-extras
+
+# Launch single-node (trainer + orchestrator + inference). --ckpt writes
+# HF-servable weights to $RUN_DIR/weights/step_N/ for Veri to upload.
+uv run rl @ /workspace/code/rl.toml \
+  --output-dir "${RUN_DIR}" \
+  --max-steps "${MAX_STEPS}" \
+  --ckpt --ckpt.weights-only \
+  ${WANDB_API_KEY:+--wandb}
+```
+
+## Launch it
+
+Upload the two files as a code artifact, then submit a custom-script job.
+
+```python
+from veri_sdk import Client
+
+client = Client()
+
+artifact = client.code_artifacts.upload("./rft-prime-rl")  # dir holding rl.toml + run.sh
+
+job = client.training_jobs.create_custom_script(
+    entrypoint="bash run.sh",
+    code_artifact_id=artifact.id,
+    base_image="veri/base-vllm",
+    gpu_type="H100-80GB",
+    gpu_count=2,
+    output_name="rft-reverse-text",
+    env={
+        "VERI_RFT_ENV_ID": "reverse-text",
+        "VERI_RFT_MAX_STEPS": "20",
+    },
+)
+
+job.wait(poll_interval=15)
+job.download(output_dir="./checkpoints")
+```
+
+## Retarget without editing files
+
+Set these in `create_custom_script(env={...})`:
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `VERI_RFT_ENV_ID` | `reverse-text` | The environment to train against. |
+| `VERI_RFT_MAX_STEPS` | `20` | Training steps. |
+
+For a different model, batch size, or reward weighting, edit `rl.toml` directly: it is prime-rl's full config surface.
+
+## Observe the run
+
+Veri streams the worker logs live and uploads the final checkpoint. For RL-specific signals (reward and KL curves, advantage and entropy distributions, sample completions), set `WANDB_API_KEY` and open the linked Weights & Biases run from the job page. prime-rl logs the trainer and orchestrator into a single shared W&B run.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Custom scripts" icon="terminal" href="/training/custom-script">
+    How the BYO-framework training substrate works.
+  </Card>
+  <Card title="Deploy your checkpoint" icon="cloud" href="/deployments">
+    Serve the trained model with an OpenAI-compatible API.
+  </Card>
+</CardGroup>

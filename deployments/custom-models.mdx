@@ -1,8 +1,8 @@
 ---
 title: "Custom models"
 sidebarTitle: "Custom models"
-description: "Your model library: fine-tuned checkpoints, Hugging Face imports, and direct uploads, all stored on Veri and ready to deploy."
-keywords: ["custom models", "model library", "checkpoint", "hugging face import", "upload model", "fine-tuned model"]
+description: "Your model library: trained checkpoints, Hugging Face imports, and direct uploads, all stored on Veri and ready to deploy."
+keywords: ["custom models", "model library", "checkpoint", "hugging face import", "upload model", "trained model"]
 ---
 
 A custom model is a set of weights you own, stored on Veri and deployable from a single named entry. Every custom model lands in the same place (Veri-managed storage) no matter how it got there, so deploying one is always the same one step regardless of where the weights came from.
@@ -29,7 +29,7 @@ You can also keep working with the raw checkpoint directly:
 veri jobs download <job-id> --output-dir ./checkpoint
 ```
 
-See [Fine-tuning](/fine-tuning) for the full training flow.
+See [Training](/training) for the full training flow.
 
 ## Import from Hugging Face
 
@@ -100,15 +100,15 @@ See [Deployments](/deployments) for the serving lifecycle and the OpenAI-compati
 If your library is empty, you have not trained or imported anything yet. Two ways to start:
 
 - Browse the model library in the dashboard and import a base model to deploy right away.
-- [Fine-tune your own model](/fine-tuning), then add the resulting checkpoint to your library.
+- [Train your own model](/training), then add the resulting checkpoint to your library.
 
 ## Where to go next
 
 <CardGroup cols={2}>
-  <Card title="Deploy a model" icon="rocket" href="/quickstart/deploy">
+  <Card title="Deploy a model" icon="rocket" href="/deployments">
     Spin up a deployment and chat with it in ~10 minutes.
   </Card>
-  <Card title="Fine-tune your own model" icon="brain" href="/fine-tuning">
+  <Card title="Train your own model" icon="brain" href="/training">
     Train a checkpoint, then add it to your library.
   </Card>
   <Card title="Hosting & GPU sizing" icon="server" href="/deployments/hosting">

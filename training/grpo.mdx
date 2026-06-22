@@ -22,7 +22,7 @@ The "group relative" part is what makes GRPO simpler than PPO — no value head,
 
 ## Hyperparameters
 
-Every field of `GRPOHyperparameters`, defaults from `control_plane/schemas/training.py`:
+Every field of the GRPO hyperparameters, with defaults:
 
 | Parameter | Default | What it does |
 | --- | --- | --- |
@@ -35,10 +35,36 @@ Every field of `GRPOHyperparameters`, defaults from `control_plane/schemas/train
 | `max_response_length` | `2048` | Tokens. Truncate longer completions. Big OOM lever. |
 | `global_batch_size` | `64` | Total batch across all GPUs. Auto-split per device. |
 | `seed` | `42` | RNG seed for reproducibility. |
+| `lora_rank` | `null` | Train LoRA adapters of this rank instead of full finetuning. `null` means full finetune. |
+| `lora_alpha` | `null` | LoRA scaling factor. Defaults to `lora_rank` when unset. |
+| `load_in_4bit` | `false` | QLoRA: load the base in 4-bit (NF4) and train LoRA adapters on top. Requires `lora_rank`. Single-GPU. |
 | `use_unsloth` | `false` | Opt-in Unsloth memory optimization. Off by default; vanilla TRL is the base path. Single-GPU only. |
 
+## LoRA and QLoRA
+
+By default Veri full-finetunes the base model. To train low-rank adapters instead, set `lora_rank` (and optionally `lora_alpha`). For QLoRA, also set `load_in_4bit`: the base loads in 4-bit (NF4) and you train adapters on top, which cuts VRAM roughly 4x and lets larger models fit on a single GPU.
+
+**LoRA (16-bit base, multi-GPU capable):**
+
+```python
+hyperparameters={
+    "lora_rank": 16,
+    "lora_alpha": 32,
+}
+```
+
+**QLoRA (4-bit base, single GPU):**
+
+```python
+hyperparameters={
+    "lora_rank": 16,
+    "lora_alpha": 32,
+    "load_in_4bit": True,
+}
+```
+
 <Note>
-  `lora_rank` and `lora_alpha` exist in the schema but **must be `null` for GRPO** today — full fine-tuning only. LoRA for LLM GRPO is on the roadmap (blocked on upstream slime PR #1140). LoRA does work for [video gen SFT](/fine-tuning/examples).
+  `load_in_4bit` requires `lora_rank`: the 4-bit base is frozen, so training happens in the adapters. QLoRA runs on a single GPU today; for multi-GPU, use 16-bit LoRA (`lora_rank` without `load_in_4bit`). Adapters target the attention and MLP projections (q/k/v/o, gate/up/down).
 </Note>
 
 ## Picking values
@@ -126,16 +152,16 @@ If your model can't follow the *format* you want yet (e.g. won't wrap answers in
 ## Where to go next
 
 <CardGroup cols={2}>
-  <Card title="Reward functions" icon="scale-balanced" href="/fine-tuning/reward-functions">
+  <Card title="Reward functions" icon="scale-balanced" href="/training/reward-functions">
     Design rewards GRPO can actually optimize against.
   </Card>
-  <Card title="Datasets" icon="database" href="/fine-tuning/datasets">
+  <Card title="Datasets" icon="database" href="/training/datasets">
     Get training data into Veri.
   </Card>
   <Card title="Submit a job" icon="play" href="/api-reference/training-jobs">
     Wire it all into `training_jobs.create`.
   </Card>
-  <Card title="Examples" icon="book" href="/fine-tuning/examples">
-    Math reasoning end-to-end with metrics interpretation.
+  <Card title="Verl GSM8K PPO demo" icon="book" href="/demos/verl-gsm8k-ppo">
+    Planned math reasoning walkthrough with metrics interpretation.
   </Card>
 </CardGroup>

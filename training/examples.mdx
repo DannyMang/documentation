@@ -1,7 +1,7 @@
 ---
 title: "Examples"
 sidebarTitle: "Examples"
-description: "Three end-to-end fine-tuning recipes: math reasoning with GRPO, a custom multi-signal reward, and video generation LoRA SFT."
+description: "Three end-to-end training recipes: math reasoning with GRPO, a custom multi-signal reward, and video generation LoRA SFT."
 keywords: ["examples", "math", "GSM8K", "custom reward", "video generation", "LoRA", "CogVideoX"]
 ---
 
@@ -9,7 +9,7 @@ Three runnable examples, each tuned for a different use case. All snippets work 
 
 ## Math reasoning with GRPO
 
-Train Qwen on GSM8K to wrap answers in `<answer>` tags and get them right. Same shape as the [Quickstart](/quickstart/fine-tune), but here we go bigger and explain the choices.
+Train Qwen on GSM8K to wrap answers in `<answer>` tags and get them right. Same shape as the [Quickstart](/training), but here we go bigger and explain the choices.
 
 ```python
 from veri_sdk import Client
@@ -26,7 +26,7 @@ dataset = client.datasets.connect(
 )
 
 reward_fn = client.reward_functions.upload(
-    "math_reward_trl.py",  # see /fine-tuning/reward-functions for the function body
+    "math_reward_trl.py",  # see /training/reward-functions for the function body
     format="trl",
     name="math-format-correctness",
 )
@@ -49,7 +49,7 @@ job = client.training_jobs.create(
 )
 
 job.wait(poll_interval=30)
-print(f"Cost: ${job.cost_usd:.2f}")
+print(job.status)
 ```
 
 **What to watch:**
@@ -57,36 +57,22 @@ print(f"Cost: ${job.cost_usd:.2f}")
 - `reward_std` should stay > 0 — if it collapses, the model is producing identical outputs (policy collapse)
 - `response_length_mean` should stabilize around the natural answer length, not balloon toward `max_response_length`
 
-After completion, evaluate against held-out GSM8K test:
+After completion, deploy the trained model to serve it:
 
 ```python
-# 1. Deploy the trained model
+# Deploy the trained model
 dep = client.deployments.create(
     model=job.id,
     source="training_job",
-    name="qwen-7b-gsm8k-eval",
+    name="qwen-7b-gsm8k",
     gpu={"gpu_type": "H100-80GB", "gpu_count": 1},
 )
 dep.wait()
-
-# 2. Score on a held-out subset (see /quickstart/eval for the full shape)
-test_ds = client.datasets.connect(
-    name="gsm8k-test",
-    source_type="hf",
-    huggingface_dataset="openai/gsm8k",
-    huggingface_config={"split": "test[:200]", "column_mapping": {"question": "prompt", "answer": "answer"}},
-)
-
-eval_def = client.evals.create(
-    name="gsm8k-test-200",
-    dataset_id=test_ds.id,
-    scorers=[{"type": "exact_match", "name": "exact_answer", "reference_field": "answer"}],
-)
-
-run = client.evals.runs.create(eval_def.id, model=f"deployment:{dep.id}")
-run = client.evals.runs.wait(eval_def.id, run.id)
-print(run.results)
 ```
+
+<Note>
+  Scoring the trained model against a held-out test set will be covered by [Evaluations](/evaluations), which are planned for a later release.
+</Note>
 
 ## Custom multi-signal reward
 
@@ -191,10 +177,10 @@ The output is a LoRA adapter (small file), not a full checkpoint — load it on 
 ## Where to go next
 
 <CardGroup cols={2}>
-  <Card title="GRPO algorithm" icon="brain" href="/fine-tuning/grpo">
+  <Card title="GRPO algorithm" icon="brain" href="/training/grpo">
     Hyperparameter intuition + failure modes.
   </Card>
-  <Card title="Deploy your fine-tune" icon="cloud" href="/deployments">
+  <Card title="Deploy your trained model" icon="cloud" href="/deployments">
     Serve the result with an OpenAI-compatible endpoint.
   </Card>
   <Card title="Run an eval" icon="chart-line" href="/evaluations">

@@ -59,8 +59,6 @@ curl -X POST https://api.veri.studio/v1/deployments \
     "count": 1
   },
   "provider": "in_memory",
-  "cost_per_hour_usd": null,
-  "total_cost_usd": 0,
   "total_requests": 0,
   "error": null,
   "started_at": null,
@@ -73,7 +71,6 @@ curl -X POST https://api.veri.studio/v1/deployments \
 <Note>
   `endpoint_url` is a **relative** path that already includes `/chat/completions`. To call from the OpenAI SDK, set `base_url` to `https://api.veri.studio/v1/deployments/{deployment_id}` — the SDK appends `/chat/completions` for you. To call with curl, use the full URL `https://api.veri.studio{endpoint_url}`.
 
-  `cost_per_hour_usd` is currently unpopulated by the control plane. Use `client.cost.estimate(...)` to read the live per-hour rate for your GPU configuration.
 </Note>
 
 ---
@@ -113,7 +110,6 @@ curl "https://api.veri.studio/v1/deployments?status=serving&limit=10" \
       "model": "job_abc123",
       "source": "training_job",
       "endpoint_url": "/v1/deployments/dep_xyz789/chat/completions",
-      "cost_per_hour_usd": null,
       "total_requests": 142,
       "created_at": "2026-05-05T10:00:00Z",
       "updated_at": "2026-05-05T12:30:00Z"
@@ -292,7 +288,6 @@ curl https://api.veri.studio/v1/deployments/dep_xyz789/metrics \
   "total_requests": 142,
   "total_prompt_tokens": 4260,
   "total_completion_tokens": 8520,
-  "total_cost_usd": 2.45,
   "avg_latency_ms": 132.5,
   "error_rate": 0.007,
   "uptime_seconds": 7200.0

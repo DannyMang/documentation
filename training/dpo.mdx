@@ -5,7 +5,7 @@ description: "Align a base model to your preferences with Direct Preference Opti
 keywords: ["DPO", "direct preference optimization", "dpo", "DPOTrainer", "preference tuning", "RLHF", "LoRA", "QLoRA"]
 ---
 
-Direct Preference Optimization (`method="dpo"`) tunes a model on preference pairs: for the same prompt, one completion is `chosen` and one is `rejected`. The model learns to widen the gap between them, relative to a reference copy of the starting model. DPO is a simpler, more stable alternative to reward-model RLHF, and a common pass after [SFT](/training/sft) to align style and helpfulness.
+Direct Preference Optimization (`method="dpo"`) tunes a model on preference pairs: for the same prompt, one completion is `chosen` and one is `rejected`. The model learns to widen the gap between them, relative to a reference copy of the starting model. DPO is a simpler, more stable alternative to reward-model RLHF, and a common pass after [SFT](/training/managed#methods) to align style and helpfulness.
 
 Veri runs DPO on TRL's `DPOTrainer`. You provide a preference dataset; Veri provisions the GPU, runs the loop, streams metrics, and uploads the checkpoint. DPO takes no reward function — the preference pairs are the training signal.
 
@@ -101,7 +101,7 @@ See [LoRA and QLoRA](/training/grpo#lora-and-qlora) for the full rules (4-bit re
 ## Where to go next
 
 <CardGroup cols={2}>
-  <Card title="SFT" icon="dna" href="/training/sft">
+  <Card title="Managed Training" icon="dna" href="/training/managed#methods">
     Supervised finetune first, then align with DPO.
   </Card>
   <Card title="Datasets" icon="database" href="/training/datasets">

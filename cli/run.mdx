@@ -54,7 +54,7 @@ kind = "train"    # or "deploy" or "eval"
 | --- | --- |
 | `"train"` | `veri jobs create` |
 | `"deploy"` | `veri deployments create` |
-| `"eval"` | `veri evals create` |
+| `"eval"` | `veri evals create` (coming soon) |
 
 Missing `kind` or an unknown value errors with a "did you mean" hint:
 
@@ -149,7 +149,7 @@ file = "./reward.py"
 format = "trl"
 
 [method]
-type = "grpo"           # grpo | sft | dpo
+type = "grpo"           # grpo | sft_text | dpo | sft_video_gen (grpo_agentic is being rebuilt; not currently available)
 learning_rate = 1e-6
 max_steps = 100
 rollouts_per_prompt = 4
@@ -204,9 +204,9 @@ model = "dep_abc"           # deployment id, training job id, or HF repo
 num_samples = 100
 ```
 
-## `--dry-run` before billing
+## `--dry-run` before submitting
 
-On `veri jobs create` (and `veri run` with `kind="train"`), `--dry-run` reports the estimated cost without submitting:
+On `veri jobs create` (and `veri run` with `kind="train"`), `--dry-run` validates the config without submitting:
 
 ```bash
 $ veri run configs/train.toml --dry-run
@@ -214,7 +214,6 @@ Dry run — no job submitted.
 ┏━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━┓
 ┃ field                ┃ value    ┃
 ┡━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━┩
-│ estimated_cost_usd   │ 12.34    │
 │ duration_minutes     │ 100      │
 └──────────────────────┴──────────┘
 ```

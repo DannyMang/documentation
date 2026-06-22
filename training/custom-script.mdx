@@ -1,0 +1,115 @@
+---
+title: "Custom training scripts"
+sidebarTitle: "Custom Training"
+description: "Run your own training script or framework (torchrun, OpenRLHF, slime, verl) on a GPU Veri provisions, with live logs, GPU metrics, checkpoints, and reward curves on one platform."
+keywords: ["custom script", "BYO", "torchrun", "OpenRLHF", "slime", "verl", "bring your own"]
+---
+
+Veri's managed methods (GRPO, SFT, DPO) own the training loop for you. When you want **whole control** (your own framework, your own loop), use a custom script: you bring the code, Veri provisions the GPU, runs your command, and shows you exactly what is happening (live logs, GPU utilization, checkpoints, reward curves) next to your managed jobs and deployments.
+
+Use this for OpenRLHF, slime, verl, a plain `torchrun` loop, or anything you can launch with a command.
+
+## How it works
+
+You supply four things:
+
+| Input | What it is |
+| --- | --- |
+| **base image** | One of the curated images Veri prebakes (see below). |
+| **code** | Your local directory. The CLI tars it and uploads it. |
+| **entrypoint** | The command Veri runs, e.g. `torchrun --nproc_per_node=$VERI_NUM_GPUS train.py`. |
+| **dependencies** | An optional `requirements.txt` layered on top of the base image. |
+
+Veri runs your entrypoint inside the base image on the GPU, with a set of `VERI_*` environment variables injected:
+
+| Variable | Meaning |
+| --- | --- |
+| `VERI_DATA_DIR` | Your dataset is materialized here (if you attach one). |
+| `VERI_OUTPUT_DIR` | Write checkpoints and artifacts here. Everything in this dir is captured to your account. |
+| `VERI_METRICS_FILE` | Append metrics here (or use `veri.log_metrics`, below). |
+| `VERI_NUM_GPUS` | GPUs on this node. |
+| `VERI_NODE_RANK`, `VERI_NODE_IPS`, `VERI_NUM_NODES` | Topology (single node today: `0`, one IP, `1`). |
+
+Exit code `0` marks the job completed; a non-zero exit marks it failed.
+
+## Base images
+
+Pick the base that matches your stack. Each prebakes the slow, compiled pieces so cold start stays fast; you layer light dependencies on top.
+
+| Image | Contains | Good for |
+| --- | --- | --- |
+| `veri/base` | CUDA + PyTorch + the Hugging Face stack (transformers, datasets, accelerate, peft) | Most custom training and SFT-style loops |
+| `veri/base-vllm` | `veri/base` + vLLM | OpenRLHF-style scripts, any vLLM-rollout RL |
+| `veri/base-sglang` | `veri/base` + SGLang | slime and SGLang-based stacks |
+
+## Example: a minimal training run
+
+A small project directory:
+
+```text
+my-run/
+  train.py
+  requirements.txt
+```
+
+`train.py` reads the Veri contract, trains, logs metrics, and writes a checkpoint:
+
+```python train.py
+import os
+from pathlib import Path
+
+import veri_sdk
+
+output_dir = Path(os.environ["VERI_OUTPUT_DIR"])
+
+# ... your training setup (model, dataset from VERI_DATA_DIR, optimizer) ...
+
+for step in range(100):
+    # ... one training step, producing `reward` and `loss` ...
+    reward, loss = train_one_step()
+
+    # Reward/loss curves render natively in the Veri UI.
+    veri_sdk.log_metrics(step=step, reward=reward, loss=loss)
+
+# Anything written under VERI_OUTPUT_DIR is captured as your checkpoint.
+save_checkpoint(output_dir / "final")
+```
+
+`requirements.txt` layers your extra dependencies on top of the base image:
+
+```text requirements.txt
+trl==0.22.2
+veri-sdk
+```
+
+Submit it with the CLI:
+
+```bash
+veri run-script ./my-run \
+  --entrypoint "torchrun --nproc_per_node=$VERI_NUM_GPUS train.py" \
+  --base-image veri/base \
+  --gpu-type H100-80GB \
+  --gpu-count 1 \
+  --requirements ./my-run/requirements.txt
+```
+
+The CLI uploads your code, submits the job, and prints the job id and dashboard link.
+
+## Observability
+
+Everything shows up in the Veri UI for the job, alongside your managed jobs and deployments:
+
+- **Live logs**: your script's stdout and stderr stream in real time.
+- **GPU metrics**: utilization, memory, and power.
+- **Checkpoints**: whatever you write under `VERI_OUTPUT_DIR`.
+- **Reward curves**: two ways, pick either.
+
+For reward and loss curves you have two options:
+
+1. **`veri_sdk.log_metrics`** (shown above): append `{"step": n, "reward": ..., "loss": ...}` records and Veri renders them natively. Add `veri-sdk` to your `requirements.txt`.
+2. **Weights & Biases**: set your `WANDB_API_KEY` as a secret and your framework's existing `wandb` logging flows to your own W&B account. Veri deep-links the run from the job page. Frameworks like OpenRLHF, verl, and slime support this out of the box, so they light up with no code change.
+
+## Limits
+
+- **Single node** today (one instance, up to 8 GPUs). Multi-node is on the roadmap; for now keep runs to a single node.
+- **Three base images** (above). If your stack does not fit, a bring-your-own container image is the escape hatch (coming soon).

@@ -70,7 +70,6 @@ veri rewards delete rf_abc
 | `get <id>` | Show one job. |
 | `cancel <id>` | Cancel a running job. |
 | `download <id>` | Download the completed checkpoint. |
-| `estimate <config>` | Pre-submit cost estimate. |
 
 ### Submit from a config
 
@@ -99,7 +98,7 @@ veri jobs create \
   --gpu-count 1
 ```
 
-Inline form requires `--base-model` AND `--dataset`. Pass `--reward` for RL methods (GRPO/DPO); omit for SFT.
+Inline form requires `--base-model` AND `--dataset`. Pass `--reward` for `grpo`; omit for `sft_video_gen`.
 
 ### Override config values
 
@@ -111,20 +110,6 @@ veri jobs create configs/train.toml \
 ```
 
 The convenience flags `--base-model`, `--gpu-type`, `--gpu-count`, `--dataset`, `--reward` expand to `--set` internally. See [Override syntax](/cli/run#override-toml-fields-from-the-cli) for type coercion and conflict detection.
-
-### Dry-run cost estimate
-
-```bash
-veri jobs create configs/train.toml --dry-run
-```
-
-Reports estimated cost via the cost API; does not submit. Use this before any non-trivial run.
-
-Standalone form:
-
-```bash
-veri jobs estimate configs/train.toml --format json
-```
 
 ### List, get, cancel
 

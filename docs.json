@@ -8,6 +8,11 @@
     "light": "#BDE689",
     "dark": "#200D0D"
   },
+  "logo": {
+    "light": "/logo/veri-mark-logo.png",
+    "dark": "/logo/veri-mark-logo-light.png",
+    "href": "/"
+  },
   "favicon": "/favicon.ico",
   "navigation": {
     "tabs": [
@@ -19,20 +24,20 @@
             "icon": "rocket",
             "pages": [
               "index",
-              "quickstart",
-              "quickstart/fine-tune",
-              "quickstart/deploy",
-              "quickstart/eval"
+              "quickstart"
             ]
           },
           {
-            "group": "Fine-tuning",
+            "group": "Training",
             "icon": "graduation-cap",
             "pages": [
-              "fine-tuning",
-              "fine-tuning/datasets",
-              "fine-tuning/reward-functions",
-              "fine-tuning/grpo"
+              "training",
+              "training/custom-script",
+              "training/managed",
+              "training/datasets",
+              "training/reward-functions",
+              "training/grpo",
+              "training/dpo"
             ]
           },
           {
@@ -81,16 +86,15 @@
         "tab": "Guides/Demos",
         "groups": [
           {
-            "group": "Fine-tuning",
-            "pages": ["fine-tuning/examples"]
-          },
-          {
-            "group": "Deployments",
-            "pages": ["deployments/examples"]
-          },
-          {
-            "group": "Evaluations",
-            "pages": ["evaluations/examples"]
+            "group": "Curated demos",
+            "pages": [
+              "demos/sft-unsloth",
+              "demos/slime-glm-4-7-flash-8xh100",
+              "demos/verl-gsm8k-ppo",
+              "demos/prime-rl-reverse-text-rft",
+              "demos/tool-calling-sft",
+              "demos/deployment-analytics"
+            ]
           }
         ]
       },
@@ -126,16 +130,16 @@
             "pages": ["api-reference/volumes"]
           }
         ]
-      },
-      {
-        "tab": "Changelog",
-        "groups": [
-          {
-            "group": "Releases",
-            "pages": ["changelog"]
-          }
-        ]
       }
     ]
-  }
+  },
+  "redirects": [
+    { "source": "/fine-tuning", "destination": "/training" },
+    { "source": "/fine-tuning/datasets", "destination": "/training/datasets" },
+    { "source": "/fine-tuning/reward-functions", "destination": "/training/reward-functions" },
+    { "source": "/fine-tuning/grpo", "destination": "/training/grpo" },
+    { "source": "/fine-tuning/examples", "destination": "/demos/sft-unsloth" },
+    { "source": "/fine-tuning/api", "destination": "/training/api" },
+    { "source": "/quickstart/fine-tune", "destination": "/training" }
+  ]
 }

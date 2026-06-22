@@ -24,23 +24,16 @@ Rough sizing for **inference only** (training needs more headroom):
 
 | `gpu_type` | Memory | Common use |
 | --- | --- | --- |
-| `A100-40GB` | 40 GB | Smallest sizes; available on AWS only today |
-| `A100-80GB` | 80 GB | Default sweet spot |
-| `L40S` | 48 GB | Cost-efficient for 3–8B models on AWS |
-| `H100-80GB` | 80 GB | ~2x throughput vs A100-80GB |
-| `H200` | 141 GB | Largest single-GPU memory; needed for some 70B FP16 |
+| `L4-24GB` | 24 GB | Single-GPU shape for small models (up to ~3B) |
+| `A10G-24GB` | 24 GB | Single-GPU shape for small models |
+| `A100-80GB` | 80 GB | Default sweet spot; launches as an 8-GPU node on AWS |
+| `H100-80GB` | 80 GB | ~2x throughput vs A100-80GB; launches as an 8-GPU node on AWS |
 
-MI300X is priced (TensorWave) but the serving backend is not yet wired — it's on the roadmap.
+H200 and MI300X support are on the roadmap.
 
 ## Provider routing
 
 Deployments run on **AWS**. The `provider` field defaults to `aws`; there are no other providers to select today.
-
-<Note>
-  The default serving backend on the Veri control plane today is an in-memory stub used during private beta. Direct provider routing for serving is being rolled out — the GPU types and rates above are the published surface; the live backend assignment may differ during early access. The control plane still bills against the chosen `provider` rate.
-</Note>
-
-Force a specific provider:
 
 ```python
 client.deployments.create(
@@ -48,25 +41,9 @@ client.deployments.create(
     source="huggingface",
     name="my-deploy",
     gpu={"gpu_type": "H100-80GB", "gpu_count": 1},
-    provider="lambda",
+    provider="aws",
 )
 ```
-
-Compare rates before deploying:
-
-<CodeGroup>
-```python SDK
-client.cost.compare(
-    gpu_type="H100-80GB",
-    gpu_count=1,
-    duration_minutes=60,
-)
-```
-
-```bash CLI
-veri gpu compare --type H100-80GB --count 1 --hours 1
-```
-</CodeGroup>
 
 ## Cold start
 
@@ -77,7 +54,7 @@ Time from `POST /v1/deployments` to `serving` depends on the provider's pod-leas
 | `huggingface`, small model (≤3B) | ~1–3 min |
 | `huggingface`, 7–13B | ~3–6 min |
 | `huggingface`, 30B+ | ~6–15 min (depends on cache hit) |
-| `training_job` (your fine-tune) | ~1–3 min — checkpoint already on Veri-managed S3, no HF download |
+| `training_job` (your trained model) | ~1–3 min — checkpoint already on Veri-managed S3, no HF download |
 
 These are operational expectations, not contractual. The slowest part is usually the model weight download from HF. Once a deployment is `serving`, individual chat requests have sub-second TTFB on small models.
 
@@ -100,8 +77,8 @@ Common fix: bump to a larger GPU (`A100-80GB` → `H100-80GB`) or add a second G
 ## Where to go next
 
 <CardGroup cols={2}>
-  <Card title="Cost & pricing" icon="dollar-sign" href="/deployments/cost">
-    Per-hour rates and the idle-stop warning.
+  <Card title="Billing" icon="dollar-sign" href="/deployments/cost">
+    Billing states and the idle-stop warning.
   </Card>
   <Card title="OpenAI compatibility" icon="code" href="/deployments/openai-compat">
     What works, what doesn't.

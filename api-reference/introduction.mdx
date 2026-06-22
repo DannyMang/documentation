@@ -65,26 +65,12 @@ API keys use the `vk_` prefix and are hashed server-side. See [API Keys](/api-re
 | `GET` | `/v1/deployments/{id}/requests` | List per-request logs |
 | `GET` | `/v1/deployments/{id}/metrics` | Get aggregate metrics |
 
-### Cost
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/v1/cost/summary` | Get spend summary |
-| `GET` | `/v1/cost/by_provider` | Break down spend by provider |
-| `GET` | `/v1/cost/by_gpu` | Break down spend by GPU type |
-| `GET` | `/v1/cost/estimate` | Estimate cost from GPU shape and duration |
-| `GET` | `/v1/cost/monthly_projection` | Project monthly spend |
-| `GET` | `/v1/cost/compare` | Compare provider costs |
-| `GET` | `/v1/cost/rates` | Get current GPU rates |
-
 ### Billing
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/v1/billing/balance` | Get credit balance |
 | `GET` | `/v1/billing/transactions` | List balance transactions |
-| `POST` | `/v1/billing/check_balance` | Check whether a job can be covered by credits |
-| `GET` | `/v1/billing/burn_rate` | Get current credit burn rate from active jobs and deployments |
 
 ### API Keys
 

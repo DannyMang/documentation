@@ -1,95 +1,146 @@
 ---
 title: "Deploy a model"
 sidebarTitle: "Deployments Quickstart"
-description: "Spin up a deployment from a base Hugging Face model, chat with it via the OpenAI SDK, then stop it."
+description: "Spin up a deployment from a base Hugging Face model and chat with it via the CLI or any OpenAI-compatible client"
 keywords: ["quickstart", "deploy", "deployment", "inference", "OpenAI compatible"]
 ---
 
 {/* doctest-page-gpu-required */}
 
-This walks through serving a model end-to-end: create a deployment, wait for it to be ready, send chat requests via both the Veri SDK and the OpenAI SDK, then stop it so you don't keep paying.
+This walks through serving a model end-to-end: create a deployment, wait for it to be ready, send chat requests, then stop it so you don't keep paying.
 
-We use **Qwen2.5-0.5B-Instruct** so it boots quickly. Swap in any HF model name once you've seen it work — or pass a training job ID instead to serve your own fine-tuned checkpoint.
+We use **Qwen2.5-0.5B-Instruct** so it boots quickly. Swap in any HF model name once you've seen it work. You may also pass a training job ID instead to serve your own trained checkpoint.
 
 <Warning>
-  This quickstart spends real GPU credit. Deployments charge by the hour while they're running, and there's no idle auto-stop. Check your balance with `veri billing balance` before you start, and make sure you call `dep.stop()` at the end.
+  This quickstart spends real GPU credit. Deployments charge by the hour while they're running, and there's no idle auto-stop. Check your balance with `veri billing balance` before you start, and remember to stop the deployment at the end.
 </Warning>
 
 <Steps>
   <Step title="Prereq: log in">
-    If you haven't already, finish the [Quickstart](/quickstart) — you need an installed SDK and `veri login` done.
+    If you haven't already, finish the [Quickstart](/quickstart) so `veri login` is done.
 
-    ```python
-    from veri_sdk import Client
-    client = Client()
+    ```bash
+    veri whoami
     ```
   </Step>
 
   <Step title="Create a deployment">
-    ```python
-    dep = client.deployments.create(
-        model="Qwen/Qwen2.5-0.5B-Instruct",
-        source="huggingface",
-        name="my-first-deploy",
-        gpu={"gpu_type": "A100-80GB", "gpu_count": 1},
-    )
+    <Tabs>
+      <Tab title="CLI">
+        ```bash
+        veri deployments create \
+          --from-hf Qwen/Qwen2.5-0.5B-Instruct \
+          --name my-first-deploy \
+          --gpu-type A100-80GB \
+          --gpu-count 1
+        ```
 
-    print(f"Deployment {dep.id} — status: {dep.status}")
-    ```
+        Copy the printed deployment ID and export it for the rest of this page:
 
-    To serve your own fine-tuned model from a completed training job, swap to:
+        ```bash
+        export DEP_ID=dep_abc        # paste the id you got back
+        ```
 
-    ```python
-    dep = client.deployments.create(
-        model=job.id,
-        source="training_job",
-        name="my-fine-tuned-model",
-        gpu={"gpu_type": "A100-80GB", "gpu_count": 1},
-    )
-    ```
+        To serve your own trained model from a completed training job, swap `--from-hf` for `--model <job-id>`.
+      </Tab>
+      <Tab title="Python SDK">
+        ```python
+        from veri_sdk import Client
+        client = Client()
+
+        dep = client.deployments.create(
+            model="Qwen/Qwen2.5-0.5B-Instruct",
+            source="huggingface",
+            name="my-first-deploy",
+            gpu={"gpu_type": "A100-80GB", "gpu_count": 1},
+        )
+
+        print(f"Deployment {dep.id} — status: {dep.status}")
+        ```
+
+        To serve your own trained model, pass `model=job.id, source="training_job"` instead.
+      </Tab>
+    </Tabs>
   </Step>
 
   <Step title="Wait for serving">
-    ```python
-    dep.wait()
-    print(f"Endpoint: {dep.endpoint_url}")
-    ```
+    A 0.5B model typically reaches `serving` in 1 to 3 minutes. Larger models take longer to pull weights.
 
-    A 0.5B model typically reaches `serving` in 1–3 minutes. Larger models take longer to pull weights.
+    <Tabs>
+      <Tab title="CLI">
+        ```bash
+        until veri deployments get $DEP_ID --format json | jq -r .status | grep -q serving; do
+          sleep 10
+        done
+
+        veri deployments get $DEP_ID --format json | jq -r .endpoint_url
+        ```
+      </Tab>
+      <Tab title="Python SDK">
+        ```python
+        dep.wait()
+        print(f"Endpoint: {dep.endpoint_url}")
+        ```
+      </Tab>
+    </Tabs>
   </Step>
 
-  <Step title="Chat with it (Veri SDK)">
-    ```python
-    response = dep.chat([
-        {"role": "user", "content": "What is 12 + 7?"},
-    ])
+  <Step title="Chat with it">
+    <Tabs>
+      <Tab title="CLI">
+        ```bash
+        veri deployments chat $DEP_ID --message "What is 12 + 7?"
+        ```
+      </Tab>
+      <Tab title="Python SDK">
+        ```python
+        response = dep.chat([
+            {"role": "user", "content": "What is 12 + 7?"},
+        ])
 
-    print(response["choices"][0]["message"]["content"])
-    ```
+        print(response["choices"][0]["message"]["content"])
+        ```
 
-    The response payload is OpenAI-compatible — same shape as `chat.completions.create`.
+        The response payload is OpenAI-compatible (same shape as `chat.completions.create`).
+      </Tab>
+    </Tabs>
   </Step>
 
-  <Step title="Chat with it (OpenAI SDK)">
-    Because the endpoint is OpenAI-compatible, you can point the official OpenAI SDK at it:
+  <Step title="Call it as an OpenAI endpoint">
+    Each deployment exposes an OpenAI-compatible `/chat/completions` URL, so any tool that speaks OpenAI (LangChain, LlamaIndex, Vercel AI SDK, your existing code) works without changes.
 
-    ```python
-    from openai import OpenAI
+    <Tabs>
+      <Tab title="curl">
+        ```bash
+        ENDPOINT=$(veri deployments get $DEP_ID --format json | jq -r .endpoint_url)
 
-    oai = OpenAI(
-        base_url=dep.endpoint_url,
-        api_key="vk_your_key_here",
-    )
+        curl -s "$ENDPOINT/chat/completions" \
+          -H "Authorization: Bearer $VERI_API_KEY" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "model": "my-first-deploy",
+            "messages": [{"role": "user", "content": "What is 12 + 7?"}]
+          }' | jq .choices[0].message.content
+        ```
+      </Tab>
+      <Tab title="OpenAI Python SDK">
+        ```python
+        from openai import OpenAI
 
-    response = oai.chat.completions.create(
-        model=dep.name,
-        messages=[{"role": "user", "content": "What is 12 + 7?"}],
-    )
+        oai = OpenAI(
+            base_url=dep.endpoint_url,
+            api_key="vk_your_key_here",
+        )
 
-    print(response.choices[0].message.content)
-    ```
+        response = oai.chat.completions.create(
+            model=dep.name,
+            messages=[{"role": "user", "content": "What is 12 + 7?"}],
+        )
 
-    This means any tool that talks OpenAI — LangChain, LlamaIndex, Vercel AI SDK, your own existing code — works against a Veri deployment without changes.
+        print(response.choices[0].message.content)
+        ```
+      </Tab>
+    </Tabs>
   </Step>
 
   <Step title="Stop the deployment">
@@ -97,28 +148,38 @@ We use **Qwen2.5-0.5B-Instruct** so it boots quickly. Swap in any HF model name 
       Don't skip this. Idle deployments accrue cost.
     </Warning>
 
-    ```python
-    dep.stop()
+    <Tabs>
+      <Tab title="CLI">
+        ```bash
+        veri deployments stop $DEP_ID
 
-    # Refresh and read final cost
-    final = client.deployments.get(dep.id)
-    print(f"Total cost: ${final.total_cost_usd:.4f}")
-    print(f"Requests served: {final.total_requests}")
-    ```
+        veri deployments get $DEP_ID --format json \
+          | jq '{total_requests}'
+        ```
+      </Tab>
+      <Tab title="Python SDK">
+        ```python
+        dep.stop()
+
+        final = client.deployments.get(dep.id)
+        print(f"Requests served: {final.total_requests}")
+        ```
+      </Tab>
+    </Tabs>
   </Step>
 </Steps>
 
 ## What's next
 
 <CardGroup cols={2}>
-  <Card title="Evaluate this deployment" icon="chart-line" href="/quickstart/eval">
+  <Card title="Evaluate this deployment" icon="chart-line" href="/evaluations">
     Score the model you just deployed on a held-out dataset.
   </Card>
-  <Card title="Fine-tune your own model" icon="brain" href="/quickstart/fine-tune">
-    Replace the HF model with one you fine-tuned for your task.
+  <Card title="Train your own model" icon="brain" href="/training">
+    Replace the HF model with one you trained for your task.
   </Card>
   <Card title="Deployments, deeper" icon="cloud" href="/deployments">
-    Full surface: lifecycle, observability, cost model, OpenAI interop.
+    Full surface: lifecycle, observability, billing, OpenAI interop.
   </Card>
   <Card title="Inspect requests" icon="list" href="/api-reference/deployments">
     Read recent requests and per-deployment metrics.
