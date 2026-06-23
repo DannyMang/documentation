@@ -20,6 +20,7 @@
         "tags": [
           "API keys"
         ],
+        "summary": "List API keys",
         "operationId": "list",
         "parameters": [
           {
@@ -62,6 +63,7 @@
         "tags": [
           "API keys"
         ],
+        "summary": "Create API key",
         "operationId": "create",
         "requestBody": {
           "content": {
@@ -100,6 +102,7 @@
         "tags": [
           "API keys"
         ],
+        "summary": "Revoke API key",
         "operationId": "revoke",
         "parameters": [
           {
@@ -139,6 +142,7 @@
         "tags": [
           "Billing"
         ],
+        "summary": "Get credit balance",
         "operationId": "balance",
         "parameters": [
           {
@@ -174,6 +178,7 @@
         "tags": [
           "Billing"
         ],
+        "summary": "Get burn rate",
         "operationId": "burn_rate",
         "responses": {
           "200": {
@@ -199,6 +204,7 @@
         "tags": [
           "Billing"
         ],
+        "summary": "List transactions",
         "operationId": "transactions",
         "parameters": [
           {
@@ -243,6 +249,7 @@
         "tags": [
           "Code artifacts"
         ],
+        "summary": "Upload code artifact",
         "operationId": "create",
         "requestBody": {
           "description": "Custom training script bundle (code.tar.gz) under the `file` field",
@@ -277,6 +284,7 @@
         "tags": [
           "Datasets"
         ],
+        "summary": "List datasets",
         "operationId": "list",
         "parameters": [
           {
@@ -319,6 +327,7 @@
         "tags": [
           "Datasets"
         ],
+        "summary": "Upload dataset",
         "operationId": "create",
         "requestBody": {
           "description": "JSONL dataset file upload",
@@ -353,6 +362,7 @@
         "tags": [
           "Datasets"
         ],
+        "summary": "Connect dataset source",
         "operationId": "connect",
         "requestBody": {
           "content": {
@@ -391,6 +401,7 @@
         "tags": [
           "Datasets"
         ],
+        "summary": "Validate dataset source",
         "operationId": "validate_connection",
         "requestBody": {
           "content": {
@@ -429,6 +440,7 @@
         "tags": [
           "Datasets"
         ],
+        "summary": "Get dataset",
         "operationId": "get",
         "parameters": [
           {
@@ -468,6 +480,7 @@
         "tags": [
           "Deployments"
         ],
+        "summary": "List deployments",
         "operationId": "list",
         "parameters": [
           {
@@ -518,6 +531,7 @@
         "tags": [
           "Deployments"
         ],
+        "summary": "Create deployment",
         "operationId": "create",
         "requestBody": {
           "content": {
@@ -556,6 +570,7 @@
         "tags": [
           "Deployments"
         ],
+        "summary": "Get deployment",
         "operationId": "get",
         "parameters": [
           {
@@ -595,6 +610,7 @@
         "tags": [
           "Deployments"
         ],
+        "summary": "Create chat completion",
         "operationId": "chat_completions",
         "parameters": [
           {
@@ -643,6 +659,7 @@
         "tags": [
           "Deployments"
         ],
+        "summary": "Get deployment metrics",
         "operationId": "metrics",
         "parameters": [
           {
@@ -682,6 +699,7 @@
         "tags": [
           "Deployments"
         ],
+        "summary": "List deployment requests",
         "operationId": "requests",
         "parameters": [
           {
@@ -738,6 +756,7 @@
         "tags": [
           "Deployments"
         ],
+        "summary": "Stop deployment",
         "operationId": "stop",
         "parameters": [
           {
@@ -777,6 +796,7 @@
         "tags": [
           "Evaluations"
         ],
+        "summary": "List evaluations",
         "operationId": "list",
         "parameters": [
           {
@@ -819,6 +839,7 @@
         "tags": [
           "Evaluations"
         ],
+        "summary": "Create evaluation",
         "operationId": "create",
         "requestBody": {
           "content": {
@@ -857,6 +878,7 @@
         "tags": [
           "Evaluations"
         ],
+        "summary": "Get evaluation",
         "operationId": "get",
         "parameters": [
           {
@@ -894,6 +916,7 @@
         "tags": [
           "Evaluations"
         ],
+        "summary": "Delete evaluation",
         "operationId": "delete",
         "parameters": [
           {
@@ -926,6 +949,7 @@
         "tags": [
           "Evaluations"
         ],
+        "summary": "List evaluation runs",
         "operationId": "list_runs",
         "parameters": [
           {
@@ -980,6 +1004,7 @@
         "tags": [
           "Evaluations"
         ],
+        "summary": "Create evaluation run",
         "operationId": "create_run",
         "parameters": [
           {
@@ -1032,6 +1057,7 @@
         "tags": [
           "Evaluations"
         ],
+        "summary": "Get evaluation run",
         "operationId": "get_run",
         "parameters": [
           {
@@ -1078,6 +1104,7 @@
         "tags": [
           "Evaluations"
         ],
+        "summary": "Delete evaluation run",
         "operationId": "delete_run",
         "parameters": [
           {
@@ -1119,6 +1146,7 @@
         "tags": [
           "Evaluations"
         ],
+        "summary": "Cancel evaluation run",
         "operationId": "cancel_run",
         "parameters": [
           {
@@ -1170,6 +1198,7 @@
         "tags": [
           "Evaluations"
         ],
+        "summary": "List run items",
         "operationId": "list_run_items",
         "parameters": [
           {
@@ -1235,6 +1264,7 @@
         "tags": [
           "Models"
         ],
+        "summary": "List models",
         "operationId": "list",
         "responses": {
           "200": {
@@ -1260,6 +1290,7 @@
         "tags": [
           "Models"
         ],
+        "summary": "Import model",
         "operationId": "import",
         "requestBody": {
           "content": {
@@ -1298,6 +1329,7 @@
         "tags": [
           "Models"
         ],
+        "summary": "Register model",
         "operationId": "register",
         "requestBody": {
           "content": {
@@ -1336,6 +1368,7 @@
         "tags": [
           "Models"
         ],
+        "summary": "Get model",
         "operationId": "get",
         "parameters": [
           {
@@ -1375,6 +1408,7 @@
         "tags": [
           "Models"
         ],
+        "summary": "Create model upload URL",
         "operationId": "presigned_upload",
         "parameters": [
           {
@@ -1427,7 +1461,7 @@
         "tags": [
           "Regions"
         ],
-        "summary": "GET /v1/regions. Auth-gated like the other v1 list endpoints. Returns the\noffered regions in registry order with the default flagged.",
+        "summary": "List regions",
         "operationId": "list",
         "responses": {
           "200": {
@@ -1453,6 +1487,7 @@
         "tags": [
           "Reward functions"
         ],
+        "summary": "List reward functions",
         "operationId": "list",
         "parameters": [
           {
@@ -1495,6 +1530,7 @@
         "tags": [
           "Reward functions"
         ],
+        "summary": "Upload reward function",
         "operationId": "create",
         "requestBody": {
           "description": "Reward function file upload",
@@ -1529,6 +1565,7 @@
         "tags": [
           "Reward functions"
         ],
+        "summary": "Get reward function",
         "operationId": "get",
         "parameters": [
           {
@@ -1568,6 +1605,7 @@
         "tags": [
           "SSH keys"
         ],
+        "summary": "List SSH keys",
         "operationId": "list",
         "parameters": [
           {
@@ -1610,6 +1648,7 @@
         "tags": [
           "SSH keys"
         ],
+        "summary": "Upload SSH key",
         "operationId": "create",
         "requestBody": {
           "content": {
@@ -1648,6 +1687,7 @@
         "tags": [
           "SSH keys"
         ],
+        "summary": "Delete SSH key",
         "operationId": "delete",
         "parameters": [
           {
@@ -1687,6 +1727,7 @@
         "tags": [
           "Training jobs"
         ],
+        "summary": "List training jobs",
         "operationId": "list",
         "parameters": [
           {
@@ -1745,6 +1786,7 @@
         "tags": [
           "Training jobs"
         ],
+        "summary": "Create training job",
         "operationId": "submit",
         "requestBody": {
           "content": {
@@ -1786,6 +1828,7 @@
         "tags": [
           "Training jobs"
         ],
+        "summary": "Get training job",
         "operationId": "get",
         "parameters": [
           {
@@ -1823,6 +1866,7 @@
         "tags": [
           "Training jobs"
         ],
+        "summary": "Delete training job",
         "operationId": "delete",
         "parameters": [
           {
@@ -1865,6 +1909,7 @@
         "tags": [
           "Training jobs"
         ],
+        "summary": "Cancel training job",
         "operationId": "cancel",
         "parameters": [
           {
@@ -1907,6 +1952,7 @@
         "tags": [
           "Training jobs"
         ],
+        "summary": "Get job events",
         "operationId": "events",
         "parameters": [
           {
@@ -1952,6 +1998,7 @@
         "tags": [
           "Training jobs"
         ],
+        "summary": "Get training metrics",
         "operationId": "metrics",
         "parameters": [
           {
@@ -2023,6 +2070,7 @@
         "tags": [
           "Training jobs"
         ],
+        "summary": "Get model checkpoint",
         "operationId": "model",
         "parameters": [
           {
@@ -2062,6 +2110,7 @@
         "tags": [
           "Volumes"
         ],
+        "summary": "List volumes",
         "operationId": "list",
         "parameters": [
           {
@@ -2104,6 +2153,7 @@
         "tags": [
           "Volumes"
         ],
+        "summary": "Create volume",
         "operationId": "create",
         "requestBody": {
           "content": {
@@ -2142,6 +2192,7 @@
         "tags": [
           "Volumes"
         ],
+        "summary": "Get volume",
         "operationId": "get",
         "parameters": [
           {
@@ -2179,6 +2230,7 @@
         "tags": [
           "Volumes"
         ],
+        "summary": "Delete volume",
         "operationId": "delete",
         "parameters": [
           {
@@ -2211,6 +2263,7 @@
         "tags": [
           "Volumes"
         ],
+        "summary": "List volume files",
         "operationId": "list_files",
         "parameters": [
           {
@@ -2267,6 +2320,7 @@
         "tags": [
           "Volumes"
         ],
+        "summary": "Delete volume file",
         "operationId": "delete_file",
         "parameters": [
           {
@@ -2308,6 +2362,7 @@
         "tags": [
           "Volumes"
         ],
+        "summary": "Create upload URL",
         "operationId": "create_upload_url",
         "parameters": [
           {
@@ -2360,6 +2415,7 @@
         "tags": [
           "Volumes"
         ],
+        "summary": "Complete multipart upload",
         "operationId": "complete_upload",
         "parameters": [
           {
@@ -2412,6 +2468,7 @@
         "tags": [
           "Volumes"
         ],
+        "summary": "Create upload part URL",
         "operationId": "create_upload_part_url",
         "parameters": [
           {
