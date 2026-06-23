@@ -14,6 +14,15 @@
     "href": "/"
   },
   "favicon": "/favicon.ico",
+  "api": {
+    "openapi": "api-reference/openapi.json",
+    "playground": {
+      "display": "interactive"
+    },
+    "examples": {
+      "languages": ["bash", "python", "javascript"]
+    }
+  },
   "navigation": {
     "tabs": [
       {
@@ -88,6 +97,7 @@
           {
             "group": "Curated demos",
             "pages": [
+              "demos/managed-grpo-quickstart",
               "demos/sft-unsloth",
               "demos/slime-glm-4-7-flash-8xh100",
               "demos/verl-gsm8k-ppo",
@@ -106,34 +116,142 @@
             "pages": ["api-reference/introduction"]
           },
           {
+            "group": "Training jobs",
+            "openapi": "api-reference/openapi.json",
+            "pages": [
+              "POST /v1/training_jobs",
+              "GET /v1/training_jobs",
+              "GET /v1/training_jobs/{job_id}",
+              "POST /v1/training_jobs/{job_id}/cancel",
+              "DELETE /v1/training_jobs/{job_id}",
+              "GET /v1/training_jobs/{job_id}/events",
+              "GET /v1/training_jobs/{job_id}/metrics",
+              "GET /v1/training_jobs/{job_id}/model"
+            ]
+          },
+          {
             "group": "Datasets",
-            "pages": ["api-reference/datasets"]
+            "openapi": "api-reference/openapi.json",
+            "pages": [
+              "POST /v1/datasets",
+              "POST /v1/datasets/connect",
+              "POST /v1/datasets/connect/validate",
+              "GET /v1/datasets",
+              "GET /v1/datasets/{dataset_id}"
+            ]
           },
           {
             "group": "Reward functions",
-            "pages": ["api-reference/reward-functions"]
-          },
-          {
-            "group": "Training jobs",
-            "pages": ["api-reference/training-jobs"]
+            "openapi": "api-reference/openapi.json",
+            "pages": [
+              "POST /v1/reward_functions",
+              "GET /v1/reward_functions",
+              "GET /v1/reward_functions/{reward_id}"
+            ]
           },
           {
             "group": "Deployments",
-            "pages": ["api-reference/deployments"]
+            "openapi": "api-reference/openapi.json",
+            "pages": [
+              "POST /v1/deployments",
+              "GET /v1/deployments",
+              "GET /v1/deployments/{deployment_id}",
+              "POST /v1/deployments/{deployment_id}/chat/completions",
+              "GET /v1/deployments/{deployment_id}/metrics",
+              "GET /v1/deployments/{deployment_id}/requests",
+              "POST /v1/deployments/{deployment_id}/stop"
+            ]
           },
           {
             "group": "Evaluations",
-            "pages": ["api-reference/evaluations"]
+            "openapi": "api-reference/openapi.json",
+            "pages": [
+              "POST /v1/evals",
+              "GET /v1/evals",
+              "GET /v1/evals/{eval_id}",
+              "DELETE /v1/evals/{eval_id}",
+              "POST /v1/evals/{eval_id}/runs",
+              "GET /v1/evals/{eval_id}/runs",
+              "GET /v1/evals/{eval_id}/runs/{run_id}",
+              "DELETE /v1/evals/{eval_id}/runs/{run_id}",
+              "POST /v1/evals/{eval_id}/runs/{run_id}/cancel",
+              "GET /v1/evals/{eval_id}/runs/{run_id}/items"
+            ]
           },
           {
             "group": "Volumes",
-            "pages": ["api-reference/volumes"]
+            "openapi": "api-reference/openapi.json",
+            "pages": [
+              "POST /v1/volumes",
+              "GET /v1/volumes",
+              "GET /v1/volumes/{name}",
+              "DELETE /v1/volumes/{name}",
+              "GET /v1/volumes/{name}/files",
+              "DELETE /v1/volumes/{name}/files/{path}",
+              "POST /v1/volumes/{name}/upload-url",
+              "POST /v1/volumes/{name}/upload-url/complete",
+              "POST /v1/volumes/{name}/upload-url/part"
+            ]
+          },
+          {
+            "group": "Models",
+            "openapi": "api-reference/openapi.json",
+            "pages": [
+              "GET /v1/models",
+              "POST /v1/models/register",
+              "POST /v1/models/import",
+              "GET /v1/models/{id}",
+              "POST /v1/models/{id}/presigned-upload"
+            ]
+          },
+          {
+            "group": "Code artifacts",
+            "openapi": "api-reference/openapi.json",
+            "pages": ["POST /v1/code_artifacts"]
+          },
+          {
+            "group": "Regions",
+            "openapi": "api-reference/openapi.json",
+            "pages": ["GET /v1/regions"]
+          },
+          {
+            "group": "Billing",
+            "openapi": "api-reference/openapi.json",
+            "pages": [
+              "GET /v1/billing/balance",
+              "GET /v1/billing/transactions",
+              "GET /v1/billing/burn_rate"
+            ]
+          },
+          {
+            "group": "API keys",
+            "openapi": "api-reference/openapi.json",
+            "pages": [
+              "POST /v1/api_keys",
+              "GET /v1/api_keys",
+              "DELETE /v1/api_keys/{key_id}"
+            ]
+          },
+          {
+            "group": "SSH keys",
+            "openapi": "api-reference/openapi.json",
+            "pages": [
+              "POST /v1/ssh_keys",
+              "GET /v1/ssh_keys",
+              "DELETE /v1/ssh_keys/{key_id}"
+            ]
           }
         ]
       }
     ]
   },
   "redirects": [
+    { "source": "/api-reference/training-jobs", "destination": "/api-reference/introduction" },
+    { "source": "/api-reference/datasets", "destination": "/api-reference/introduction" },
+    { "source": "/api-reference/reward-functions", "destination": "/api-reference/introduction" },
+    { "source": "/api-reference/deployments", "destination": "/api-reference/introduction" },
+    { "source": "/api-reference/evaluations", "destination": "/api-reference/introduction" },
+    { "source": "/api-reference/volumes", "destination": "/api-reference/introduction" },
     { "source": "/fine-tuning", "destination": "/training" },
     { "source": "/fine-tuning/datasets", "destination": "/training/datasets" },
     { "source": "/fine-tuning/reward-functions", "destination": "/training/reward-functions" },

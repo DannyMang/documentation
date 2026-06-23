@@ -23,7 +23,7 @@ Each line is one training example:
 ```
 
 - **`prompt`** (required) — string OR list of OpenAI-format message dicts
-- **`answer`** / **`label`** — ground truth used by your reward function (optional but typically present)
+- **`answer`** — ground truth used by your reward function (optional but typically present). The column name is passed to your reward as a keyword argument of the same name, so it must match what the function reads. Every example here uses `answer`; if you map it to another name, read that name instead.
 
 The validation step at upload rejects any row missing `prompt`.
 
@@ -137,7 +137,7 @@ Connecting two datasets with the same `name` but different source config returns
   <Card title="Reward functions" icon="scale-balanced" href="/training/reward-functions">
     Score completions with TRL-format functions.
   </Card>
-  <Card title="Submit a training job" icon="brain" href="/api-reference/training-jobs">
+  <Card title="Submit a training job" icon="brain" href="/api-reference/introduction">
     Use your dataset_id in `training_jobs.create`.
   </Card>
   <Card title="Quickstart" icon="rocket" href="/training">
