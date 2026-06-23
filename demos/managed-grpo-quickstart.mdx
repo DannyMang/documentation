@@ -1,0 +1,114 @@
+---
+title: "Managed GRPO in five minutes"
+sidebarTitle: "Managed GRPO quickstart"
+description: "The shortest end-to-end managed training run on Veri: one decorated reward function and one command."
+keywords: ["demo", "quickstart", "managed training", "GRPO", "GSM8K", "veri train"]
+---
+
+{/* doctest-page-gpu-required */}
+
+The shortest path to a trained model on Veri. [Managed GRPO](/training/managed) is **one decorator and one command**: define a reward function, decorate it with your config, and run `veri train`. Veri uploads the reward, connects the dataset, provisions the GPU, runs the loop, streams metrics, and captures the checkpoint.
+
+This trains **Qwen2.5-0.5B-Instruct** on [GSM8K](https://huggingface.co/datasets/openai/gsm8k) for 50 GRPO steps on a single **L4** (24 GB) — a fast smoke test.
+
+<Warning>
+  This spends real GPU credit. Check your balance with `veri billing balance` first.
+</Warning>
+
+## Prerequisites
+
+- Install the SDK: `pip install veri-sdk`
+- Authenticate: `veri login` (or set `VERI_API_KEY`)
+
+## Write the script
+
+Save as `train.py`:
+
+```python train.py
+from veri_sdk import training_job
+
+
+@training_job(
+    base_model="Qwen/Qwen2.5-0.5B-Instruct",
+    dataset="hf:openai/gsm8k",
+    dataset_config="main",
+    column_mapping={"question": "prompt"},
+    gpu_type="L4-24GB",
+    gpu_count=1,
+    hyperparameters={
+        "learning_rate": 1e-6,
+        "rollouts_per_prompt": 4,
+        "max_response_length": 512,
+        "kl_coef": 0.001,
+        "max_steps": 50,
+        # Without this, a small base model never discovers the <answer> format
+        # on its own, every completion scores 0, and GRPO has no signal to learn
+        # from. The system prompt gives it the output shape to aim at.
+        "system_prompt": (
+            "You are a math tutor. Think step by step, then put ONLY the final "
+            "numeric answer inside <answer></answer> tags, e.g. <answer>42</answer>."
+        ),
+    },
+)
+def reward(completions, answer, **kwargs):
+    """Score each model completion from 0.0 to 1.0 (higher = better).
+
+    GRPO calls this every step with a batch of `completions` (what the model
+    generated) and `answer` (the ground-truth labels from the dataset's
+    `answer` column). You return one float per completion; the model is
+    trained to maximize it. The reward function IS the task definition.
+
+    This reward has two equally weighted halves:
+      - format  (0.5): did the model wrap its answer in <answer>...</answer>?
+      - correct (0.5): does the final answer inside those tags match?
+    Scoring format separately gives the model an easy early signal to learn the
+    output shape before it has to get the math right.
+    """
+    import re
+
+    scores = []
+    for c, expected in zip(completions, answer):
+        # A completion is a chat-message list; take the assistant's text.
+        text = c[-1]["content"] if isinstance(c, list) else str(c)
+
+        # GSM8K's `answer` is a full worked solution ending in "#### <final>".
+        # Grade against just that final value, not the whole solution text.
+        gold = expected.split("####")[-1].strip()
+
+        # Half the reward: did it use the <answer>...</answer> format at all?
+        m = re.search(r"<answer>(.*?)</answer>", text, re.DOTALL)
+        format_ok = bool(m)
+
+        # Other half: is the gold final answer actually inside those tags?
+        correct = bool(m and gold and gold in m.group(1).strip())
+
+        scores.append(0.5 * float(format_ok) + 0.5 * float(correct))
+    return scores
+```
+
+The decorator is metadata only. `veri train` does the upload, submit, and wait.
+
+## Run it
+
+```bash
+veri train train.py
+```
+
+Veri bundles the reward, connects GSM8K, submits the job, and streams status to completion. Open the dashboard URL it prints to watch the live reward curve.
+
+## Get the checkpoint
+
+```bash
+veri jobs download <job-id> --output ./checkpoints
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Managed training" icon="graduation-cap" href="/training/managed">
+    Methods, lifecycle, failure modes, and what each hyperparameter controls.
+  </Card>
+  <Card title="Deploy your checkpoint" icon="cloud" href="/deployments">
+    Serve it with an OpenAI-compatible API.
+  </Card>
+</CardGroup>
