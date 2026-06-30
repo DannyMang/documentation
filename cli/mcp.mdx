@@ -1,0 +1,93 @@
+---
+title: "veri mcp — Model Context Protocol server"
+sidebarTitle: "veri mcp"
+description: "Run a local MCP server so Claude Desktop, Claude Code, and Cursor can drive Veri: list and inspect jobs and deployments, estimate cost, and create or cancel runs."
+keywords: ["veri mcp", "MCP", "Model Context Protocol", "Claude Desktop", "Cursor", "agent"]
+---
+
+`veri mcp serve` runs a [Model Context Protocol](https://modelcontextprotocol.io) server over stdio that exposes Veri as a set of tools. MCP clients such as Claude Desktop, Claude Code, and Cursor can then list and inspect your training jobs and deployments, estimate cost, check your balance, chat with a running deployment, and submit or cancel runs on your behalf.
+
+The server is a thin layer over the same API the SDK and CLI use. It runs on your machine and authenticates with your existing credentials, so it can do exactly what you can do from the CLI, nothing more.
+
+## Prerequisites
+
+- A Veri account. Run `veri login` once so the server can read your credentials.
+- The optional `mcp` extra:
+
+```bash
+pip install 'veri-sdk[mcp]'
+```
+
+## Configure your client
+
+Add Veri to your MCP client's server config. The command is `veri mcp serve`:
+
+```json
+{
+  "mcpServers": {
+    "veri": {
+      "command": "veri",
+      "args": ["mcp", "serve"]
+    }
+  }
+}
+```
+
+Restart the client. The Veri tools become available in the next session.
+
+## Read-only mode
+
+By default every tool is available, including ones that create billable GPU jobs and deployments. Your MCP client prompts you to approve each tool call, so creation is gated by that approval. Tools that spend credits have descriptions that begin with `CREATES A BILLABLE ...` so the intent is clear in the approval prompt.
+
+For an automated or unattended setup where no human approves each call, run the server read-only so the creation and cancellation tools are not registered at all:
+
+```json
+{
+  "mcpServers": {
+    "veri": {
+      "command": "veri",
+      "args": ["mcp", "serve", "--readonly"]
+    }
+  }
+}
+```
+
+Setting the environment variable `VERI_MCP_READONLY=1` has the same effect.
+
+## Available tools
+
+### Read tools (always available)
+
+| Tool | What it does |
+| --- | --- |
+| `veri_list_training_jobs` | List training jobs, with optional status and method filters. |
+| `veri_get_training_job` | Get one job: status, cost, dashboard URL, and any error. |
+| `veri_list_deployments` | List deployments, with an optional status filter. |
+| `veri_get_deployment` | Get one deployment: status, endpoint, GPU, and running cost. |
+| `veri_list_models` | List custom models in your registry. |
+| `veri_list_datasets` | List datasets available for training. |
+| `veri_list_regions` | List the launch regions you can target. |
+| `veri_estimate_cost` | Estimate the cost of a GPU job before submitting it. |
+| `veri_billing_balance` | Get your current credit balance. |
+| `veri_chat_deployment` | Send a chat request to a running deployment. |
+
+### Write tools (available unless read-only)
+
+| Tool | What it does |
+| --- | --- |
+| `veri_create_training_job` | Submit a managed training run. Returns the job and a pre-submit cost estimate. |
+| `veri_create_deployment` | Create an inference deployment from a training job or a HuggingFace model. |
+| `veri_cancel_training_job` | Cancel a queued or running job. |
+| `veri_stop_deployment` | Stop a running deployment. |
+| `veri_register_model` | Register a completed job's checkpoint as a reusable custom model. |
+
+## Working with datasets and reward functions
+
+The server does not upload local files. Upload your dataset and reward functions with the CLI first, then pass their ids to the agent:
+
+```bash
+veri datasets upload ./data/train.jsonl --name my-data
+veri rewards upload ./reward.py --name my-reward
+```
+
+The agent can then reference `my-data` and the reward id when it calls `veri_create_training_job`.

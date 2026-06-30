@@ -79,6 +79,7 @@
               "cli/deployments",
               "cli/evals",
               "cli/volumes",
+              "cli/mcp",
               "cli/reference"
             ]
           },
