@@ -1,26 +1,64 @@
 ---
-title: "veri mcp — Model Context Protocol server"
+title: "veri mcp: Model Context Protocol server"
 sidebarTitle: "veri mcp"
-description: "Run a local MCP server so Claude Desktop, Claude Code, and Cursor can drive Veri: list and inspect jobs and deployments, estimate cost, and create or cancel runs."
-keywords: ["veri mcp", "MCP", "Model Context Protocol", "Claude Desktop", "Cursor", "agent"]
+description: "Set up a local MCP server so Claude Code, Claude Desktop, and Cursor can drive Veri: list and inspect jobs and deployments, estimate cost, and create or cancel runs."
+keywords: ["veri mcp", "MCP", "Model Context Protocol", "Claude Code", "Claude Desktop", "Cursor", "agent"]
 ---
 
-`veri mcp serve` runs a [Model Context Protocol](https://modelcontextprotocol.io) server over stdio that exposes Veri as a set of tools. MCP clients such as Claude Desktop, Claude Code, and Cursor can then list and inspect your training jobs and deployments, estimate cost, check your balance, chat with a running deployment, and submit or cancel runs on your behalf.
+`veri mcp serve` runs a [Model Context Protocol](https://modelcontextprotocol.io) server over stdio that exposes Veri as a set of tools. MCP clients such as Claude Code, Claude Desktop, and Cursor can then list and inspect your training jobs and deployments, estimate cost, check your balance, chat with a running deployment, and submit or cancel runs on your behalf.
 
-The server is a thin layer over the same API the SDK and CLI use. It runs on your machine and authenticates with your existing credentials, so it can do exactly what you can do from the CLI, nothing more.
+The server runs on your own machine. Your MCP client starts it as a subprocess and talks to it over stdin/stdout, so there is nothing to host and no port to open. It authenticates with the same credentials the CLI uses, so it can do exactly what you can do from the CLI, nothing more.
 
-## Prerequisites
+## Setup
 
-- A Veri account. Run `veri login` once so the server can read your credentials.
-- The optional `mcp` extra:
+<Steps>
 
-```bash
-pip install 'veri-sdk[mcp]'
+<Step title="Install the SDK with the mcp extra">
+The MCP server ships with the SDK behind an optional `mcp` extra:
+
+<CodeGroup>
+```bash uv (recommended)
+uv tool install 'veri-sdk[mcp]'
 ```
 
-## Configure your client
+```bash pipx
+pipx install 'veri-sdk[mcp]'
+```
 
-Add Veri to your MCP client's server config. The command is `veri mcp serve`:
+```bash pip
+pip install 'veri-sdk[mcp]'
+```
+</CodeGroup>
+
+Confirm the command is available:
+
+```bash
+veri mcp serve --help
+```
+</Step>
+
+<Step title="Log in">
+The server reads your stored credentials, so log in once:
+
+```bash
+veri login
+```
+
+You never paste an API key into the MCP client. The server uses the credentials from `veri login` (or the `VERI_API_KEY` environment variable if you set one).
+</Step>
+
+<Step title="Register Veri in your client">
+Add Veri to your MCP client. The command the client runs is always `veri mcp serve`.
+
+**Claude Code** has a one-liner. The part after `--` is the command it will spawn:
+
+```bash
+claude mcp add veri -- veri mcp serve
+```
+
+By default this registers Veri for you in the current project. Use `-s user` to make it available in every project, or `-s project` to write a `.mcp.json` that your whole team shares (each teammate still runs their own `veri login`).
+
+**Claude Desktop** and **Cursor** are configured with a JSON file. Add a `veri` entry under `mcpServers`:
 
 ```json
 {
@@ -33,15 +71,36 @@ Add Veri to your MCP client's server config. The command is `veri mcp serve`:
 }
 ```
 
-Restart the client. The Veri tools become available in the next session.
+The file location depends on the client:
+
+| Client | Config file |
+| --- | --- |
+| Claude Desktop (macOS) | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Claude Desktop (Windows) | `%APPDATA%\Claude\claude_desktop_config.json` |
+| Cursor (global) | `~/.cursor/mcp.json` |
+| Cursor (per project) | `.cursor/mcp.json` in the project root |
+</Step>
+
+<Step title="Restart and verify">
+Restart the client so it picks up the new server.
+
+In Claude Code, run `claude mcp list` (or `/mcp` inside a session) and confirm `veri` shows as connected. In Claude Desktop and Cursor, the Veri tools appear once the server connects. Ask the agent something like "what is my Veri credit balance?" to confirm it can reach your account.
+</Step>
+
+</Steps>
 
 ## Read-only mode
 
 By default every tool is available, including ones that create billable GPU jobs and deployments. Your MCP client prompts you to approve each tool call, so creation is gated by that approval. Tools that spend credits have descriptions that begin with `CREATES A BILLABLE ...` so the intent is clear in the approval prompt.
 
-For an automated or unattended setup where no human approves each call, run the server read-only so the creation and cancellation tools are not registered at all:
+For an automated or unattended setup where no human approves each call, run the server read-only so the creation and cancellation tools are not registered at all. Pass `--readonly` in the command:
 
-```json
+<CodeGroup>
+```bash Claude Code
+claude mcp add veri -- veri mcp serve --readonly
+```
+
+```json Claude Desktop / Cursor
 {
   "mcpServers": {
     "veri": {
@@ -51,6 +110,7 @@ For an automated or unattended setup where no human approves each call, run the 
   }
 }
 ```
+</CodeGroup>
 
 Setting the environment variable `VERI_MCP_READONLY=1` has the same effect.
 
