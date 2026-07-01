@@ -1259,6 +1259,61 @@
         ]
       }
     },
+    "/v1/gpu/availability": {
+      "get": {
+        "tags": [
+          "GPU"
+        ],
+        "summary": "GPU availability by provider/region",
+        "operationId": "availability",
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "query",
+            "description": "\"aws\" | \"hotaisle\". Absent = every probeable provider we can reach.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "gpu_type",
+            "in": "query",
+            "description": "GPU-type filter (e.g. \"H100\", \"A100-80GB\", \"MI300X-192GB\"). Absent = all.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "region",
+            "in": "query",
+            "description": "Region filter. AWS: a real region. Hot Aisle: \"hotaisle-us\".",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Live GPU availability rows across providers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GpuAvailabilityList"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/models": {
       "get": {
         "tags": [
@@ -3046,6 +3101,13 @@
               "string",
               "null"
             ]
+          },
+          "engine": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Inference engine: \"vllm\" (default) or \"max\" (Modular MAX). Omitted => vllm."
           }
         }
       },
@@ -3207,6 +3269,12 @@
             ]
           },
           "provider": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "engine": {
             "type": [
               "string",
               "null"
@@ -3850,6 +3918,88 @@
           }
         }
       },
+      "GpuAvailabilityList": {
+        "type": "object",
+        "required": [
+          "object",
+          "availability"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "availability": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GpuAvailabilityRow"
+            }
+          }
+        }
+      },
+      "GpuAvailabilityRow": {
+        "type": "object",
+        "description": "One availability row. Mirrors the transport `AvailabilityRow` JSON (SA-3); the\ncontrol plane passes it through verbatim. Optional fields are provider-shaped,\nso `serde(default)` lets a row the transport omitted a field on still parse.",
+        "required": [
+          "provider",
+          "gpu_type",
+          "region",
+          "gpu_count",
+          "status"
+        ],
+        "properties": {
+          "provider": {
+            "type": "string"
+          },
+          "gpu_type": {
+            "type": "string"
+          },
+          "region": {
+            "type": "string"
+          },
+          "gpu_count": {
+            "type": "integer",
+            "format": "int32",
+            "description": "GPUs per launchable unit (Hot Aisle VM cards; AWS whole-node GPU count).",
+            "minimum": 0
+          },
+          "status": {
+            "type": "string",
+            "description": "\"AVAILABLE\" (Hot Aisle live qty>0), \"OFFERED\" (AWS catalog + spot proxy),\nor \"UNAVAILABLE\"."
+          },
+          "available": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Hot Aisle live count of launchable VMs of this shape (absent for AWS).",
+            "minimum": 0
+          },
+          "spot_score": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "AWS Spot placement score 1–10 proxy (absent for Hot Aisle)."
+          },
+          "price_per_hr": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "USD/hr where the provider publishes it (Hot Aisle). AWS on-demand price is\nserved by /v1/cost/rates, so it is absent here."
+          },
+          "detail": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Honest fidelity/units note."
+          }
+        }
+      },
       "GpuConfig": {
         "type": "object",
         "required": [
@@ -4396,6 +4546,12 @@
                   ]
                 },
                 "provider": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "engine": {
                   "type": [
                     "string",
                     "null"
@@ -5022,6 +5178,10 @@
                     "string",
                     "null"
                   ]
+                },
+                "num_nodes": {
+                  "type": "integer",
+                  "format": "int32"
                 },
                 "error": {
                   "oneOf": [
@@ -5755,6 +5915,10 @@
               "string",
               "null"
             ]
+          },
+          "num_nodes": {
+            "type": "integer",
+            "format": "int32"
           }
         }
       },
@@ -5856,6 +6020,10 @@
               "string",
               "null"
             ]
+          },
+          "num_nodes": {
+            "type": "integer",
+            "format": "int32"
           },
           "error": {
             "oneOf": [
@@ -6263,6 +6431,10 @@
     {
       "name": "Regions",
       "description": "Discover available launch regions."
+    },
+    {
+      "name": "GPU",
+      "description": "Live GPU availability by provider and region."
     },
     {
       "name": "Code artifacts",
