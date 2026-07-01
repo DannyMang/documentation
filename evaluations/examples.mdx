@@ -1,16 +1,77 @@
 ---
 title: "Examples"
 sidebarTitle: "Examples"
-description: "Walkthroughs for running evals and comparing models. Planned for a later release."
+description: "Walkthroughs for running evals and comparing models."
 keywords: ["examples", "eval suite", "compare runs", "inspect failures"]
 ---
 
-<Note>
-  **Work in progress.** [Evaluations](/evaluations) are planned for a later release, so there is nothing to run here yet. This page will hold end-to-end walkthroughs once the feature ships.
-</Note>
+Practical recipes with the [Evaluations](/evaluations) SDK. Each assumes
+`client = Client()` and an eval dataset with a `label` column.
 
-## What these examples will cover
+## Run an eval and read the score
 
-- Run an eval against a deployed model and read the aggregate score.
-- Inspect per-item failures to see which inputs a model gets wrong.
-- Compare two models (for example a base model and your trained model) against the same eval definition.
+```python
+eval = client.evals.create(
+    name="gsm8k-exact",
+    dataset_id="ds_abc123",
+    scorers=[{"type": "exact_match", "name": "em", "reference_field": "label"}],
+)
+
+run = client.evals.runs.create(eval.id, model="dep_abc").wait()
+print(run.results["scores"]["em"]["mean"])   # aggregate accuracy
+```
+
+## Inspect per-item failures
+
+```python
+run = client.evals.runs.create(eval.id, model="dep_abc").wait()
+
+failures = [
+    item for item in client.evals.runs.items(eval.id, run.id, limit=200)
+    if item.scores.get("em", 0) < 1.0
+]
+for item in failures:
+    print(f"[{item.item_index}] {item.input!r} -> {item.output!r} (want {item.label!r})")
+```
+
+## Compare two models against the same eval
+
+Reuse one eval definition, run it against each target, and compare aggregates:
+
+```python
+eval = client.evals.create(
+    name="compare-em",
+    dataset_id="ds_abc123",
+    scorers=[{"type": "exact_match", "name": "em", "reference_field": "label"}],
+)
+
+for target in ["Qwen/Qwen2.5-0.5B-Instruct", "dep_my_trained"]:
+    run = client.evals.runs.create(eval.id, model=target).wait()
+    print(target, run.results["scores"]["em"]["mean"])
+```
+
+## Multiple scorers at once
+
+```python
+eval = client.evals.create(
+    name="multi",
+    dataset_id="ds_abc123",
+    scorers=[
+        {"type": "exact_match", "name": "em", "reference_field": "label"},
+        {"type": "contains", "name": "has_answer", "reference_field": "label"},
+    ],
+)
+run = client.evals.runs.create(eval.id, model="dep_abc").wait()
+print(run.results["scores"])   # {"em": {...}, "has_answer": {...}}
+```
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Evaluations" icon="chart-line" href="/evaluations">
+    Full SDK surface.
+  </Card>
+  <Card title="Scorers" icon="scale-balanced" href="/evaluations/scorers">
+    Every scorer config.
+  </Card>
+</CardGroup>

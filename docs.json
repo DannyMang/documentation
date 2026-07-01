@@ -65,7 +65,9 @@
             "icon": "chart-line",
             "pages": [
               "evaluations",
-              "evaluations/scorers"
+              "evaluations/scorers",
+              "evaluations/api",
+              "evaluations/examples"
             ]
           },
           {
@@ -97,7 +99,6 @@
           {
             "group": "Curated demos",
             "pages": [
-              "demos/managed-grpo-quickstart",
               "demos/sft-unsloth",
               "demos/slime-glm-4-7-flash-8xh100",
               "demos/verl-gsm8k-ppo",

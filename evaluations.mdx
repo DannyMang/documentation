@@ -1,21 +1,133 @@
 ---
 title: "Evaluations"
-description: "Score deployed models against a dataset using reusable scorers"
+description: "Score a model against a dataset using reusable scorers"
 keywords: ["evaluations", "scorers", "model evaluation"]
 ---
 
+Evaluations let you score a model against a dataset and read both aggregate
+statistics and per-item results, so you can see exactly which inputs a model
+gets wrong.
+
 <Note>
-  **Work in progress.** Evaluations are planned for a later release and are not available yet. There is no SDK, CLI, or API for evals today. This page describes the planned direction so you know what is coming.
+  Available today via the **Python SDK** (`client.evals`) and the
+  **[REST API](/evaluations/api)** (`/v1/evals/*`). A `veri evals` CLI wrapper is
+  still in progress — see [CLI: evals](/cli/evals).
 </Note>
 
-## What evaluations will do
+## How it works
 
-Evaluations will let you score a deployed model against a held-out dataset and read both an aggregate score and per-sample results, so you can see exactly which inputs a model gets wrong.
+1. **Define an eval** — a dataset plus one or more [scorers](/evaluations/scorers).
+2. **Start a run** against a target model (a deployment, a training job's
+   checkpoint, or a Hugging Face repo).
+3. **Read results** — aggregate stats per scorer, plus per-item inputs, outputs,
+   and scores.
 
-## Planned scorers
+## Quickstart (Python SDK)
 
-- `exact_match`: case-insensitive comparison against a dataset reference field.
-- `contains`: substring or regex match against a reference field.
-- `llm_judge`, custom `python` scorers, and curated public benchmarks (MMLU, GPQA, HumanEval, and similar) are planned for later stages.
+```python
+from veri_sdk import Client
 
-The SDK, CLI, and API surface for evaluations will be documented here once the feature ships.
+client = Client()
+
+# 1. Define an eval: dataset + scorers
+eval = client.evals.create(
+    name="gsm8k-exact",
+    dataset_id="ds_abc123",
+    scorers=[
+        {"type": "exact_match", "name": "em", "reference_field": "label"},
+    ],
+)
+
+# 2. Run it against a target model
+run = client.evals.runs.create(
+    eval.id,
+    model="dep_abc",        # deployment id, training job id, or HF repo
+    num_samples=100,        # optional: cap the number of items
+)
+
+# 3. Wait for completion, then read aggregate results
+run = run.wait()            # polls until completed / failed / cancelled
+print(run.status, run.results)
+
+# 4. Inspect per-item outputs and scores
+for item in client.evals.runs.items(eval.id, run.id, limit=20):
+    print(item.item_index, item.scores, item.output[:80])
+```
+
+## SDK surface
+
+**Evals**
+
+```python
+client.evals.create(name, dataset_id, scorers, *, generation_params=None) -> Eval
+client.evals.list(limit=20, after=None) -> list[Eval]
+client.evals.get(eval_id) -> Eval
+client.evals.delete(eval_id) -> None
+```
+
+`Eval` fields: `id`, `name`, `dataset_id`, `scorers`, `created_at`.
+
+**Runs** (`client.evals.runs`)
+
+```python
+runs.create(eval_id, model, *, num_samples=None, generation_params=None) -> EvalRun
+runs.get(eval_id, run_id) -> EvalRun
+runs.list(eval_id, limit=20, after=None) -> list[EvalRun]
+runs.items(eval_id, run_id, limit=50, after=None) -> list[EvalRunItem]
+runs.cancel(eval_id, run_id) -> EvalRun
+runs.wait(eval_id, run_id, poll_interval=5.0, timeout=None) -> EvalRun
+```
+
+`EvalRun` fields: `id`, `eval_id`, `model`, `status`
+(`queued` / `running` / `completed` / `failed` / `cancelled`), `processed_items`,
+`total_items`, `results`, `error_message`, `created_at`, `completed_at`. It also
+has a bound `.wait()`.
+
+`EvalRunItem` fields: `id`, `run_id`, `item_index`, `input`, `output`, `label`,
+`scores` (per-scorer), `latency_ms`.
+
+## Generation params
+
+Both `evals.create` and `runs.create` accept an optional `generation_params`
+dict that controls how the target model generates during the run:
+
+```python
+generation_params = {
+    "max_tokens": 2048,     # default 2048
+    "temperature": 0.7,     # default 0.7
+    "top_p": 1.0,           # default 1.0
+    "stop": ["</answer>"],  # optional list of stop strings
+}
+```
+
+Params set on the run override those set on the eval.
+
+## Results shape
+
+When a run completes, `run.results` aggregates each scorer across all items:
+
+```json
+{
+  "total_items": 100,
+  "scores": {
+    "em": {"mean": 0.72, "median": 1.0, "std": 0.45, "min": 0.0, "max": 1.0, "count": 100, "error_count": 0}
+  }
+}
+```
+
+## What's next
+
+<CardGroup cols={2}>
+  <Card title="Scorers" icon="scale-balanced" href="/evaluations/scorers">
+    Every scorer type and its config.
+  </Card>
+  <Card title="Evaluations API" icon="code" href="/evaluations/api">
+    The `/v1/evals/*` REST reference.
+  </Card>
+  <Card title="Examples" icon="book" href="/evaluations/examples">
+    End-to-end eval walkthroughs.
+  </Card>
+  <Card title="Deploy a model" icon="rocket" href="/deployments">
+    Stand up a target to evaluate.
+  </Card>
+</CardGroup>

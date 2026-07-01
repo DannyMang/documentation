@@ -189,9 +189,12 @@ max_response_length: int = 2048
 global_batch_size: int = 64
 seed: int = 42
 use_unsloth: bool = False
-lora_rank: int | None = None  # must be null for GRPO
-lora_alpha: int | None = None # must be null for GRPO
+lora_rank: int | None = None   # set to enable LoRA (null = full fine-tune)
+lora_alpha: int | None = None  # LoRA scaling; pairs with lora_rank
+load_in_4bit: bool = False     # QLoRA: 4-bit base + LoRA (needs use_unsloth + lora_rank)
 ```
+
+LoRA and QLoRA are supported on GRPO — see [GRPO algorithm](/training/grpo).
 
 ### AgenticGRPOHyperparameters (method=grpo_agentic)
 

@@ -1,16 +1,176 @@
 ---
 title: "Evaluations API"
 sidebarTitle: "API reference"
-description: "Endpoints for evals, runs, and per-item results. Planned for a later release."
+description: "Endpoints for evals, runs, and per-item results."
 keywords: ["evaluations", "API reference", "endpoints", "scorers", "runs", "items"]
 ---
 
-<Note>
-  **Work in progress.** The Evaluations API is planned for a later release and is not available yet. No `/v1/evals/*` endpoints are live. The full endpoint reference will be documented here once the feature ships.
-</Note>
+Reference for `/v1/evals/*`. All endpoints require Bearer token auth
+(`Authorization: Bearer vk_...`) unless flagged worker-only.
 
-## What the API will provide
+## Endpoints
 
-- Create and manage **Eval** definitions (a dataset plus one or more scorers).
-- Start **Eval Runs** against a model target and track their progress.
-- Read back aggregate statistics per scorer and per-sample outputs once a run completes.
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `POST` | `/v1/evals` | Create an eval (dataset + scorers) |
+| `GET` | `/v1/evals` | List evals (paginated) |
+| `GET` | `/v1/evals/{id}` | Get one eval |
+| `DELETE` | `/v1/evals/{id}` | Delete an eval |
+| `POST` | `/v1/evals/{id}/runs` | Start a run against a model |
+| `GET` | `/v1/evals/{id}/runs` | List runs |
+| `GET` | `/v1/evals/{id}/runs/{run_id}` | Get one run |
+| `DELETE` | `/v1/evals/{id}/runs/{run_id}` | Delete a run |
+| `POST` | `/v1/evals/{id}/runs/{run_id}/cancel` | Cancel a non-terminal run |
+| `GET` | `/v1/evals/{id}/runs/{run_id}/items` | List per-item results |
+
+Worker-only (runner callbacks, not for direct use):
+`POST /v1/evals/{id}/runs/{run_id}/items` and
+`POST /v1/evals/{id}/runs/{run_id}/status`.
+
+## POST /v1/evals
+
+Create an eval. `scorers` must be non-empty.
+
+**Request:**
+
+```json
+{
+  "name": "gsm8k-exact",
+  "dataset_id": "ds_abc123",
+  "scorers": [
+    {"type": "exact_match", "name": "em", "reference_field": "label"}
+  ],
+  "generation_params": {"max_tokens": 2048, "temperature": 0.7, "top_p": 1.0}
+}
+```
+
+See [Scorers](/evaluations/scorers) for every scorer config. `generation_params`
+is optional (defaults: `max_tokens` 2048, `temperature` 0.7, `top_p` 1.0,
+`stop` null).
+
+**Response** (`eval`):
+
+```json
+{
+  "object": "eval",
+  "id": "eval_abc123",
+  "name": "gsm8k-exact",
+  "dataset_id": "ds_abc123",
+  "scorers": [{"type": "exact_match", "name": "em", "reference_field": "label", "case_sensitive": false}],
+  "generation_params": {"max_tokens": 2048, "temperature": 0.7, "top_p": 1.0, "stop": null},
+  "created_at": "2026-05-12T..."
+}
+```
+
+## GET /v1/evals
+
+List your evals. Returns `PaginatedList[EvalResponse]` (`data` + `has_more`).
+
+## GET /v1/evals/{id}
+
+Single eval, same shape as the create response.
+
+## DELETE /v1/evals/{id}
+
+Delete an eval (and its runs).
+
+## POST /v1/evals/{id}/runs
+
+Start a run against a target model.
+
+**Request:**
+
+```json
+{
+  "model": "dep_abc",
+  "num_samples": 100,
+  "generation_params": {"temperature": 0.0}
+}
+```
+
+| Field | Required | Notes |
+| --- | --- | --- |
+| `model` | yes | Deployment id, training job id, or HF repo to evaluate |
+| `num_samples` | no | Cap the number of dataset items |
+| `generation_params` | no | Overrides the eval's generation params for this run |
+
+**Response** (`eval_run`):
+
+```json
+{
+  "object": "eval_run",
+  "id": "run_abc123",
+  "eval_id": "eval_abc123",
+  "model": "dep_abc",
+  "status": "queued",
+  "generation_params": {"max_tokens": 2048, "temperature": 0.0, "top_p": 1.0, "stop": null},
+  "num_samples": 100,
+  "total_items": null,
+  "processed_items": null,
+  "results": null,
+  "error_message": null,
+  "started_at": null,
+  "completed_at": null,
+  "created_at": "2026-05-12T...",
+  "updated_at": "2026-05-12T..."
+}
+```
+
+`status` is one of `queued` / `running` / `completed` / `failed` / `cancelled`.
+
+## GET /v1/evals/{id}/runs and /runs/{run_id}
+
+List runs (paginated) or fetch one. A completed run populates `results`:
+
+```json
+{
+  "total_items": 100,
+  "scores": {
+    "em": {"mean": 0.72, "median": 1.0, "std": 0.45, "min": 0.0, "max": 1.0, "count": 100, "error_count": 0}
+  }
+}
+```
+
+## POST /v1/evals/{id}/runs/{run_id}/cancel
+
+Cancel a non-terminal run. Returns the updated run.
+
+## GET /v1/evals/{id}/runs/{run_id}/items
+
+Per-item results (paginated with `limit` / `after`).
+
+**Response:**
+
+```json
+{
+  "object": "list",
+  "data": [
+    {
+      "object": "eval_run_item",
+      "id": "item_xyz",
+      "run_id": "run_abc123",
+      "item_index": 0,
+      "input": "What is 12 + 7?",
+      "output": "19",
+      "label": "19",
+      "scores": {"em": 1.0},
+      "latency_ms": 245.3,
+      "created_at": "2026-05-12T..."
+    }
+  ],
+  "has_more": true
+}
+```
+
+Per-scorer `scores` may be `null` for an item the scorer failed on.
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Evaluations" icon="chart-line" href="/evaluations">
+    SDK quickstart and surface.
+  </Card>
+  <Card title="Scorers" icon="scale-balanced" href="/evaluations/scorers">
+    Every scorer config shape.
+  </Card>
+</CardGroup>

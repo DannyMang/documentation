@@ -49,9 +49,14 @@ API keys use the `vk_` prefix and are hashed server-side. See [API Keys](/api-re
 | `GET` | `/v1/training_jobs` | List training jobs (filter by `status`, `method`) |
 | `GET` | `/v1/training_jobs/{id}` | Get job status |
 | `POST` | `/v1/training_jobs/{id}/cancel` | Cancel a job |
-| `GET` | `/v1/training_jobs/{id}/logs` | Stream job logs (SSE) |
+| `DELETE` | `/v1/training_jobs/{id}` | Hard-delete a finished job |
+| `GET` | `/v1/training_jobs/{id}/logs` | Stream stdout tail |
+| `GET` | `/v1/training_jobs/{id}/logs/full` | Full stdout from S3 (after job ends) |
 | `GET` | `/v1/training_jobs/{id}/events` | Get job lifecycle events |
+| `GET` | `/v1/training_jobs/{id}/metrics` | Sampled training metrics |
 | `GET` | `/v1/training_jobs/{id}/model` | Get checkpoint download URL |
+
+See the [Training jobs API](/training/api) for full schemas.
 
 ### Deployments
 
@@ -64,6 +69,37 @@ API keys use the `vk_` prefix and are hashed server-side. See [API Keys](/api-re
 | `POST` | `/v1/deployments/{id}/chat/completions` | OpenAI-compatible inference |
 | `GET` | `/v1/deployments/{id}/requests` | List per-request logs |
 | `GET` | `/v1/deployments/{id}/metrics` | Get aggregate metrics |
+
+### Evaluations
+
+See the [Evaluations API](/evaluations/api) for full schemas.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/v1/evals` | Create an eval (dataset + scorers) |
+| `GET` | `/v1/evals` | List evals |
+| `GET` | `/v1/evals/{id}` | Get an eval |
+| `DELETE` | `/v1/evals/{id}` | Delete an eval |
+| `POST` | `/v1/evals/{id}/runs` | Start a run against a model |
+| `GET` | `/v1/evals/{id}/runs` | List runs |
+| `GET` | `/v1/evals/{id}/runs/{run_id}` | Get a run |
+| `DELETE` | `/v1/evals/{id}/runs/{run_id}` | Delete a run |
+| `POST` | `/v1/evals/{id}/runs/{run_id}/cancel` | Cancel a run |
+| `GET` | `/v1/evals/{id}/runs/{run_id}/items` | List per-item results |
+
+### Volumes
+
+See the [Volumes guide](/volumes) for usage.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/v1/volumes` | Create a volume |
+| `GET` | `/v1/volumes` | List volumes |
+| `GET` | `/v1/volumes/{name}` | Get a volume |
+| `DELETE` | `/v1/volumes/{name}` | Delete a volume |
+| `GET` | `/v1/volumes/{name}/files` | List files |
+| `DELETE` | `/v1/volumes/{name}/files/{path}` | Delete a file |
+| `POST` | `/v1/volumes/{name}/upload-url` | Get a presigned upload URL |
 
 ### Billing
 
