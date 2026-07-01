@@ -147,7 +147,7 @@ veri gpu list
 veri regions list
 ```
 
-Pass a region to a training job with `veri train --region <name>` or the `region` argument of the `@veri.train` decorator. Omit both to use the default region.
+Pass a region to a training job with `veri train --region <name>`, `veri jobs create --region <name>` (or `region` under `[resources]` in the config), or the `region` argument of the `@veri.train` decorator. Omit it to use the default region.
 
 ## `veri billing` {#billing}
 
