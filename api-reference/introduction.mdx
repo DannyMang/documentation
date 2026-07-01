@@ -70,23 +70,6 @@ See the [Training jobs API](/training/api) for full schemas.
 | `GET` | `/v1/deployments/{id}/requests` | List per-request logs |
 | `GET` | `/v1/deployments/{id}/metrics` | Get aggregate metrics |
 
-### Evaluations
-
-See the [Evaluations API](/evaluations/api) for full schemas.
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/v1/evals` | Create an eval (dataset + scorers) |
-| `GET` | `/v1/evals` | List evals |
-| `GET` | `/v1/evals/{id}` | Get an eval |
-| `DELETE` | `/v1/evals/{id}` | Delete an eval |
-| `POST` | `/v1/evals/{id}/runs` | Start a run against a model |
-| `GET` | `/v1/evals/{id}/runs` | List runs |
-| `GET` | `/v1/evals/{id}/runs/{run_id}` | Get a run |
-| `DELETE` | `/v1/evals/{id}/runs/{run_id}` | Delete a run |
-| `POST` | `/v1/evals/{id}/runs/{run_id}/cancel` | Cancel a run |
-| `GET` | `/v1/evals/{id}/runs/{run_id}/items` | List per-item results |
-
 ### Volumes
 
 See the [Volumes guide](/volumes) for usage.

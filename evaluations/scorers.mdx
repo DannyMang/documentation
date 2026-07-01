@@ -1,113 +1,24 @@
 ---
 title: "Scorers"
 sidebarTitle: "Scorers"
-description: "Reusable functions that turn a model's output into a numeric score."
+description: "Reusable functions that turn a model's output into a numeric score. Planned for a later release."
 keywords: ["scorers", "exact_match", "contains", "LLM judge", "benchmark", "evaluation"]
 ---
 
-A scorer turns a model's output for a single dataset item into a numeric score.
-An [evaluation](/evaluations) applies one or more scorers across every item, then
-aggregates the per-item scores.
+<Note>
+  **Work in progress.** Scorers ship with [Evaluations](/evaluations), which are planned for a later release. The configuration shapes are not final and are not available yet.
+</Note>
 
-Each scorer is a JSON object with a `type` discriminator and a `name` (the label
-its scores appear under in results). Pass a list of them to
-`client.evals.create(..., scorers=[...])`.
+## What scorers will do
 
-## Scorer types
+A scorer turns a model's output for a single dataset item into a numeric score. An evaluation run applies one or more scorers across every item, then aggregates the per-item scores.
 
-### `exact_match`
+## Planned scorer types
 
-Compares the model output against a dataset reference field.
+- `exact_match`: case-insensitive comparison against a dataset reference field.
+- `contains`: substring or regex match against a reference field.
+- `llm_judge`: grade outputs with a judge model.
+- `python`: bring your own scoring function.
+- Curated public benchmarks (MMLU, GPQA, HumanEval, and similar) in a later stage.
 
-```json
-{"type": "exact_match", "name": "em", "reference_field": "label", "case_sensitive": false}
-```
-
-| Field | Default | Notes |
-| --- | --- | --- |
-| `name` | — | Label for this scorer's scores. |
-| `reference_field` | `"label"` | Dataset column holding the expected answer. |
-| `case_sensitive` | `false` | Case-sensitive comparison when `true`. |
-
-### `contains`
-
-Substring (or regex) match against a reference field.
-
-```json
-{"type": "contains", "name": "has_answer", "reference_field": "label", "regex": false}
-```
-
-| Field | Default | Notes |
-| --- | --- | --- |
-| `name` | — | Label. |
-| `reference_field` | `"label"` | Dataset column to look for. |
-| `regex` | `false` | Treat the reference value as a regex when `true`. |
-
-### `reward_function`
-
-Reuse a previously uploaded [reward function](/training/reward-functions) as a
-scorer.
-
-```json
-{"type": "reward_function", "name": "math", "reward_function_id": "rf_abc123"}
-```
-
-### `llm_judge`
-
-Grade outputs with a judge model.
-
-```json
-{
-  "type": "llm_judge",
-  "name": "helpfulness",
-  "judge_prompt": "Rate the answer's helpfulness from 0 to 1.",
-  "judge_model": "gpt-4o-mini",
-  "judge_temperature": 0.0
-}
-```
-
-| Field | Default | Notes |
-| --- | --- | --- |
-| `name` | — | Label. |
-| `judge_prompt` | — | Instruction given to the judge. |
-| `judge_model` | `null` | Judge model; server default when omitted. |
-| `judge_temperature` | `0.0` | Judge sampling temperature. |
-
-### `python`
-
-Bring your own scoring function as source code.
-
-```json
-{"type": "python", "name": "custom", "source_code": "def score(output, item):\n    return 1.0 if output.strip() else 0.0"}
-```
-
-### `benchmark`
-
-Curated public benchmark tasks.
-
-```json
-{"type": "benchmark", "name": "mmlu", "task": "mmlu", "sample_limit": 500}
-```
-
-| Field | Default | Notes |
-| --- | --- | --- |
-| `name` | — | Label. |
-| `task` | — | Benchmark task identifier. |
-| `sample_limit` | `null` | Cap the number of benchmark items. |
-
-## Datasets and reference fields
-
-`exact_match` and `contains` read the expected answer from `reference_field`
-(default `label`). Make sure your eval dataset has that column, or set
-`reference_field` to the column you use.
-
-## Related
-
-<CardGroup cols={2}>
-  <Card title="Evaluations" icon="chart-line" href="/evaluations">
-    Define and run evals from the SDK.
-  </Card>
-  <Card title="Evaluations API" icon="code" href="/evaluations/api">
-    The `/v1/evals/*` REST reference.
-  </Card>
-</CardGroup>
+Exact configuration and the API will be documented here once evaluations ship.

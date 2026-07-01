@@ -6,9 +6,9 @@ keywords: ["veri evals", "evaluation", "scorer", "cli"]
 ---
 
 <Note>
-  **CLI is work in progress.** The `veri evals` command group is registered but has no subcommands yet — you cannot define or run evals from the terminal today. Evaluations *are* available now via the [Python SDK](/evaluations) and the [REST API](/evaluations/api); only the CLI wrapper is pending.
+  **Work in progress.** The `veri evals` command group is planned for a later release and is not available in the CLI yet.
 </Note>
 
 ## What the CLI will do
 
-Once the CLI wrapper ships, `veri evals` will let you define an eval (a dataset plus scorers), run it against a deployed model, and inspect per-sample outputs and aggregate scores from the terminal. In the meantime, use `client.evals.create(...)` / `client.evals.runs.create(...)` from the SDK — see [Evaluations](/evaluations).
+Once evaluations ship, `veri evals` will let you define an eval (a dataset plus scorers), run it against a deployed model, and inspect per-sample outputs and aggregate scores from the terminal. The commands and flags will be documented here at release.

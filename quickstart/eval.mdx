@@ -1,79 +1,14 @@
 ---
 title: "Run an eval"
 sidebarTitle: "Evals Quickstart"
-description: "Score a model on a dataset with a scorer, end to end."
+description: "Score a model on a held-out dataset. Planned for a later release."
 keywords: ["quickstart", "eval", "evaluation", "scorer"]
 ---
 
-This walks through scoring a model against a dataset: define an eval (dataset plus
-a scorer), run it against a target model, wait for it to finish, and read both
-the aggregate score and per-item results.
-
 <Note>
-  Evaluations are available via the Python SDK and [REST API](/evaluations/api)
-  today. A `veri evals` CLI wrapper is still in progress.
+  **Work in progress.** Evaluations are planned for a later release and are not available to run yet. This walkthrough will return once the feature ships.
 </Note>
 
-<Steps>
-  <Step title="Prereq: a dataset and a target model">
-    You need a `dataset_id` (upload one with `veri datasets upload` or connect
-    from Hugging Face) and something to evaluate — a deployment id, a completed
-    training job id, or a Hugging Face repo.
-  </Step>
+When evaluations land, this quickstart will walk through scoring a model on a held-out dataset end to end: define an eval (dataset plus scorers), run it against a deployed model, wait for it to finish, and read both the aggregate score and per-item failures.
 
-  <Step title="Define the eval">
-    ```python
-    from veri_sdk import Client
-    client = Client()
-
-    eval = client.evals.create(
-        name="gsm8k-exact",
-        dataset_id="ds_abc123",
-        scorers=[
-            {"type": "exact_match", "name": "em", "reference_field": "label"},
-        ],
-    )
-    print(f"Eval {eval.id}")
-    ```
-
-    See [Scorers](/evaluations/scorers) for the full list of scorer types.
-  </Step>
-
-  <Step title="Run it against a model">
-    ```python
-    run = client.evals.runs.create(
-        eval.id,
-        model="dep_abc",     # deployment id, training job id, or HF repo
-        num_samples=100,     # optional cap
-    )
-    run = run.wait()         # polls until completed / failed / cancelled
-    print(run.status)
-    print(run.results)       # {"total_items": ..., "scores": {"em": {...}}}
-    ```
-  </Step>
-
-  <Step title="Inspect per-item failures">
-    ```python
-    for item in client.evals.runs.items(eval.id, run.id, limit=20):
-        if item.scores.get("em", 0) < 1.0:
-            print(item.input, "->", item.output, "(expected", item.label, ")")
-    ```
-  </Step>
-</Steps>
-
-## What's next
-
-<CardGroup cols={2}>
-  <Card title="Evaluations, deeper" icon="chart-line" href="/evaluations">
-    Full SDK surface and results shape.
-  </Card>
-  <Card title="Scorers" icon="scale-balanced" href="/evaluations/scorers">
-    Every scorer type and its config.
-  </Card>
-  <Card title="Deploy a model" icon="rocket" href="/deployments">
-    Stand up a target to evaluate.
-  </Card>
-  <Card title="Train a model" icon="brain" href="/training">
-    Evaluate a checkpoint you trained.
-  </Card>
-</CardGroup>
+In the meantime, start with [Deploy a model](/deployments) or [Train a model](/training).

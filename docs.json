@@ -65,9 +65,7 @@
             "icon": "chart-line",
             "pages": [
               "evaluations",
-              "evaluations/scorers",
-              "evaluations/api",
-              "evaluations/examples"
+              "evaluations/scorers"
             ]
           },
           {
