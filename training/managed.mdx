@@ -7,7 +7,7 @@ keywords: ["managed training", "GRPO", "SFT", "DPO", "post-training", "reward fu
 
 Managed training on Veri is **dataset + base model → trained checkpoint**. You submit a training job; Veri provisions the GPU, runs the loop, streams metrics, and uploads the result. You either download the checkpoint or [deploy it](/deployments) directly.
 
-The training method you pick decides how outputs are scored. GRPO takes a [reward function](/training/reward-functions); SFT and DPO learn directly from examples or preference pairs. The smallest viable example is in the [Quickstart](/training).
+The training method you pick decides how outputs are scored. GRPO takes a [reward function](/training/reward-functions); SFT and DPO learn directly from examples or preference pairs. For the smallest end-to-end run, see the [Managed GRPO quickstart](/demos/managed-grpo-quickstart) — one decorated reward and one command.
 
 ## Methods
 
@@ -94,6 +94,10 @@ job.wait(poll_interval=15)
 job.download(output_dir="./checkpoints")
 ```
 
+<Note>
+  This snippet uses the low-level client and assumes you have already uploaded a dataset and reward function (the `dataset` and `reward_fn` it references). For a runnable end-to-end version that handles those uploads for you with `@training_job` + `veri train`, see the [Managed GRPO quickstart](/demos/managed-grpo-quickstart).
+</Note>
+
 Same shape from the CLI:
 
 ```bash
@@ -105,8 +109,8 @@ with `kind = "train"` in the TOML config. See the [CLI training reference](/cli/
 ## Where to go next
 
 <CardGroup cols={2}>
-  <Card title="Quickstart: train a model" icon="rocket" href="/training">
-    End-to-end on a small model in ~15 minutes.
+  <Card title="Managed GRPO quickstart" icon="rocket" href="/demos/managed-grpo-quickstart">
+    End-to-end on a small model: one decorator, one command.
   </Card>
   <Card title="Deploy your checkpoint" icon="cloud" href="/deployments">
     Skip downloading — serve from Veri with an OpenAI-compatible API.

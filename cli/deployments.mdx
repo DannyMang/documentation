@@ -110,11 +110,22 @@ veri deployments requests dep_abc --after req_xyz --limit 100   # pagination
 
 ## List, get
 
+`list` shows your deployments, most recent first. Filter and paginate with the flags below.
+
 ```bash
-veri deployments list
+veri deployments list                              # all of them
+veri deployments list --status serving             # only the live ones
 veri deployments list --status serving --format json
-veri deployments get dep_abc
+veri deployments get dep_abc                        # one deployment, with its status
 ```
+
+| Flag | Purpose |
+| --- | --- |
+| `--status` | Filter by status: `queued`, `provisioning`, `serving`, `unhealthy`, `stopped`, or `failed`. |
+| `--limit` | Maximum number to return. Default `20`. |
+| `--after <id>` | Pagination cursor: return deployments created after this ID. |
+
+A deployment bills while either `serving` or `unhealthy`, so to catch everything holding a GPU, list both (or list without `--status` and scan the `status` column).
 
 ## Exit codes
 

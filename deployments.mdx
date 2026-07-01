@@ -1,14 +1,14 @@
 ---
 title: "Deployments"
 sidebarTitle: "Deployments"
-description: "Serve any open-source model — base or trained — on a per-hour GPU with an OpenAI-compatible API."
+description: "Serve any open-source model (base or trained) on our infrastructure with an OpenAI-compatible API."
 keywords: ["deployments", "inference", "serving", "OpenAI compatible", "chat completions"]
 boost: 3
 ---
 
-A deployment is a model running on a GPU you control, exposed at an HTTPS endpoint that speaks the OpenAI Chat Completions API. Point any tool that already speaks OpenAI at it — no client changes — and it works.
+A deployment is a model running on a GPU you control, exposed at an HTTPS endpoint that speaks the OpenAI Chat Completions API. 
 
-The smallest viable example is in the [Quickstart](/deployments). This page is the mental model and the surface map.
+The smallest viable example is in the [Deploy a HF model quickstart](/demos/deploy-hf-quickstart). This page is the mental model and the surface map.
 
 ## Two sources
 
@@ -38,7 +38,9 @@ stateDiagram-v2
 
 Deployments consume GPU credit **only while `serving` or `unhealthy`**. No charge during `queued` or `provisioning`. Once `stopped`, billing stops; the deployment row stays for history.
 
-There is **no idle auto-stop today**. If you forget to call `stop`, the deployment keeps billing, so the safest pattern is `stop` as soon as you're done.
+<Warning>
+  There is **no idle auto-stop today**. If you forget to call `stop`, the deployment keeps billing, so the safest pattern is `stop` as soon as you're done.
+</Warning>
 
 ## Calling a deployment
 
@@ -46,6 +48,12 @@ Once a deployment is `serving`, it accepts OpenAI-shaped requests at `https://ap
 
 <CodeGroup>
 ```python Veri SDK
+from veri_sdk import Client
+
+client = Client()
+dep = client.deployments.get("dep_...")  # the object returned by client.deployments.create(...)
+
+# dep carries its own id, so it routes to the right deployment.
 response = dep.chat([
     {"role": "user", "content": "Hello"},
 ])
@@ -119,7 +127,7 @@ Running deployments consume GPU credit until you stop them.
 ## Where to go next
 
 <CardGroup cols={2}>
-  <Card title="Quickstart: deploy a model" icon="rocket" href="/deployments">
+  <Card title="Quickstart: deploy a model" icon="rocket" href="/demos/deploy-hf-quickstart">
     Spin up + chat + stop in ~10 minutes.
   </Card>
   <Card title="Train your own model" icon="brain" href="/training">

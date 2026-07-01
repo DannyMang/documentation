@@ -97,6 +97,8 @@
           {
             "group": "Curated demos",
             "pages": [
+              "demos/managed-grpo-quickstart",
+              "demos/deploy-hf-quickstart",
               "demos/sft-unsloth",
               "demos/slime-glm-4-7-flash-8xh100",
               "demos/verl-gsm8k-ppo",

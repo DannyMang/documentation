@@ -3054,21 +3054,42 @@
         "properties": {
           "total_requests": {
             "type": "integer",
-            "format": "int32"
+            "format": "int64"
           },
           "total_prompt_tokens": {
             "type": "integer",
-            "format": "int32"
+            "format": "int64"
           },
           "total_completion_tokens": {
             "type": "integer",
-            "format": "int32"
+            "format": "int64"
           },
           "total_cost_usd": {
             "type": "number",
             "format": "double"
           },
           "avg_latency_ms": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "p50_latency_ms": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "p90_latency_ms": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "p99_latency_ms": {
             "type": [
               "number",
               "null"

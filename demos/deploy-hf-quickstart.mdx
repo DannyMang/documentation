@@ -1,0 +1,172 @@
+---
+title: "Deploy a Hugging Face model in ten minutes"
+sidebarTitle: "Deploy a HF model"
+description: "The shortest end-to-end deployment on Veri: serve any Hugging Face model behind an OpenAI-compatible API, send a request, and stop."
+keywords: ["demo", "quickstart", "deployment", "Hugging Face", "inference", "OpenAI compatible", "veri deployments"]
+---
+
+{/* doctest-page-gpu-required */}
+
+The shortest path to a live endpoint on Veri. Point a deployment at any [Hugging Face](https://huggingface.co) repo and Veri provisions the GPU, pulls the weights server-side, and exposes an [OpenAI-compatible](/deployments/openai-compat) chat endpoint. No upload, no training, no checkpoint to manage.
+
+This serves **Qwen2.5-0.5B-Instruct** on a single **L4** (24 GB), sends one request, then stops the deployment so it stops billing. L4 is a true single-GPU node, so it is the cheapest shape and the most likely to have capacity. A 0.5B model fits with room to spare.
+
+<Warning>
+  A running deployment spends real GPU credit until you stop it. There is no idle auto-stop, so the safe pattern is to `stop` as soon as you are done. Check your balance with `veri billing balance` first.
+</Warning>
+
+<Note>
+  If `create` fails with **"No `<gpu>` capacity available"**, that GPU is momentarily sold out in the region. Retry shortly, or pass a different `--gpu-type` (run `veri gpu list` to see offered shapes). Bigger shapes like `A100-80GB` are scarcer because they come as full 8-GPU nodes, so prefer `L4-24GB` for small models.
+</Note>
+
+## Prerequisites
+
+- Install the SDK: `pip install veri-sdk`
+- Authenticate: `veri login` (or set `VERI_API_KEY`)
+
+## Step 1: bring up the deployment
+
+Create the deployment from a Hugging Face repo. Each tab is the same call. It returns immediately with a deployment ID and `status: queued`; the GPU then provisions in the background.
+
+<CodeGroup>
+```python Veri SDK
+from veri_sdk import Client
+
+client = Client()
+
+dep = client.deployments.create(
+    model="Qwen/Qwen2.5-0.5B-Instruct",   # any Hugging Face repo id
+    source="huggingface",
+    name="hf-quickstart",
+    gpu={"gpu_type": "L4-24GB", "gpu_count": 1},
+)
+
+dep.wait()                                 # block until status == "serving"
+print(f"Serving at {dep.endpoint_url}")
+print(f"Deployment ID: {dep.id}")          # you need this to chat and to stop
+```
+
+```bash CLI
+# Prints the new deployment ID. Poll `get` until status == serving.
+veri deployments create \
+  --from-hf Qwen/Qwen2.5-0.5B-Instruct \
+  --name hf-quickstart \
+  --gpu-type L4-24GB --gpu-count 1
+
+veri deployments get <id>                   # repeat until status == serving
+veri deployments list                       # or see all your deployments at once
+```
+
+```bash curl
+# Returns the deployment ID and status: queued.
+curl https://api.veri.studio/v1/deployments \
+  -H "Authorization: Bearer vk_your_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "Qwen/Qwen2.5-0.5B-Instruct",
+    "source": "huggingface",
+    "name": "hf-quickstart",
+    "gpu": {"gpu_type": "L4-24GB", "gpu_count": 1}
+  }'
+
+# Poll until "status": "serving".
+curl https://api.veri.studio/v1/deployments/$DEPLOYMENT_ID \
+  -H "Authorization: Bearer vk_your_api_key"
+```
+</CodeGroup>
+
+Once it reports `serving`, the deployment stays up. **It is now billing GPU credit until you stop it in step 3.**
+
+## Step 2: experiment
+
+Send as many requests as you like while it is up. Reuse the ID from step 1. Because the endpoint is OpenAI-shaped, the OpenAI SDK and plain `curl` work against it too.
+
+<CodeGroup>
+```python Veri SDK
+from veri_sdk import Client
+
+client = Client()
+dep = client.deployments.get("<id>")       # the ID printed in step 1
+
+for prompt in ["What is 12 + 7?", "Now multiply that by 3."]:
+    answer = dep.chat([{"role": "user", "content": prompt}])
+    print(answer["choices"][0]["message"]["content"])
+```
+
+```python OpenAI SDK
+from openai import OpenAI
+
+oai = OpenAI(
+    base_url="https://api.veri.studio/v1/deployments/<id>",
+    api_key="vk_your_api_key",
+)
+response = oai.chat.completions.create(
+    model="hf-quickstart",                 # the deployment name
+    messages=[{"role": "user", "content": "What is 12 + 7?"}],
+)
+print(response.choices[0].message.content)
+```
+
+```bash CLI
+veri deployments chat <id> -m "Write a haiku about GPUs"
+veri deployments chat <id> -m "Explain backprop in one sentence"
+```
+
+```bash curl
+curl https://api.veri.studio/v1/deployments/<id>/chat/completions \
+  -H "Authorization: Bearer vk_your_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "hf-quickstart",
+    "messages": [{"role": "user", "content": "What is 12 + 7?"}]
+  }'
+```
+</CodeGroup>
+
+Check usage counters any time with `veri deployments metrics <id>`.
+
+## Step 3: stop it when you are done
+
+Nothing stops on its own. When you have finished experimenting, shut it down so billing stops:
+
+<CodeGroup>
+```python Veri SDK
+client.deployments.stop("<id>")            # or dep.stop()
+```
+
+```bash CLI
+veri deployments stop <id>
+```
+
+```bash curl
+curl -X POST https://api.veri.studio/v1/deployments/<id>/stop \
+  -H "Authorization: Bearer vk_your_api_key"
+```
+</CodeGroup>
+
+<Warning>
+  There is no idle auto-stop. As long as the deployment shows `serving`, it is spending credit even while you are not sending requests. Stop it as soon as you are done.
+</Warning>
+
+## What you just did
+
+- `source="huggingface"` tells Veri to pull the weights from the Hub at serve time. Nothing was uploaded from your machine, and there is no second download at request time.
+- The endpoint speaks the OpenAI Chat Completions API, so any OpenAI client works by pointing `base_url` at it. See [Calling a deployment](/deployments#calling-a-deployment).
+- Billing ran only while the deployment was `serving`. Once stopped, the row stays for history but no longer charges.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Deployments overview" icon="server" href="/deployments">
+    The lifecycle, GPU sizing, and the full chat surface.
+  </Card>
+  <Card title="Serve a model you trained" icon="brain" href="/deployments/custom-models">
+    Deploy a checkpoint from a completed training job.
+  </Card>
+  <Card title="OpenAI compatibility" icon="plug" href="/deployments/openai-compat">
+    Drop-in usage from the OpenAI SDK, LangChain, and LlamaIndex.
+  </Card>
+  <Card title="CLI deployment commands" icon="terminal" href="/cli/deployments">
+    `veri deployments create / chat / stop`.
+  </Card>
+</CardGroup>

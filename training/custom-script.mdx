@@ -28,7 +28,11 @@ Veri runs your entrypoint inside the base image on the GPU, with a set of `VERI_
 | `VERI_OUTPUT_DIR` | Write checkpoints and artifacts here. Everything in this dir is captured to your account. |
 | `VERI_METRICS_FILE` | Append metrics here (or use `veri.log_metrics`, below). |
 | `VERI_NUM_GPUS` | GPUs on this node. |
-| `VERI_NODE_RANK`, `VERI_NODE_IPS`, `VERI_NUM_NODES` | Topology (single node today: `0`, one IP, `1`). |
+| `VERI_NODE_RANK` | This node's 0-based rank in the gang. Single node: `0`. |
+| `VERI_NUM_NODES` | Number of nodes in the gang (`N`). Single node: `1`. |
+| `VERI_HEAD_IP` | Private IP of rank 0, the rendezvous host. Set only for a multi-node gang. |
+| `VERI_NODE_IPS` | Comma-joined ordered private IPs of every node (index 0 = rank 0). Single node: one IP. |
+| `VERI_JOB_ID` | The rendezvous id for the gang. Set only for a multi-node gang. |
 
 Exit code `0` marks the job completed; a non-zero exit marks it failed.
 
@@ -95,6 +99,77 @@ veri run-script ./my-run \
 
 The CLI uploads your code, submits the job, and prints the job id and dashboard link.
 
+## Multi-node
+
+For runs that do not fit on one box, launch a multi-node gang with `--num-nodes`. Veri provisions all nodes together as a single unit, wires the topology into the `VERI_*` env above, and runs your entrypoint on every node. Your script drives the distributed launch (`torchrun`, with c10d rendezvous on rank 0).
+
+Constraints:
+
+- **Whole-box only**: each node is an 8-GPU box, so set `--gpu-count 8` with `--gpu-type A100-80GB` or `--gpu-type H100-80GB`. Other shapes are rejected.
+- **AWS only**: multi-node runs on AWS.
+- **Custom script only**: managed methods (GRPO, SFT, DPO) are single-node.
+- **Exact node count or fail**: `--num-nodes` must be one of `1`, `2`, `4`, `8`, `16`. The gang launches at exactly that size or the submit fails fast (no silent cap-down).
+
+Point `torchrun` at the injected topology. Rank 0 is the rendezvous host (`VERI_HEAD_IP`), every node reads its own `VERI_NODE_RANK`, and `VERI_JOB_ID` is the rendezvous id:
+
+```python train.py
+import os
+from pathlib import Path
+
+import torch
+import torch.distributed as dist
+import veri_sdk
+
+output_dir = Path(os.environ["VERI_OUTPUT_DIR"])
+
+# torchrun sets RANK / LOCAL_RANK / WORLD_SIZE from the flags below.
+dist.init_process_group(backend="nccl")
+rank = dist.get_rank()
+torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))
+
+# ... build model, wrap in DDP/FSDP, train ...
+for step in range(100):
+    reward, loss = train_one_step()
+    if rank == 0:
+        veri_sdk.log_metrics(step=step, reward=reward, loss=loss)
+
+# Only rank 0 writes the checkpoint so the N nodes do not clobber each other.
+if rank == 0:
+    save_checkpoint(output_dir / "final")
+
+dist.barrier()
+dist.destroy_process_group()
+```
+
+Your entrypoint is the `torchrun` launch line, consuming the injected topology directly:
+
+```bash
+torchrun --nnodes=$VERI_NUM_NODES --node-rank=$VERI_NODE_RANK \
+         --rdzv-backend=c10d --rdzv-endpoint=$VERI_HEAD_IP:29400 \
+         --rdzv-id=$VERI_JOB_ID --nproc-per-node=$VERI_NUM_GPUS \
+         train.py
+```
+
+Submit a 2-node H100 gang (16 GPUs total):
+
+```bash
+veri run-script ./my-run \
+  --entrypoint "torchrun --nnodes=\$VERI_NUM_NODES --node-rank=\$VERI_NODE_RANK --rdzv-backend=c10d --rdzv-endpoint=\$VERI_HEAD_IP:29400 --rdzv-id=\$VERI_JOB_ID --nproc-per-node=\$VERI_NUM_GPUS train.py" \
+  --base-image veri/base \
+  --gpu-type H100-80GB \
+  --gpu-count 8 \
+  --num-nodes 2
+```
+
+### Checkpoints across nodes
+
+Everything written under `VERI_OUTPUT_DIR` is captured, the same as single node. With N nodes you must avoid each rank writing the same path:
+
+- **Rank 0 saves** (shown above): the simplest pattern. Gate the write on `rank == 0` and use a `dist.barrier()` so other ranks wait for the save to finish.
+- **Sharded checkpoints**: for large models, `torch.distributed.checkpoint` (DCP) writes one shard per rank under `VERI_OUTPUT_DIR`, so no two ranks collide and you reload the shards on resume.
+
+Each node writes to its own `VERI_OUTPUT_DIR`; a shared filesystem across nodes is not provided yet.
+
 ## Observability
 
 Everything shows up in the Veri UI for the job, alongside your managed jobs and deployments:
@@ -111,5 +186,7 @@ For reward and loss curves you have two options:
 
 ## Limits
 
-- **Single node** today (one instance, up to 8 GPUs). Multi-node is on the roadmap; for now keep runs to a single node.
+- **Node counts** are exact: `1`, `2`, `4`, `8`, or `16`. A gang launches at the requested size or the submit fails fast (no cap-down to fewer nodes).
+- **Multi-node is whole-box, AWS, custom script only**: `--gpu-count 8` with `--gpu-type A100-80GB` or `H100-80GB` on AWS. Managed methods (GRPO, SFT, DPO) are single-node.
+- **No shared filesystem** across nodes yet: each node writes to its own `VERI_OUTPUT_DIR`. Have rank 0 save, or shard with `torch.distributed.checkpoint`.
 - **Three base images** (above). If your stack does not fit, a bring-your-own container image is the escape hatch (coming soon).
