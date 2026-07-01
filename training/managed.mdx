@@ -58,7 +58,7 @@ When a job ends in `failed`, `error.code` carries one of:
 | `error.code` | Common cause | What to do |
 | --- | --- | --- |
 | `oom` | Model too large for the chosen GPU | Drop to a smaller base, raise `gpu_count`, or shrink `max_response_length` |
-| `CAPACITY_UNAVAILABLE` | No GPU capacity for the requested type in any availability zone, after trying every capable zone (`max_launch_attempts`) | Retry later, or pick a different `gpu_type`. Capacity is provider-side and not pre-checkable |
+| `CAPACITY_UNAVAILABLE` | No GPU capacity for the requested type in any availability zone, after trying every capable zone (`max_launch_attempts`) | Retry later, pick a different `gpu_type`, or launch in another region (`veri regions list`, then `region="..."`). Capacity is provider-side and not pre-checkable |
 | `provisioning_error` | The instance booted but the worker did not come up | Re-submit; if persistent, try a different `gpu_type` |
 | `provisioning_timeout` | The instance never reached a running worker within the provisioning deadline | Re-submit; capacity or boot was too slow |
 | `configuring_timeout` | The worker booted but made no training progress within the configuring deadline | Re-submit; if persistent, check the full log via `GET /v1/training_jobs/{id}/logs/full` |
@@ -93,6 +93,17 @@ job = client.training_jobs.create(
 job.wait(poll_interval=15)
 job.download(output_dir="./checkpoints")
 ```
+
+### Choosing a launch region
+
+Capacity is per-region. If your job fails with `CAPACITY_UNAVAILABLE`, another region may have the GPU you need right now:
+
+```bash
+veri regions list        # offered regions; default marked, coming-soon flagged
+veri gpu list            # live availability per provider and region
+```
+
+Pass `region="us-west-2"` to `client.training_jobs.create`, the `@veri.train` decorator, or `veri train --region us-west-2`. Omit it to launch in the default region. Unknown or not-yet-available regions are rejected at submit with the list of valid options.
 
 <Note>
   This snippet uses the low-level client and assumes you have already uploaded a dataset and reward function (the `dataset` and `reward_fn` it references). For a runnable end-to-end version that handles those uploads for you with `@training_job` + `veri train`, see the [Managed GRPO quickstart](/demos/managed-grpo-quickstart).

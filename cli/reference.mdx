@@ -137,6 +137,18 @@ veri doctor --format json | jq -e '.[] | select(.status == "fail")' && exit 1
 veri gpu list
 ```
 
+## `veri regions` {#regions}
+
+| Command | Purpose |
+| --- | --- |
+| `list` | Launch regions for training jobs. Marks the default region and whether each region is available or coming soon. |
+
+```bash
+veri regions list
+```
+
+Pass a region to a training job with `veri train --region <name>` or the `region` argument of the `@veri.train` decorator. Omit both to use the default region.
+
 ## `veri billing` {#billing}
 
 | Command | Purpose |

@@ -5384,7 +5384,8 @@
         "type": "object",
         "required": [
           "name",
-          "default"
+          "default",
+          "launch_enabled"
         ],
         "properties": {
           "name": {
@@ -5393,6 +5394,10 @@
           "default": {
             "type": "boolean",
             "description": "True for the home region used when a job specifies no region."
+          },
+          "launch_enabled": {
+            "type": "boolean",
+            "description": "Whether training jobs may launch into this region right now. A listed\nregion with `launch_enabled: false` is coming soon (visible while its\nsubstrate is provisioned); submit rejects it. VS-257 Phase 1."
           }
         }
       },
