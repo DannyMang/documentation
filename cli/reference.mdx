@@ -131,10 +131,14 @@ veri doctor --format json | jq -e '.[] | select(.status == "fail")' && exit 1
 
 | Command | Purpose |
 | --- | --- |
-| `list` | Available GPU SKUs across providers. |
+| `list` | Available GPU node SKUs, with per-GPU and whole-node $/hr. |
+| `describe <sku>` | Hardware specs (VRAM, vCPU, host RAM, node size) + $/hr for one SKU. |
+| `compare` | Compare cost across providers for a given GPU config. |
 
 ```bash
 veri gpu list
+veri gpu describe A100-80GB
+veri gpu compare --gpu-type A100-80GB --gpu-count 1
 ```
 
 ## `veri regions` {#regions}
