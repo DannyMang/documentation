@@ -227,7 +227,7 @@ seed: int = 42
 gpu = {"gpu_type": "H100-80GB", "gpu_count": 2}
 ```
 
-Supported `gpu_type` values: `A100-80GB`, `H100-80GB`, `L4-24GB`, `A10G-24GB`. (H200 and MI300X are roadmap.) On AWS, `A100-80GB` and `H100-80GB` launch as 8-GPU nodes; `L4-24GB` and `A10G-24GB` are the single-GPU shapes.
+Supported `gpu_type` values: `A100-80GB`, `H100-80GB`, `L4-24GB`, `A10G-24GB`. `MI300X-192GB` (AMD, single GPU, `provider: "hotaisle"`) is coming soon; H200 is roadmap. On AWS, `A100-80GB` and `H100-80GB` launch as 8-GPU nodes; `L4-24GB` and `A10G-24GB` are the single-GPU shapes. Run `veri gpu list` to see current availability and pricing for every shape.
 
 ## Checkpoint destination schema
 
