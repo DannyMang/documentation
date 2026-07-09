@@ -21,6 +21,7 @@ dataset = client.datasets.connect(
     huggingface_dataset="openai/gsm8k",
     huggingface_config={
         "split": "train",
+        "subset": "main",  # GSM8K requires a config: "main" or "socratic"
         "column_mapping": {"question": "prompt", "answer": "answer"},
     },
 )

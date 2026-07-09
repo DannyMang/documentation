@@ -65,13 +65,14 @@ echo $DS_ID    # ds_abc123
 No download required; Veri references the HF repo directly.
 
 ```bash
-veri datasets connect-hf openai/gsm8k --split train --name gsm8k-train
+veri datasets connect-hf openai/gsm8k --config main --split train --name gsm8k-train
 ```
 
-Rename columns at connect time with `--map old=new` (repeatable):
+GSM8K requires a config name (`main` or `socratic`) — datasets with a single config can omit `--config`. Rename columns at connect time with `--map old=new` (repeatable):
 
 ```bash
 veri datasets connect-hf openai/gsm8k \
+  --config main \
   --split train \
   --map question=prompt \
   --map answer=answer

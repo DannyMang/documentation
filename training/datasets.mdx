@@ -49,6 +49,7 @@ client.datasets.connect(
     huggingface_dataset="openai/gsm8k",
     huggingface_config={
         "split": "train",
+        "subset": "main",  # GSM8K requires a config: "main" or "socratic"
         "column_mapping": {
             "question": "prompt",
             "answer": "answer",
@@ -59,6 +60,7 @@ client.datasets.connect(
 
 ```bash CLI
 veri datasets connect-hf openai/gsm8k \
+  --config main \
   --map question=prompt --map answer=answer \
   --name gsm8k-train
 ```
@@ -88,7 +90,7 @@ Test the connection + preview the first row + see total row count without commit
 result = client.datasets.validate(
     source_type="hf",
     huggingface_dataset="openai/gsm8k",
-    huggingface_config={"split": "train", "column_mapping": {"question": "prompt", "answer": "answer"}},
+    huggingface_config={"split": "train", "subset": "main", "column_mapping": {"question": "prompt", "answer": "answer"}},
 )
 
 print(f"Valid: {result['valid']}")
