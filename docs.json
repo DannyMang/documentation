@@ -43,6 +43,7 @@
               "training",
               "training/custom-script",
               "training/managed",
+              "training/providers",
               "training/datasets",
               "training/reward-functions",
               "training/grpo",

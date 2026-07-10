@@ -105,6 +105,23 @@ veri gpu list            # live availability per provider and region
 
 Pass `region="us-west-2"` to `client.training_jobs.create`, the `@veri.train` decorator, or `veri train --region us-west-2`. Omit it to launch in the default region. Unknown or not-yet-available regions are rejected at submit with the list of valid options.
 
+### Choosing a GPU provider
+
+Veri supports multiple GPU providers — AWS (NVIDIA, default), Hot Aisle (AMD MI300X), and Vast.ai (NVIDIA marketplace). Pass `provider` at submit time to choose where your job runs:
+
+```python
+job = client.training_jobs.create(
+    base_model="Qwen/Qwen2.5-0.5B-Instruct",
+    dataset_id=dataset.id,
+    reward_function_id=reward_fn.id,
+    gpu_type="MI300X-192GB",
+    gpu_count=1,
+    provider="hotaisle",
+)
+```
+
+See [GPU providers](/training/providers) for the full provider list, GPU types, pricing, and availability checks.
+
 <Note>
   This snippet uses the low-level client and assumes you have already uploaded a dataset and reward function (the `dataset` and `reward_fn` it references). For a runnable end-to-end version that handles those uploads for you with `@training_job` + `veri train`, see the [Managed GRPO quickstart](/demos/managed-grpo-quickstart).
 </Note>

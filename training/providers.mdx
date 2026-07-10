@@ -1,0 +1,195 @@
+---
+title: "GPU providers"
+sidebarTitle: "Providers"
+description: "Choose where your training job runs: AWS (NVIDIA), Hot Aisle (AMD MI300X), or Vast.ai (NVIDIA marketplace spillover)."
+keywords: ["providers", "AWS", "Hot Aisle", "AMD", "MI300X", "Vast.ai", "GPU", "cloud"]
+---
+
+Veri runs training jobs on three GPU providers. You pick one at job submit time with the `provider` field. Each provider offers different GPU types at different price points — AWS is the default, Hot Aisle is the AMD beachhead, and Vast.ai is the NVIDIA marketplace spillover.
+
+## Providers at a glance
+
+| Provider | GPUs offered | Architecture | Billing | Status |
+| --- | --- | --- | --- | --- |
+| `aws` (default) | L4, A10G, A100 80GB, H100 80GB | NVIDIA (Ampere/Hopper) | Per-second, on-demand or spot | Available |
+| `hotaisle` | MI300X 192GB | AMD (CDNA3 / ROCm) | Per-hour, on-demand | Available |
+| `vast` | A100 80GB, H100 80GB | NVIDIA (marketplace) | Per-second, marketplace pricing | Available |
+
+<Note>
+  All providers except AWS are gated behind feature flags that may be off in your environment. If a provider is disabled, submit returns a "coming soon" 400. Run `veri gpu list` to see which providers are live.
+</Note>
+
+## Choosing a provider
+
+Pass `provider` when creating a training job:
+
+```python
+from veri_sdk import Client
+client = Client()
+
+job = client.training_jobs.create(
+    base_model="Qwen/Qwen2.5-0.5B-Instruct",
+    dataset_id=dataset.id,
+    reward_function_id=reward_fn.id,
+    output_name="qwen-0.5b-amd",
+    method="grpo",
+    gpu_type="MI300X-192GB",
+    gpu_count=1,
+    provider="hotaisle",
+    hyperparameters={
+        "learning_rate": 1e-6,
+        "max_steps": 50,
+    },
+)
+```
+
+From the CLI:
+
+```bash
+veri train --provider hotaisle --gpu-type MI300X-192GB --gpu-count 1
+```
+
+Or in a TOML config:
+
+```toml
+kind = "train"
+provider = "hotaisle"
+gpu_type = "MI300X-192GB"
+gpu_count = 1
+```
+
+Omit `provider` to use the default (AWS).
+
+## Checking live availability
+
+Capacity is per-provider and per-region. Check what's available right now before submitting:
+
+```bash
+veri gpu list                    # all providers, all regions
+veri gpu list --provider hotaisle  # Hot Aisle only
+veri gpu list --provider vast     # Vast.ai only
+veri gpu list --gpu-type MI300X-192GB  # filter by GPU type
+```
+
+The `available` column shows live capacity: a real-time count of GPUs that can be launched immediately. `0` means the shape is offered but currently out of stock — retry later.
+
+## AWS (default)
+
+AWS is the default provider and the most reliable for NVIDIA training. It offers four GPU types:
+
+| GPU type | VRAM | Instance | GPUs per node |
+| --- | --- | --- | --- |
+| `L4-24GB` | 24 GB | g6.xlarge | 1 |
+| `A10G-24GB` | 24 GB | g5.xlarge | 1 |
+| `A100-80GB` | 80 GB | p4de.24xlarge | 8 |
+| `H100-80GB` | 80 GB | p5.48xlarge | 8 |
+
+L4 and A10G are single-GPU instances — you rent one card. A100 and H100 are whole 8-GPU nodes: you get (and pay for) all 8 cards regardless of `gpu_count`, which controls how many are used for training, not how many are rented.
+
+```python
+job = client.training_jobs.create(
+    base_model="Qwen/Qwen2.5-0.5B-Instruct",
+    dataset_id=dataset.id,
+    reward_function_id=reward_fn.id,
+    gpu_type="L4-24GB",
+    gpu_count=1,
+    # provider defaults to "aws"
+)
+```
+
+## Hot Aisle (AMD MI300X)
+
+Hot Aisle is a neocloud offering single- and multi-GPU AMD MI300X VMs. The MI300X has 192 GB of HBM3 memory — more than any NVIDIA single-GPU offering — making it well-suited for large-model finetuning on a single card.
+
+| GPU type | VRAM | Architecture | GPUs available |
+| --- | --- | --- | --- |
+| `MI300X-192GB` | 192 GB | AMD CDNA3 (ROCm 6.4) | 1, 2, or 4 |
+
+<Info>
+  Hot Aisle VMs run ROCm, not CUDA. The training stack (torch, transformers, TRL) is installed from the ROCm wheel index at boot. Unsloth, bitsandbytes, xformers, and vLLM are CUDA-only and are not available on this provider. Vanilla TRL training (GRPO, SFT, DPO) is fully supported.
+</Info>
+
+```python
+job = client.training_jobs.create(
+    base_model="Qwen/Qwen2.5-0.5B-Instruct",
+    dataset_id=dataset.id,
+    reward_function_id=reward_fn.id,
+    output_name="qwen-amd-grpo",
+    gpu_type="MI300X-192GB",
+    gpu_count=1,
+    provider="hotaisle",
+    hyperparameters={
+        "learning_rate": 1e-6,
+        "rollouts_per_prompt": 4,
+        "max_steps": 50,
+    },
+)
+```
+
+### Cold-start behavior
+
+Hot Aisle VMs boot from a stock image and install the ROCm training stack at boot via cloud-init. The first boot includes:
+
+1. ROCm driver verification (`rocm-smi`)
+2. PyTorch ROCm wheel installation (torch 2.9.1 from the ROCm 6.4 index)
+3. Training stack install (transformers, accelerate, peft, TRL)
+4. GPU sanity gate (`SA5_ROCM_OK` — torch must see the AMD GPU)
+
+Cold-start time depends on Hot Aisle's VM provisioning and network throughput. If the cloud-init path is slow, a prebuilt ROCm worker container may be used in the future to reduce boot time.
+
+### Supported training methods
+
+All managed training methods work on Hot Aisle: `grpo`, `sft_text`, `dpo`, and `sft_video_gen`. The `grpo_agentic` method is unavailable on all providers (the agentic engine is being rebuilt).
+
+<Warning>
+  `use_unsloth` and `load_in_4bit` (QLoRA) are not supported on Hot Aisle — both depend on CUDA-only libraries. Set them to `false` (the default) when using `provider="hotaisle"`.
+</Warning>
+
+## Vast.ai (NVIDIA marketplace)
+
+Vast.ai is a GPU marketplace that rents per-host NVIDIA chunks (1-8 GPUs within a single machine). It serves as a capacity spillover when AWS is out of A100 or H100 stock.
+
+| GPU type | VRAM | Architecture | GPUs available |
+| --- | --- | --- | --- |
+| `A100-80GB` | 80 GB | NVIDIA Ampere | 1-8 (per-host) |
+| `H100-80GB` | 80 GB | NVIDIA Hopper | 1-8 (per-host) |
+
+```python
+job = client.training_jobs.create(
+    base_model="Qwen/Qwen2.5-0.5B-Instruct",
+    dataset_id=dataset.id,
+    reward_function_id=reward_fn.id,
+    gpu_type="H100-80GB",
+    gpu_count=1,
+    provider="vast",
+)
+```
+
+Vast.ai rents individual GPU cards on shared hosts, so `gpu_count=1` rents exactly one GPU (unlike AWS where A100/H100 are whole 8-GPU nodes). Availability and pricing vary by host and fluctuate in real time.
+
+## Pricing
+
+Each provider has its own rate card. Check current pricing with:
+
+```bash
+veri gpu list --format json   # includes usd_per_hour per GPU type
+```
+
+Rates are per-GPU-hour. You are billed from when the GPU is provisioned (`provisioning` state) until the job terminates and the instance is reaped. A job that never secures a GPU (e.g. `CAPACITY_UNAVAILABLE`) is not billed.
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="Managed training" icon="graduation-cap" href="/training/managed">
+    How the training loop works across all providers.
+  </Card>
+  <Card title="GRPO algorithm" icon="brain" href="/training/grpo">
+    The default RL method — works on all providers.
+  </Card>
+  <Card title="Check live availability" icon="server" href="/cli/reference">
+    `veri gpu list` shows real-time capacity per provider.
+  </Card>
+  <Card title="Regions" icon="globe" href="/cli/reference">
+    Launch in a specific AWS region for lower latency or capacity.
+  </Card>
+</CardGroup>
