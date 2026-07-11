@@ -19,6 +19,31 @@ The smallest viable example is in the [Deploy a HF model quickstart](/demos/depl
 
 To name, store, and reuse your own weights (trained checkpoints, Hugging Face imports, or direct uploads), see [Custom models](/deployments/custom-models).
 
+## Deployment parameters
+
+You set these at create time, whether from the SDK (`client.deployments.create(...)`), the CLI (`veri deployments create`), or a `kind = "deploy"` config.
+
+| Parameter | Required | Default | What it does |
+| --- | --- | --- | --- |
+| `model` | Yes | — | What to serve: a Hugging Face repo id, a completed training job id, or a [custom model](/deployments/custom-models) id, paired with `source`. |
+| `source` | No | `training_job` | Where `model` comes from: `huggingface`, `training_job`, or `s3_model`. See [Two sources](#two-sources). |
+| `name` | Yes | — | Display name, also the `model` value clients send in requests. |
+| `gpu.gpu_type` | Yes | — | GPU SKU (for example `L4-24GB`, `A100-80GB`). Run `veri gpu list` for offered shapes and [Sizing the GPU](#sizing-the-gpu) for guidance. |
+| `gpu.gpu_count` | No | `1` | GPUs per replica, for multi-GPU model parallelism. |
+| `engine` | No | `vllm` | Inference engine: `vllm` or `max` (Modular MAX). |
+| `provider` | No | auto | Cloud to serve on. Omit to let Veri choose. |
+| `replicas` | No | `1` | Number of GPU-box replicas behind one endpoint (1-8). Experimental, see the note below. |
+
+At call time, `chat` also accepts a session key for cache-warm routing across replicas.
+
+| Parameter | Where | What it does |
+| --- | --- | --- |
+| `session_id` | `X-Veri-Session-Id` header, or the OpenAI `user` field | Pins a conversation to one replica so its KV cache stays warm across turns. Only affects multi-replica deployments. Experimental. |
+
+<Warning>
+  `replicas` and session affinity are a work in progress. The router and failover are shipped but lightly tested, and autoscaling (changing the replica count with load) is not implemented yet, so expect bugs. See [Multiple replicas and session affinity](/cli/deployments#multiple-replicas-and-session-affinity).
+</Warning>
+
 ## The deployment lifecycle
 
 ```mermaid
