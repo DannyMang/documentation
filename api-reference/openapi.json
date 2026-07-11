@@ -279,6 +279,51 @@
         ]
       }
     },
+    "/v1/credits/redeem": {
+      "post": {
+        "tags": [
+          "Billing"
+        ],
+        "summary": "Redeem a credit code",
+        "operationId": "redeem",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RedeemRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Code redeemed; credits added to balance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RedeemResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or malformed code"
+          },
+          "404": {
+            "description": "Code not found"
+          },
+          "409": {
+            "description": "Code already redeemed"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/datasets": {
       "get": {
         "tags": [
@@ -1270,7 +1315,7 @@
           {
             "name": "provider",
             "in": "query",
-            "description": "\"aws\" | \"hotaisle\". Absent = every probeable provider we can reach.",
+            "description": "\"aws\" | \"hotaisle\" | \"vast\". Absent = every probeable provider we can reach.",
             "required": false,
             "schema": {
               "type": "string"
@@ -3108,6 +3153,14 @@
               "null"
             ],
             "description": "Inference engine: \"vllm\" (default) or \"max\" (Modular MAX). Omitted => vllm."
+          },
+          "num_replicas": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "VS-341: number of GPU-box replicas to launch (fixed N; no autoscaling in\nthis chunk). Omitted => 1, which is byte-for-byte today's single-box\nbehavior. Validated 1..=8 at create."
           }
         }
       },
@@ -3279,6 +3332,11 @@
               "string",
               "null"
             ]
+          },
+          "num_replicas": {
+            "type": "integer",
+            "format": "int32",
+            "description": "VS-341: number of serving replicas (GPU boxes) behind this deployment."
           },
           "cost_per_hour_usd": {
             "type": [
@@ -3989,7 +4047,7 @@
               "null"
             ],
             "format": "double",
-            "description": "USD/hr where the provider publishes it (Hot Aisle). AWS on-demand price is\nserved by /v1/cost/rates, so it is absent here."
+            "description": "Per-GPU USD/hr for this shape. On the wire from the transport this is the\nprovider's RAW published rate; before returning to the caller the endpoint\nmarks it up by the per-provider markup (VS-344) so it matches the customer\nprice on /v1/cost/rates and never leaks the raw margin."
           },
           "detail": {
             "type": [
@@ -4556,6 +4614,11 @@
                     "string",
                     "null"
                   ]
+                },
+                "num_replicas": {
+                  "type": "integer",
+                  "format": "int32",
+                  "description": "VS-341: number of serving replicas (GPU boxes) behind this deployment."
                 },
                 "cost_per_hour_usd": {
                   "type": [
@@ -5377,6 +5440,34 @@
           },
           "source_code": {
             "type": "string"
+          }
+        }
+      },
+      "RedeemRequest": {
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          }
+        }
+      },
+      "RedeemResponse": {
+        "type": "object",
+        "required": [
+          "amount_usd",
+          "balance_usd"
+        ],
+        "properties": {
+          "amount_usd": {
+            "type": "number",
+            "format": "double"
+          },
+          "balance_usd": {
+            "type": "number",
+            "format": "double"
           }
         }
       },

@@ -57,6 +57,7 @@ veri deployments create \
 | `--name` | Display name. |
 | `--gpu-type` | Required in inline form. |
 | `--gpu-count` | Default `1`. |
+| `--replicas` | Number of GPU-box replicas behind one endpoint (1-8). Default `1`. Experimental, see [Multiple replicas and session affinity](#multiple-replicas-and-session-affinity). |
 
 ## Smoke-test with `chat`
 
@@ -74,8 +75,38 @@ The CLI calls the OpenAI-compatible endpoint with a single user message and prin
 | `--model` | Override the model name in the request body. Defaults to the deployment's name. |
 | `--temperature` | Sampling temperature. Default `1.0`. |
 | `--max-tokens` | Cap on response tokens. |
+| `--session-id` | Pin this conversation to one replica for cache-warm affinity (sets the `X-Veri-Session-Id` header). Only affects multi-replica deployments. Experimental. |
 
 For programmatic chat, point any OpenAI-compatible client at the deployment's `endpoint_url` (visible in `veri deployments get`).
+
+## Multiple replicas and session affinity
+
+<Warning>
+  Multiple replicas and session affinity are a work in progress. The router, per-replica lifecycle, and failover are shipped but lightly tested, so expect rough edges and bugs. Autoscaling (growing or shrinking the replica count with load) is not implemented yet: the count you set is fixed until you recreate the deployment.
+</Warning>
+
+Pass `--replicas N` (1-8) at create to serve one endpoint from several GPU boxes behind a load-balancing router. The endpoint, billing, and chat surface are unchanged; only throughput scales.
+
+```bash
+veri deployments create \
+  --from-hf Qwen/Qwen3-4B \
+  --name qwen-prod \
+  --gpu-type L4-24GB --gpu-count 1 \
+  --replicas 2
+```
+
+The deployment reports `serving` once at least one replica is up, and billing is the per-box rate times the replica count.
+
+Routing:
+
+- **With `--session-id <key>`** (or the OpenAI `user` field, which sets the `X-Veri-Session-Id` header), a conversation is pinned to one replica so its KV cache stays warm across turns. The same key always lands on the same replica; if that replica is unavailable, the request fails over to another.
+- **Without a session key**, requests go to the least-loaded replica.
+
+```bash
+veri deployments chat dep_abc -m "Continue our story" --session-id chat-42
+```
+
+Reuse the same `--session-id` for every turn of a conversation to keep it on its cache-warm replica.
 
 ## Pause to control billing
 
