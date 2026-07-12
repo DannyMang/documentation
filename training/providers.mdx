@@ -1,11 +1,11 @@
 ---
 title: "GPU providers"
 sidebarTitle: "Providers"
-description: "Choose where your training job runs: AWS (NVIDIA), Hot Aisle (AMD MI300X), or Vast.ai (NVIDIA marketplace spillover)."
-keywords: ["providers", "AWS", "Hot Aisle", "AMD", "MI300X", "Vast.ai", "GPU", "cloud"]
+description: "Choose where your training job runs: AWS (NVIDIA), Hot Aisle (AMD MI300X), Vast.ai (NVIDIA marketplace spillover), or DigitalOcean (H100 + MI300X droplets)."
+keywords: ["providers", "AWS", "Hot Aisle", "AMD", "MI300X", "Vast.ai", "DigitalOcean", "H100", "GPU", "cloud"]
 ---
 
-Veri runs training jobs on three GPU providers. You pick one at job submit time with the `provider` field. Each provider offers different GPU types at different price points — AWS is the default, Hot Aisle is the AMD beachhead, and Vast.ai is the NVIDIA marketplace spillover.
+Veri runs training jobs on four GPU providers. You pick one at job submit time with the `provider` field. Each provider offers different GPU types at different price points — AWS is the default, Hot Aisle is the AMD beachhead, Vast.ai is the NVIDIA marketplace spillover, and DigitalOcean offers single-GPU H100 and MI300X droplets with per-second billing.
 
 ## Providers at a glance
 
@@ -14,6 +14,7 @@ Veri runs training jobs on three GPU providers. You pick one at job submit time 
 | `aws` (default) | L4, A10G, A100 80GB, H100 80GB | NVIDIA (Ampere/Hopper) | Per-second, on-demand or spot | Available |
 | `hotaisle` | MI300X 192GB | AMD (CDNA3 / ROCm) | Per-hour, on-demand | Available |
 | `vast` | A100 80GB, H100 80GB | NVIDIA (marketplace) | Per-second, marketplace pricing | Available |
+| `digitalocean` | H100 80GB, MI300X 192GB | NVIDIA (Hopper) + AMD (CDNA3) | Per-second, on-demand | Coming soon |
 
 <Note>
   All providers except AWS are gated behind feature flags that may be off in your environment. If a provider is disabled, submit returns a "coming soon" 400. Run `veri gpu list` to see which providers are live.
@@ -68,10 +69,15 @@ Capacity is per-provider and per-region. Check what's available right now before
 veri gpu list                    # all providers, all regions
 veri gpu list --provider hotaisle  # Hot Aisle only
 veri gpu list --provider vast     # Vast.ai only
+veri gpu list --provider digitalocean  # DigitalOcean only
 veri gpu list --gpu-type MI300X-192GB  # filter by GPU type
 ```
 
 The `available` column shows live capacity: a real-time count of GPUs that can be launched immediately. `0` means the shape is offered but currently out of stock — retry later.
+
+<Note>
+  DigitalOcean rows show one `AVAILABLE` entry per region with current capacity, or a single `UNAVAILABLE` row when a shape has no capacity anywhere. This signal comes from DigitalOcean's size catalog, which can lag real launch acceptance in both directions — a submit may still succeed after the launcher retries across regions, or miss capacity the catalog listed moments earlier.
+</Note>
 
 ## AWS (default)
 
@@ -166,6 +172,41 @@ job = client.training_jobs.create(
 ```
 
 Vast.ai rents individual GPU cards on shared hosts, so `gpu_count=1` rents exactly one GPU (unlike AWS where A100/H100 are whole 8-GPU nodes). Availability and pricing vary by host and fluctuate in real time.
+
+## DigitalOcean (H100 + MI300X)
+
+DigitalOcean GPU Droplets are on-demand single- and 8-GPU VMs with per-second billing and fast (about one minute) provisioning. It is the one provider offering both NVIDIA and AMD silicon:
+
+| GPU type | VRAM | Architecture | GPUs available |
+| --- | --- | --- | --- |
+| `H100-80GB` | 80 GB | NVIDIA Hopper | 1 or 8 |
+| `MI300X-192GB` | 192 GB | AMD CDNA3 (ROCm) | 1 or 8 |
+
+DigitalOcean sells fixed 1x and 8x droplet shapes only — a `gpu_count` of 2 or 4 is rejected at submit.
+
+<Note>
+  DigitalOcean is feature-gated and currently rolling out. While the gate is off, a `provider="digitalocean"` submit returns a "coming soon" 400.
+</Note>
+
+```python
+job = client.training_jobs.create(
+    base_model="Qwen/Qwen2.5-0.5B-Instruct",
+    dataset_id=dataset.id,
+    method="sft_text",
+    output_name="qwen-do-sft",
+    gpu_type="H100-80GB",
+    gpu_count=1,
+    provider="digitalocean",
+)
+```
+
+<Info>
+  MI300X droplets run ROCm, not CUDA — the same constraints as Hot Aisle apply: vanilla TRL training works, but `use_unsloth` and `load_in_4bit` do not. H100 droplets run the standard CUDA stack.
+</Info>
+
+<Warning>
+  DigitalOcean GPU capacity fluctuates minute-to-minute. A submit that hits `CAPACITY_UNAVAILABLE` after retrying across regions is not billed — check `veri gpu list --provider digitalocean` and retry.
+</Warning>
 
 ## Pricing
 
