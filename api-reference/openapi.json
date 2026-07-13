@@ -918,6 +918,35 @@
         ]
       }
     },
+    "/v1/evals/benchmarks": {
+      "get": {
+        "tags": [
+          "Evaluations"
+        ],
+        "summary": "List benchmark catalog",
+        "operationId": "list_benchmarks",
+        "responses": {
+          "200": {
+            "description": "Available benchmark tasks",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BenchmarkInfo"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/evals/{eval_id}": {
       "get": {
         "tags": [
@@ -1315,7 +1344,7 @@
           {
             "name": "provider",
             "in": "query",
-            "description": "\"aws\" | \"hotaisle\" | \"vast\". Absent = every probeable provider we can reach.",
+            "description": "\"aws\" | \"hotaisle\" | \"vast\" | \"digitalocean\". Absent = every probeable\nprovider we can reach.",
             "required": false,
             "schema": {
               "type": "string"
@@ -1333,7 +1362,7 @@
           {
             "name": "region",
             "in": "query",
-            "description": "Region filter. AWS: a real region. Hot Aisle: \"hotaisle-us\".",
+            "description": "Region filter. AWS: a real region. Hot Aisle: \"hotaisle-us\".\nDigitalOcean: a DO region slug (e.g. \"tor1\").",
             "required": false,
             "schema": {
               "type": "string"
@@ -2754,6 +2783,37 @@
           }
         }
       },
+      "BenchmarkInfo": {
+        "type": "object",
+        "required": [
+          "task",
+          "name",
+          "description",
+          "tier",
+          "num_samples"
+        ],
+        "properties": {
+          "task": {
+            "type": "string",
+            "description": "Catalog id used as `task` in a benchmark scorer (e.g. \"gsm8k\")."
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "tier": {
+            "type": "string",
+            "description": "\"inference_only\" or \"code_exec\" (code_exec runs each sample in a sandbox)."
+          },
+          "num_samples": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Total rows in the source split; cap with `sample_limit`."
+          }
+        }
+      },
       "BenchmarkScorerConfig": {
         "type": "object",
         "required": [
@@ -3573,7 +3633,6 @@
         "type": "object",
         "required": [
           "name",
-          "dataset_id",
           "scorers"
         ],
         "properties": {
@@ -3581,7 +3640,11 @@
             "type": "string"
           },
           "dataset_id": {
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional when the (single) scorer is a benchmark — benchmark tasks\nsupply their own rows. Required for every other scorer type."
           },
           "scorers": {
             "type": "array",
@@ -3607,7 +3670,6 @@
           "object",
           "id",
           "name",
-          "dataset_id",
           "scorers",
           "created_at"
         ],
@@ -3622,7 +3684,10 @@
             "type": "string"
           },
           "dataset_id": {
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "scorers": {
             "type": "array",
@@ -4693,7 +4758,6 @@
                 "object",
                 "id",
                 "name",
-                "dataset_id",
                 "scorers",
                 "created_at"
               ],
@@ -4708,7 +4772,10 @@
                   "type": "string"
                 },
                 "dataset_id": {
-                  "type": "string"
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 },
                 "scorers": {
                   "type": "array",

@@ -1,14 +1,108 @@
 ---
 title: "veri evals"
 sidebarTitle: "Evals"
-description: "CLI for defining and running evaluations. Planned for a later release."
-keywords: ["veri evals", "evaluation", "scorer", "cli"]
+description: "Define and run evaluations from the terminal — datasets, benchmarks, and live run progress"
+keywords: ["veri evals", "evaluation", "scorer", "benchmark", "gsm8k", "humaneval", "cli"]
 ---
 
-<Note>
-  **Work in progress.** The `veri evals` command group is planned for a later release and is not available in the CLI yet.
-</Note>
+The `veri evals` command group defines evals (a dataset + scorers, or a benchmark task), runs them against serving deployments, and inspects per-sample results. `veri run <config>.toml` with `kind = "eval"` dispatches here too.
 
-## What the CLI will do
+## veri evals benchmarks
 
-Once evaluations ship, `veri evals` will let you define an eval (a dataset plus scorers), run it against a deployed model, and inspect per-sample outputs and aggregate scores from the terminal. The commands and flags will be documented here at release.
+List the curated benchmark catalog.
+
+```bash
+veri evals benchmarks
+```
+
+```
+ task       name       tier            num_samples  description
+ gsm8k      GSM8K      inference_only  1319         Grade-school math word problems...
+ humaneval  HumanEval  code_exec       164          Python function synthesis...
+```
+
+## veri evals create
+
+Three ways to create (and implicitly start) an eval:
+
+### Benchmark — one line, no dataset
+
+```bash
+veri evals create --benchmark gsm8k --model deployment:dep_abc123 --n 100 --follow
+```
+
+| Flag | Meaning |
+| --- | --- |
+| `--benchmark <task>` | Catalog task (`gsm8k`, `humaneval`). Mutually exclusive with `--dataset`. |
+| `--model <target>` | Required. A serving deployment: `deployment:<id>`. |
+| `--n <int>` | Sample limit (default 100). |
+| `--follow`, `-f` | Poll the run, stream progress, print scores at the end. |
+
+### Quick — inline dataset eval
+
+```bash
+veri evals create --quick --dataset ds_abc123 --model deployment:dep_abc123 --scorer exact_match --n 200
+```
+
+### Config — reusable TOML
+
+```bash
+veri evals create configs/eval.toml --follow
+# or equivalently:
+veri run configs/eval.toml --follow
+```
+
+```toml
+kind = "eval"
+
+[eval]
+name = "gsm8k-baseline"
+# dataset_id = "ds_abc123"   # only for dataset evals; benchmarks omit it
+
+[[scorers]]
+type = "benchmark"
+name = "gsm8k"
+task = "gsm8k"
+sample_limit = 100
+
+[run]                         # optional — starts a run on create
+model = "deployment:dep_abc123"
+```
+
+Override any config value from the CLI with `--set`, e.g. `--set run.model=deployment:dep_xyz`.
+
+## veri evals list / get / delete
+
+```bash
+veri evals list
+veri evals get eval_9f2c01
+veri evals delete eval_9f2c01
+```
+
+## veri evals runs
+
+```bash
+veri evals runs list eval_9f2c01                 # all runs for an eval
+veri evals runs get eval_9f2c01 run_5b7d22       # status, progress, results
+veri evals runs items eval_9f2c01 run_5b7d22     # per-sample outputs + scores
+veri evals runs cancel eval_9f2c01 run_5b7d22    # stop an active run
+```
+
+All commands support `--format json` for machine output and `--quiet` for pipe-friendly IDs.
+
+## Following a run
+
+`--follow` on `create` (or `veri run`) polls until the run is terminal:
+
+```
+  [   1.2s] running  0/100
+  [   9.8s] running  64/100
+  [  14.1s] completed  100/100
+  gsm8k: mean=0.8100  n=100  errors=0
+```
+
+Exits non-zero if the run fails, so it composes with CI:
+
+```bash
+veri evals create --benchmark gsm8k --model "deployment:$DEP" --n 100 --follow --quiet
+```

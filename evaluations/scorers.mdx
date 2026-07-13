@@ -1,24 +1,76 @@
 ---
 title: "Scorers"
 sidebarTitle: "Scorers"
-description: "Reusable functions that turn a model's output into a numeric score. Planned for a later release."
-keywords: ["scorers", "exact_match", "contains", "LLM judge", "benchmark", "evaluation"]
+description: "Configuration reference for eval scorers: exact_match, contains, and benchmark"
+keywords: ["scorers", "exact_match", "contains", "benchmark", "evaluation"]
 ---
 
-<Note>
-  **Work in progress.** Scorers ship with [Evaluations](/evaluations), which are planned for a later release. The configuration shapes are not final and are not available yet.
-</Note>
+A scorer turns a model's output for a single sample into a numeric score. An eval applies its scorers to every sample, then aggregates per-scorer stats (`mean`, `median`, `std`, `min`, `max`, `count`, `error_count`).
 
-## What scorers will do
+Scorers are declared as a JSON array on the eval. Every scorer has a `type` and a `name` (the key its scores appear under in results).
 
-A scorer turns a model's output for a single dataset item into a numeric score. An evaluation run applies one or more scorers across every item, then aggregates the per-item scores.
+## exact_match
 
-## Planned scorer types
+Case-insensitive (by default) string comparison of the model output against a reference field on the dataset row.
 
-- `exact_match`: case-insensitive comparison against a dataset reference field.
-- `contains`: substring or regex match against a reference field.
-- `llm_judge`: grade outputs with a judge model.
-- `python`: bring your own scoring function.
-- Curated public benchmarks (MMLU, GPQA, HumanEval, and similar) in a later stage.
+```json
+{
+  "type": "exact_match",
+  "name": "answer_accuracy",
+  "reference_field": "label",
+  "case_sensitive": false
+}
+```
 
-Exact configuration and the API will be documented here once evaluations ship.
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `reference_field` | `"label"` | Dataset row field holding the expected output |
+| `case_sensitive` | `false` | Exact-case comparison when `true` |
+
+Score: `1.0` on match, `0.0` otherwise. Both sides are whitespace-trimmed.
+
+## contains
+
+Substring or regex match against a reference field.
+
+```json
+{
+  "type": "contains",
+  "name": "mentions_refund",
+  "reference_field": "label",
+  "regex": false
+}
+```
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `reference_field` | `"label"` | Dataset row field holding the pattern |
+| `regex` | `false` | Treat the reference value as a regular expression |
+
+Score: `1.0` when the output contains the reference (or matches the regex), `0.0` otherwise. An invalid regex scores as an error, not a failure.
+
+## benchmark
+
+Runs a curated task from the [benchmark catalog](/evaluations/benchmarks). The task supplies its own rows, prompting, and scoring — so a benchmark eval has **no dataset**, and the benchmark scorer cannot be combined with other scorers.
+
+```json
+{
+  "type": "benchmark",
+  "name": "gsm8k",
+  "task": "gsm8k",
+  "sample_limit": 100
+}
+```
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `task` | — | Catalog task id (`gsm8k`, `humaneval`) |
+| `sample_limit` | all rows | Cap on how many task rows run |
+
+## Errors vs. failures
+
+A score of `0.0` means the model got the sample wrong. A `null` score means the sample **errored** — inference failed, the row was malformed, or (for code benchmarks) sandbox infrastructure failed. Errors are reported in `error_count` and excluded from the aggregate stats, so an infra blip doesn't masquerade as a model regression.
+
+## Planned
+
+`reward_function` (reuse an uploaded reward function), `llm_judge` (grade with a judge model), and `python` (custom scoring code) are declared in the API schema but not executable yet — samples scored with them land in `error_count` rather than producing scores.

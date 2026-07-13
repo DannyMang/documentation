@@ -1,21 +1,128 @@
 ---
 title: "Evaluations"
-description: "Score deployed models against a dataset using reusable scorers"
-keywords: ["evaluations", "scorers", "model evaluation"]
+description: "Score deployed models against datasets or curated benchmarks, with concurrent execution and per-sample results"
+keywords: ["evaluations", "scorers", "benchmarks", "gsm8k", "humaneval", "model evaluation"]
 ---
 
-<Note>
-  **Work in progress.** Evaluations are planned for a later release and are not available yet. There is no SDK, CLI, or API for evals today. This page describes the planned direction so you know what is coming.
-</Note>
+Evaluations score a deployed model and give you both an aggregate score and per-sample results, so you can see exactly which inputs a model gets wrong — and compare checkpoints before promoting one.
 
-## What evaluations will do
+There are two ways to provide test data:
 
-Evaluations will let you score a deployed model against a held-out dataset and read both an aggregate score and per-sample results, so you can see exactly which inputs a model gets wrong.
+- **Your own dataset** — a JSONL dataset you've uploaded, scored with [scorers](/evaluations/scorers) like `exact_match` and `contains`.
+- **A curated benchmark** — GSM8K, HumanEval, and friends. [Benchmarks](/evaluations/benchmarks) bring their own data, prompting, and scoring; you only pick a model.
 
-## Planned scorers
+## How it works
 
-- `exact_match`: case-insensitive comparison against a dataset reference field.
-- `contains`: substring or regex match against a reference field.
-- `llm_judge`, custom `python` scorers, and curated public benchmarks (MMLU, GPQA, HumanEval, and similar) are planned for later stages.
+1. Create an **eval** — a reusable definition: a dataset + scorers, or a benchmark task.
+2. Start a **run** — the eval × a model target (`deployment:<id>`, a serving deployment).
+3. The eval engine fans samples out **concurrently** (up to 100 in flight) against your deployment's serving replicas. Code benchmarks execute each completion in an isolated sandbox.
+4. Watch progress live; read the aggregate score and drill into per-sample items when it completes.
 
-The SDK, CLI, and API surface for evaluations will be documented here once the feature ships.
+Runs are resumable: progress is checkpointed per item, so a run interrupted by a platform deploy picks up where it left off instead of starting over.
+
+## Quickstart (CLI)
+
+Run GSM8K against a serving deployment — no dataset, no config file:
+
+```bash
+veri evals benchmarks                       # see what's available
+veri evals create --benchmark gsm8k --model deployment:dep_abc123 --n 100 --follow
+```
+
+`--follow` streams progress and prints the score when the run completes:
+
+```
+Created eval_9f2c01 and started run run_5b7d22 against deployment:dep_abc123.
+  [   1.2s] running  0/100
+  [   9.8s] running  64/100
+  [  14.1s] completed  100/100
+  gsm8k: mean=0.8100  n=100  errors=0
+```
+
+To eval your own dataset instead:
+
+```bash
+veri evals create --quick \
+  --dataset ds_abc123 \
+  --model deployment:dep_abc123 \
+  --scorer exact_match \
+  --n 200 --follow
+```
+
+Or keep the definition in a TOML config (`veri run configs/eval.toml` works too):
+
+```toml
+kind = "eval"
+
+[eval]
+name = "gsm8k-baseline"
+
+[[scorers]]
+type = "benchmark"
+name = "gsm8k"
+task = "gsm8k"
+sample_limit = 100
+
+[run]
+model = "deployment:dep_abc123"
+```
+
+## Quickstart (dashboard)
+
+On the **Evaluations** page:
+
+1. Click **+ Create** → **Run a benchmark** (or pick a dataset).
+2. Choose the benchmark and a sample limit, then **Create**.
+3. In the detail panel, pick a serving deployment and click **Run eval**.
+4. Progress updates live; scores appear in the runs table when done.
+
+## Quickstart (SDK)
+
+```python
+from veri_sdk import Client
+
+client = Client()
+
+ev = client.evals.create(
+    name="gsm8k-baseline",
+    scorers=[{"type": "benchmark", "name": "gsm8k", "task": "gsm8k", "sample_limit": 100}],
+)
+run = client.evals.runs.create(eval_id=ev.id, model="deployment:dep_abc123")
+run = run.wait()                     # poll until terminal
+print(run.results["scores"])         # {"gsm8k": {"mean": 0.81, "count": 100, ...}}
+
+items = client.evals.runs.items(ev.id, run.id)   # per-sample inspection
+```
+
+## Dataset format
+
+Dataset evals expect JSONL rows with a `prompt` and a reference field (default `label`):
+
+```jsonl
+{"prompt": "What is 2+2?", "label": "4"}
+{"prompt": [{"role": "user", "content": "Capital of France?"}], "label": "Paris"}
+```
+
+`prompt` is either a plain string or a chat-message array; `label` is what scorers compare against.
+
+## Results
+
+A completed run carries per-scorer aggregates:
+
+| Field | Meaning |
+| --- | --- |
+| `mean`, `median`, `std`, `min`, `max` | Aggregate stats over scored samples |
+| `count` | Samples that produced a score |
+| `error_count` | Samples that errored (inference or scoring failure) — excluded from the stats |
+
+Per-sample rows (`items`) include the input, the model's output, the reference label, each scorer's score, and inference latency.
+
+## Model targets
+
+Runs target `deployment:<id>` — a [deployment](/deployments) in the `serving` state. Inference cost is attributed through the deployment's normal request accounting; there is no separate eval billing.
+
+## Next steps
+
+- [Benchmarks](/evaluations/benchmarks) — the curated catalog and how code execution is sandboxed
+- [Scorers](/evaluations/scorers) — configuration reference for every scorer type
+- [CLI reference](/cli/evals) — every `veri evals` command and flag

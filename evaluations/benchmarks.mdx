@@ -1,0 +1,72 @@
+---
+title: "Benchmarks"
+sidebarTitle: "Benchmarks"
+description: "Curated benchmark tasks — GSM8K and HumanEval — with concurrent execution and sandboxed code scoring"
+keywords: ["benchmarks", "gsm8k", "humaneval", "pass@1", "sandbox", "evaluation"]
+---
+
+Benchmarks are curated eval tasks that bring their own data, prompting, and scoring. You pick a task and a model; the platform handles the rest. Unlike dataset evals, a benchmark eval takes **no `dataset_id`** — the task supplies its own rows.
+
+## Catalog
+
+| Task | Tier | Samples | Scoring |
+| --- | --- | --- | --- |
+| `gsm8k` | inference only | 1,319 | Grade-school math word problems. The final numeric answer is extracted from the model output and compared to the reference. |
+| `humaneval` | code exec | 164 | Python function synthesis. Each completion is run against the task's unit tests in an **isolated sandbox**; score is pass@1. |
+
+List the live catalog anytime:
+
+```bash
+veri evals benchmarks
+```
+
+## Running a benchmark
+
+```bash
+veri evals create --benchmark humaneval --model deployment:dep_abc123 --n 50 --follow
+```
+
+Or in the dashboard: **Evaluations → + Create → Run a benchmark**.
+
+Or via config:
+
+```toml
+kind = "eval"
+
+[eval]
+name = "humaneval-checkpoint-7"
+
+[[scorers]]
+type = "benchmark"
+name = "humaneval"
+task = "humaneval"
+sample_limit = 50
+
+[run]
+model = "deployment:dep_abc123"
+```
+
+A benchmark scorer cannot be combined with other scorers in the same eval — the task owns both the rows and the scoring.
+
+## Sample limits
+
+`sample_limit` caps how many rows run (`--n` on the CLI). The subset is sampled deterministically per run, so an interrupted-and-resumed run scores the same rows. Fewer samples = faster and cheaper; the full split gives the most stable score. For quick checkpoint comparisons, 50–100 samples is usually enough to see a meaningful gap.
+
+## Speed
+
+Samples run concurrently — up to 100 in flight against your deployment's serving replicas. A 100-sample GSM8K run completes in roughly the time of a handful of sequential requests, bounded by your deployment's throughput rather than the eval engine.
+
+## Sandboxed code execution
+
+`humaneval` completions are **never executed on platform infrastructure**. Each sample gets its own ephemeral sandbox:
+
+1. The model's completion is combined with the task's unit tests into a standalone program.
+2. A fresh sandbox is created, the program runs with a hard timeout, and the sandbox is destroyed.
+3. Exit code 0 = pass (1.0), anything else = fail (0.0). Sandbox infrastructure failures count as `error_count`, not as failures.
+
+One sandbox per sample means a malicious or runaway completion can't affect other samples — or anything else.
+
+## Scoring notes
+
+- **gsm8k** — the scorer extracts the last number in the model's output (handling `####`-style answer markers and formatting like commas) and compares it to the reference answer. Encourage your model to end with the bare answer for best results; chain-of-thought before it is fine.
+- **humaneval** — pass@1 with a single completion per problem. Markdown code fences in the output are stripped automatically; indentation is preserved.

@@ -20,7 +20,11 @@
       "display": "interactive"
     },
     "examples": {
-      "languages": ["bash", "python", "javascript"]
+      "languages": [
+        "bash",
+        "python",
+        "javascript"
+      ]
     }
   },
   "navigation": {
@@ -66,6 +70,7 @@
             "icon": "chart-line",
             "pages": [
               "evaluations",
+              "evaluations/benchmarks",
               "evaluations/scorers"
             ]
           },
@@ -116,7 +121,9 @@
         "groups": [
           {
             "group": "Overview",
-            "pages": ["api-reference/introduction"]
+            "pages": [
+              "api-reference/introduction"
+            ]
           },
           {
             "group": "Training jobs",
@@ -171,6 +178,7 @@
             "pages": [
               "POST /v1/evals",
               "GET /v1/evals",
+              "GET /v1/evals/benchmarks",
               "GET /v1/evals/{eval_id}",
               "DELETE /v1/evals/{eval_id}",
               "POST /v1/evals/{eval_id}/runs",
@@ -210,12 +218,16 @@
           {
             "group": "Code artifacts",
             "openapi": "api-reference/openapi.json",
-            "pages": ["POST /v1/code_artifacts"]
+            "pages": [
+              "POST /v1/code_artifacts"
+            ]
           },
           {
             "group": "Regions",
             "openapi": "api-reference/openapi.json",
-            "pages": ["GET /v1/regions"]
+            "pages": [
+              "GET /v1/regions"
+            ]
           },
           {
             "group": "Billing",
@@ -249,18 +261,57 @@
     ]
   },
   "redirects": [
-    { "source": "/api-reference/training-jobs", "destination": "/api-reference/introduction" },
-    { "source": "/api-reference/datasets", "destination": "/api-reference/introduction" },
-    { "source": "/api-reference/reward-functions", "destination": "/api-reference/introduction" },
-    { "source": "/api-reference/deployments", "destination": "/api-reference/introduction" },
-    { "source": "/api-reference/evaluations", "destination": "/api-reference/introduction" },
-    { "source": "/api-reference/volumes", "destination": "/api-reference/introduction" },
-    { "source": "/fine-tuning", "destination": "/training" },
-    { "source": "/fine-tuning/datasets", "destination": "/training/datasets" },
-    { "source": "/fine-tuning/reward-functions", "destination": "/training/reward-functions" },
-    { "source": "/fine-tuning/grpo", "destination": "/training/grpo" },
-    { "source": "/fine-tuning/examples", "destination": "/demos/sft-unsloth" },
-    { "source": "/fine-tuning/api", "destination": "/training/api" },
-    { "source": "/quickstart/fine-tune", "destination": "/training" }
+    {
+      "source": "/api-reference/training-jobs",
+      "destination": "/api-reference/introduction"
+    },
+    {
+      "source": "/api-reference/datasets",
+      "destination": "/api-reference/introduction"
+    },
+    {
+      "source": "/api-reference/reward-functions",
+      "destination": "/api-reference/introduction"
+    },
+    {
+      "source": "/api-reference/deployments",
+      "destination": "/api-reference/introduction"
+    },
+    {
+      "source": "/api-reference/evaluations",
+      "destination": "/api-reference/introduction"
+    },
+    {
+      "source": "/api-reference/volumes",
+      "destination": "/api-reference/introduction"
+    },
+    {
+      "source": "/fine-tuning",
+      "destination": "/training"
+    },
+    {
+      "source": "/fine-tuning/datasets",
+      "destination": "/training/datasets"
+    },
+    {
+      "source": "/fine-tuning/reward-functions",
+      "destination": "/training/reward-functions"
+    },
+    {
+      "source": "/fine-tuning/grpo",
+      "destination": "/training/grpo"
+    },
+    {
+      "source": "/fine-tuning/examples",
+      "destination": "/demos/sft-unsloth"
+    },
+    {
+      "source": "/fine-tuning/api",
+      "destination": "/training/api"
+    },
+    {
+      "source": "/quickstart/fine-tune",
+      "destination": "/training"
+    }
   ]
 }
