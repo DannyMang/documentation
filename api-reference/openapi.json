@@ -3758,6 +3758,27 @@
               "null"
             ],
             "format": "int32"
+          },
+          "seed": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "epochs": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "samples_per_item": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "sampling_policy": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
@@ -3771,6 +3792,8 @@
           "input",
           "output",
           "scores",
+          "epoch",
+          "attempt_index",
           "created_at"
         ],
         "properties": {
@@ -3819,6 +3842,81 @@
             ],
             "format": "double"
           },
+          "sample_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "epoch": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "attempt_index": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "request": {},
+          "response": {},
+          "prompt_tokens": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "completion_tokens": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "finish_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "replica_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "endpoint_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "error_category": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "error_message": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "scorer_explanation": {},
+          "sandbox_evidence": {},
+          "trace_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "span_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "metadata": {},
           "created_at": {
             "type": "string",
             "format": "date-time"
@@ -3833,6 +3931,9 @@
           "eval_id",
           "model",
           "status",
+          "runner_type",
+          "epochs",
+          "samples_per_item",
           "created_at",
           "updated_at"
         ],
@@ -3869,6 +3970,62 @@
             ],
             "format": "int32"
           },
+          "deployment_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "snapshot": {},
+          "runner_type": {
+            "type": "string"
+          },
+          "runner_version": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "runner_image_digest": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "seed": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "epochs": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "samples_per_item": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "sampling_policy": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "total_prompt_tokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total_completion_tokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total_cost_usd": {
+            "type": "number",
+            "format": "double"
+          },
+          "usage": {},
           "total_items": {
             "type": [
               "integer",
@@ -4038,6 +4195,13 @@
             "items": {
               "type": "string"
             }
+          },
+          "seed": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
           }
         }
       },
@@ -4828,6 +4992,8 @@
                 "input",
                 "output",
                 "scores",
+                "epoch",
+                "attempt_index",
                 "created_at"
               ],
               "properties": {
@@ -4876,6 +5042,81 @@
                   ],
                   "format": "double"
                 },
+                "sample_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "epoch": {
+                  "type": "integer",
+                  "format": "int32"
+                },
+                "attempt_index": {
+                  "type": "integer",
+                  "format": "int32"
+                },
+                "request": {},
+                "response": {},
+                "prompt_tokens": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "int32"
+                },
+                "completion_tokens": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "int32"
+                },
+                "finish_reason": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "replica_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "endpoint_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "error_category": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "error_message": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "scorer_explanation": {},
+                "sandbox_evidence": {},
+                "trace_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "span_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "metadata": {},
                 "created_at": {
                   "type": "string",
                   "format": "date-time"
@@ -4909,6 +5150,9 @@
                 "eval_id",
                 "model",
                 "status",
+                "runner_type",
+                "epochs",
+                "samples_per_item",
                 "created_at",
                 "updated_at"
               ],
@@ -4945,6 +5189,62 @@
                   ],
                   "format": "int32"
                 },
+                "deployment_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "snapshot": {},
+                "runner_type": {
+                  "type": "string"
+                },
+                "runner_version": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "runner_image_digest": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "seed": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "int64"
+                },
+                "epochs": {
+                  "type": "integer",
+                  "format": "int32"
+                },
+                "samples_per_item": {
+                  "type": "integer",
+                  "format": "int32"
+                },
+                "sampling_policy": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "total_prompt_tokens": {
+                  "type": "integer",
+                  "format": "int32"
+                },
+                "total_completion_tokens": {
+                  "type": "integer",
+                  "format": "int32"
+                },
+                "total_cost_usd": {
+                  "type": "number",
+                  "format": "double"
+                },
+                "usage": {},
                 "total_items": {
                   "type": [
                     "integer",
@@ -5857,6 +6157,34 @@
           "error_count": {
             "type": "integer",
             "format": "int32"
+          },
+          "confidence_interval_low": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "confidence_interval_high": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "confidence_level": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "pass_at_k": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
           }
         }
       },
