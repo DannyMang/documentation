@@ -33,3 +33,27 @@ Set `runner_type` to `lm_eval` or `inspect` and provide `runner_config` when cre
 ```
 
 Raw lm-eval JSON/JSONL and Inspect `.eval` logs are uploaded to the run artifact prefix and returned in the run's `artifacts` field. Runner events are idempotent by event ID and sequence.
+
+## Comparisons and gates
+
+Pass `baseline_run_id` and `gates` when creating a run. Comparable runs must share task, dataset hash, scorer hash, sampling policy, epochs, and sample IDs. Veri reports incompatible dimensions rather than silently comparing different evidence.
+
+```json
+{
+  "model": "deployment:dep_candidate",
+  "baseline_run_id": "run_baseline",
+  "gates": [
+    {
+      "metric": "score:quality",
+      "max_regression": 0.02,
+      "confidence": 0.95
+    },
+    {
+      "metric": "p95_latency_ms",
+      "maximum": 2500
+    }
+  ]
+}
+```
+
+`GET /v1/evals/{eval_id}/runs/{run_id}/compare` returns paired per-sample deltas, aggregate quality/latency/token/cost/error metrics, confidence intervals, and gate decisions. Score regressions default to higher-is-better; system metrics default to lower-is-better. Set `higher_is_better` explicitly for custom metric semantics. Confidence-aware gates currently use 95% paired bootstrap intervals and require at least two aligned samples.

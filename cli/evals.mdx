@@ -94,9 +94,10 @@ veri evals runs items eval_9f2c01 run_5b7d22     # per-sample outputs + scores
 veri evals runs cancel eval_9f2c01 run_5b7d22    # stop an active run
 veri evals runs rescore eval_9f2c01 run_5b7d22 --scorer exact_match --name revised
 veri evals runs calibrate eval_9f2c01 run_5b7d22 --scorer-name quality --threshold 0.7
+veri evals runs compare eval_9f2c01 run_5b7d22 --baseline run_baseline --junit eval.xml
 ```
 
-All commands support `--format json` for machine output and `--quiet` for pipe-friendly IDs.
+All commands support `--format json` for machine output and `--quiet` for pipe-friendly IDs. `runs compare --junit <path>` writes JUnit XML. Gate-aware commands use exit code `0` for pass, `1` for gate failure, `2` for invalid gate configuration, and `3` for run/infrastructure failure.
 
 ## Following a run
 
