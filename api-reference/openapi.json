@@ -3936,6 +3936,10 @@
           "model": {
             "type": "string"
           },
+          "runner_type": {
+            "type": "string"
+          },
+          "runner_config": {},
           "generation_params": {
             "oneOf": [
               {
@@ -4242,6 +4246,13 @@
             "type": "integer",
             "format": "int32"
           },
+          "external_task_arn": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "artifacts": {},
           "total_items": {
             "type": [
               "integer",
@@ -5549,6 +5560,13 @@
                   "type": "integer",
                   "format": "int32"
                 },
+                "external_task_arn": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "artifacts": {},
                 "total_items": {
                   "type": [
                     "integer",

@@ -16,3 +16,20 @@ The Evaluations API creates reusable eval definitions and executes them against 
 - `POST /v1/evals/{eval_id}/runs/{run_id}/calibrate` compares an LLM judge revision with boolean item labels.
 
 Calibration labels accept `true`/`false`, `1`/`0`, `pass`/`fail`, or `yes`/`no`. The response includes accuracy, invalid rate, sample count, and a confusion matrix.
+
+## External runners
+
+Set `runner_type` to `lm_eval` or `inspect` and provide `runner_config` when creating a run. Veri launches a one-shot runner with a run-scoped callback token. The runner uses authenticated manifest, heartbeat, and event endpoints; model requests pass through Veri's internal OpenAI-compatible gateway so deployment usage remains authoritative.
+
+```json
+{
+  "model": "deployment:dep_abc123",
+  "runner_type": "lm_eval",
+  "runner_config": {
+    "task": "hellaswag",
+    "limit": 100
+  }
+}
+```
+
+Raw lm-eval JSON/JSONL and Inspect `.eval` logs are uploaded to the run artifact prefix and returned in the run's `artifacts` field. Runner events are idempotent by event ID and sequence.

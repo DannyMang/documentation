@@ -29,6 +29,10 @@ Three ways to create (and implicitly start) an eval:
 
 ```bash
 veri evals create --benchmark gsm8k --model deployment:dep_abc123 --n 100 --follow
+
+# Use the pinned lm-eval adapter instead of the native evaluator
+veri evals create --benchmark gsm8k --model deployment:dep_abc123 \
+  --runner lm_eval --runner-task gsm8k --n 100 --follow
 ```
 
 | Flag | Meaning |
@@ -36,6 +40,8 @@ veri evals create --benchmark gsm8k --model deployment:dep_abc123 --n 100 --foll
 | `--benchmark <task>` | Catalog task (`gsm8k`, `humaneval`). Mutually exclusive with `--dataset`. |
 | `--model <target>` | Required. A serving deployment: `deployment:<id>`. |
 | `--n <int>` | Sample limit (default 100). |
+| `--runner <type>` | `native` (default), `lm_eval`, or `inspect`. |
+| `--runner-task <task>` | Allowlisted harness task for an external runner. |
 | `--follow`, `-f` | Poll the run, stream progress, print scores at the end. |
 
 ### Quick — inline dataset eval
