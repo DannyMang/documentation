@@ -86,6 +86,8 @@ veri evals runs list eval_9f2c01                 # all runs for an eval
 veri evals runs get eval_9f2c01 run_5b7d22       # status, progress, results
 veri evals runs items eval_9f2c01 run_5b7d22     # per-sample outputs + scores
 veri evals runs cancel eval_9f2c01 run_5b7d22    # stop an active run
+veri evals runs rescore eval_9f2c01 run_5b7d22 --scorer exact_match --name revised
+veri evals runs calibrate eval_9f2c01 run_5b7d22 --scorer-name quality --threshold 0.7
 ```
 
 All commands support `--format json` for machine output and `--quiet` for pipe-friendly IDs.
@@ -95,9 +97,9 @@ All commands support `--format json` for machine output and `--quiet` for pipe-f
 `--follow` on `create` (or `veri run`) polls until the run is terminal:
 
 ```
-  [   1.2s] running  0/100
-  [   9.8s] running  64/100
-  [  14.1s] completed  100/100
+  [   1.2s] running/generating  0/100
+  [   9.8s] running/scoring  100/100
+  [  14.1s] completed/completed  100/100
   gsm8k: mean=0.8100  n=100  errors=0
 ```
 

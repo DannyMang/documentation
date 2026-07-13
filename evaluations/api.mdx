@@ -1,16 +1,18 @@
 ---
 title: "Evaluations API"
 sidebarTitle: "API reference"
-description: "Endpoints for evals, runs, and per-item results. Planned for a later release."
-keywords: ["evaluations", "API reference", "endpoints", "scorers", "runs", "items"]
+description: "Endpoints for eval definitions, phased runs, rescoring, calibration, and per-item evidence."
+keywords: ["evaluations", "API reference", "rescoring", "calibration", "runs", "items"]
 ---
 
-<Note>
-  **Work in progress.** The Evaluations API is planned for a later release and is not available yet. No `/v1/evals/*` endpoints are live. The full endpoint reference will be documented here once the feature ships.
-</Note>
+The Evaluations API creates reusable eval definitions and executes them against serving deployments. Runs progress through `preparing`, `generating`, `scoring`, and `aggregating` phases.
 
-## What the API will provide
+## Run workflow
 
-- Create and manage **Eval** definitions (a dataset plus one or more scorers).
-- Start **Eval Runs** against a model target and track their progress.
-- Read back aggregate statistics per scorer and per-sample outputs once a run completes.
+- `POST /v1/evals/{eval_id}/runs` creates a run with immutable provenance.
+- `GET /v1/evals/{eval_id}/runs/{run_id}` returns phase, progress, usage, uncertainty, and results.
+- `GET /v1/evals/{eval_id}/runs/{run_id}/items` returns candidate request/response evidence and scores.
+- `POST /v1/evals/{eval_id}/runs/{run_id}/rescore` creates an immutable scoring revision from persisted outputs without repeating candidate inference.
+- `POST /v1/evals/{eval_id}/runs/{run_id}/calibrate` compares an LLM judge revision with boolean item labels.
+
+Calibration labels accept `true`/`false`, `1`/`0`, `pass`/`fail`, or `yes`/`no`. The response includes accuracy, invalid rate, sample count, and a confusion matrix.

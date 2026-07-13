@@ -1215,6 +1215,68 @@
         ]
       }
     },
+    "/v1/evals/{eval_id}/runs/{run_id}/calibrate": {
+      "post": {
+        "tags": [
+          "Evaluations"
+        ],
+        "summary": "Calibrate an LLM judge scoring revision",
+        "operationId": "calibrate_run",
+        "parameters": [
+          {
+            "name": "eval_id",
+            "in": "path",
+            "description": "Evaluation ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "path",
+            "description": "Evaluation run ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvalCalibrationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Judge calibration metrics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvalCalibrationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Revision cannot be calibrated"
+          },
+          "404": {
+            "description": "Run not found or not owned by the caller"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/evals/{eval_id}/runs/{run_id}/cancel": {
       "post": {
         "tags": [
@@ -1324,6 +1386,68 @@
           },
           "404": {
             "description": "Not found or not owned by the caller"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/evals/{eval_id}/runs/{run_id}/rescore": {
+      "post": {
+        "tags": [
+          "Evaluations"
+        ],
+        "summary": "Rescore an evaluation run",
+        "operationId": "rescore_run",
+        "parameters": [
+          {
+            "name": "eval_id",
+            "in": "path",
+            "description": "Evaluation ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "run_id",
+            "in": "path",
+            "description": "Evaluation run ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvalRunRescoreRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "An immutable scoring revision",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvalScoringRevisionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Run cannot be rescored"
+          },
+          "404": {
+            "description": "Run not found or not owned by the caller"
           }
         },
         "security": [
@@ -3629,6 +3753,76 @@
           }
         ]
       },
+      "EvalCalibrationRequest": {
+        "type": "object",
+        "required": [
+          "scorer_name"
+        ],
+        "properties": {
+          "scorer_name": {
+            "type": "string"
+          },
+          "threshold": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "EvalCalibrationResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "id",
+          "run_id",
+          "scoring_revision",
+          "scorer_name",
+          "threshold",
+          "accuracy",
+          "invalid_rate",
+          "confusion_matrix",
+          "sample_count",
+          "created_at"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "run_id": {
+            "type": "string"
+          },
+          "scoring_revision": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "scorer_name": {
+            "type": "string"
+          },
+          "threshold": {
+            "type": "number",
+            "format": "double"
+          },
+          "accuracy": {
+            "type": "number",
+            "format": "double"
+          },
+          "invalid_rate": {
+            "type": "number",
+            "format": "double"
+          },
+          "confusion_matrix": {},
+          "sample_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "EvalCreate": {
         "type": "object",
         "required": [
@@ -3923,6 +4117,20 @@
           }
         }
       },
+      "EvalRunRescoreRequest": {
+        "type": "object",
+        "required": [
+          "scorers"
+        ],
+        "properties": {
+          "scorers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScorerConfig"
+            }
+          }
+        }
+      },
       "EvalRunResponse": {
         "type": "object",
         "required": [
@@ -3934,6 +4142,7 @@
           "runner_type",
           "epochs",
           "samples_per_item",
+          "phase",
           "created_at",
           "updated_at"
         ],
@@ -4026,6 +4235,13 @@
             "format": "double"
           },
           "usage": {},
+          "phase": {
+            "type": "string"
+          },
+          "scoring_revision": {
+            "type": "integer",
+            "format": "int32"
+          },
           "total_items": {
             "type": [
               "integer",
@@ -4089,6 +4305,47 @@
           "failed",
           "cancelled"
         ]
+      },
+      "EvalScoringRevisionResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "id",
+          "run_id",
+          "revision",
+          "scorers",
+          "results",
+          "created_at"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "run_id": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "scorers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScorerConfig"
+            }
+          },
+          "results": {
+            "$ref": "#/components/schemas/EvalResults"
+          },
+          "judge_usage": {},
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
       },
       "EventDto": {
         "type": "object",
@@ -4456,6 +4713,45 @@
           "judge_temperature": {
             "type": "number",
             "format": "double"
+          },
+          "rubric": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "dimensions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "min_score": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "max_score": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "pass_threshold": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "calibration_id": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
@@ -5153,6 +5449,7 @@
                 "runner_type",
                 "epochs",
                 "samples_per_item",
+                "phase",
                 "created_at",
                 "updated_at"
               ],
@@ -5245,6 +5542,13 @@
                   "format": "double"
                 },
                 "usage": {},
+                "phase": {
+                  "type": "string"
+                },
+                "scoring_revision": {
+                  "type": "integer",
+                  "format": "int32"
+                },
                 "total_items": {
                   "type": [
                     "integer",

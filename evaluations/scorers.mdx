@@ -1,8 +1,8 @@
 ---
 title: "Scorers"
 sidebarTitle: "Scorers"
-description: "Configuration reference for eval scorers: exact_match, contains, and benchmark"
-keywords: ["scorers", "exact_match", "contains", "benchmark", "evaluation"]
+description: "Configuration reference for deterministic, benchmark, and LLM judge eval scorers"
+keywords: ["scorers", "exact_match", "contains", "benchmark", "llm judge", "evaluation"]
 ---
 
 A scorer turns a model's output for a single sample into a numeric score. An eval applies its scorers to every sample, then aggregates per-scorer stats (`mean`, `median`, `std`, `min`, `max`, `count`, `error_count`).
@@ -49,6 +49,26 @@ Substring or regex match against a reference field.
 
 Score: `1.0` when the output contains the reference (or matches the regex), `0.0` otherwise. An invalid regex scores as an error, not a failure.
 
+## llm_judge
+
+Grades persisted candidate outputs with a serving deployment. Judge responses must be JSON with `score` or `pass`; explanations and per-dimension scores are retained with each item.
+
+```json
+{
+  "type": "llm_judge",
+  "name": "quality",
+  "judge_model": "deployment:dep_judge123",
+  "judge_prompt": "Evaluate the candidate response.",
+  "rubric": "The response must be correct, relevant, and concise.",
+  "dimensions": ["correctness", "relevance"],
+  "min_score": 1,
+  "max_score": 5,
+  "pass_threshold": 0.75
+}
+```
+
+Judge scores are normalized to `0..1`. Judge token usage is reported separately from candidate usage. Use `veri evals runs rescore` to apply a new judge without repeating candidate inference.
+
 ## benchmark
 
 Runs a curated task from the [benchmark catalog](/evaluations/benchmarks). The task supplies its own rows, prompting, and scoring — so a benchmark eval has **no dataset**, and the benchmark scorer cannot be combined with other scorers.
@@ -73,4 +93,4 @@ A score of `0.0` means the model got the sample wrong. A `null` score means the 
 
 ## Planned
 
-`reward_function` (reuse an uploaded reward function), `llm_judge` (grade with a judge model), and `python` (custom scoring code) are declared in the API schema but not executable yet — samples scored with them land in `error_count` rather than producing scores.
+`reward_function` (reuse an uploaded reward function) and `python` (custom scoring code) remain declared but are not executable yet. Samples scored with them land in `error_count` rather than producing scores.
