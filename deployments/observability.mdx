@@ -146,6 +146,19 @@ curl --get "https://api.veri.studio/v1/deployments/$DEPLOYMENT_ID/requests" \
   --data-urlencode "to=2026-07-14T01:00:00Z"
 ```
 
+#### Scope results to a single replica
+
+The `metrics/timeseries`, `metrics/engine-timeseries`, and `requests` endpoints accept an optional `replica_id` query parameter. List replica IDs with `GET /v1/deployments/$DEPLOYMENT_ID/replicas`:
+
+```bash
+curl --get "https://api.veri.studio/v1/deployments/$DEPLOYMENT_ID/metrics/timeseries" \
+  -H "Authorization: Bearer $VERI_API_KEY" \
+  --data-urlencode "interval=auto" \
+  --data-urlencode "replica_id=rep_..."
+```
+
+When `replica_id` is set, buckets, the window summary, engine gauges (queue depth and KV-cache utilization), and recent requests are scoped to that replica. Cost efficiency becomes replica-scoped as well: window cost is the replica's own active interval multiplied by its per-box GPU rate. Scoped metrics responses echo `replica_id` at the top level. The ID must be a replica of the deployment; unknown IDs return `404`. Omit the parameter to keep deployment-wide aggregates.
+
 See the interactive [API reference](/api-reference/introduction) for complete response schemas.
 
 ## Investigate with MCP

@@ -648,6 +648,60 @@
             "bearerAuth": []
           }
         ]
+      },
+      "patch": {
+        "tags": [
+          "Deployments"
+        ],
+        "summary": "Update deployment scaling settings",
+        "operationId": "update",
+        "parameters": [
+          {
+            "name": "deployment_id",
+            "in": "path",
+            "description": "Deployment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeploymentUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The updated deployment (desired state; the reconciler converges the replica fleet asynchronously)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid bounds, terminal deployment, or a pre-replica deployment that cannot scale"
+          },
+          "404": {
+            "description": "Not found or not owned by the caller"
+          },
+          "422": {
+            "description": "Request body failed validation (immutable or unknown field)"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/v1/deployments/{deployment_id}/chat/completions": {
@@ -781,6 +835,15 @@
             "schema": {
               "$ref": "#/components/schemas/MetricsInterval"
             }
+          },
+          {
+            "name": "replica_id",
+            "in": "query",
+            "description": "Scope buckets, summary, and cost to one replica of the deployment (404\nwhen the replica doesn't belong to it). Omitted = deployment-wide.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -850,6 +913,15 @@
             "schema": {
               "$ref": "#/components/schemas/MetricsInterval"
             }
+          },
+          {
+            "name": "replica_id",
+            "in": "query",
+            "description": "Scope buckets, summary, and cost to one replica of the deployment (404\nwhen the replica doesn't belong to it). Omitted = deployment-wide.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -865,6 +937,46 @@
           },
           "400": {
             "description": "Invalid range or interval"
+          },
+          "404": {
+            "description": "Not found or not owned by the caller"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/deployments/{deployment_id}/replicas": {
+      "get": {
+        "tags": [
+          "Deployments"
+        ],
+        "summary": "List deployment replicas",
+        "operationId": "replicas",
+        "parameters": [
+          {
+            "name": "deployment_id",
+            "in": "path",
+            "description": "Deployment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Replica status and latest engine snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedList_DeploymentReplicaResponse"
+                }
+              }
+            }
           },
           "404": {
             "description": "Not found or not owned by the caller"
@@ -936,6 +1048,15 @@
             "schema": {
               "type": "boolean"
             }
+          },
+          {
+            "name": "replica_id",
+            "in": "query",
+            "description": "Restrict to requests served by one replica of the deployment (404 when\nthe replica doesn't belong to it). Omitted = all replicas.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -988,6 +1109,49 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "Not found or not owned by the caller"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/deployments/{deployment_id}/wake": {
+      "post": {
+        "tags": [
+          "Deployments"
+        ],
+        "summary": "Wake a scaled-to-zero deployment",
+        "operationId": "wake",
+        "parameters": [
+          {
+            "name": "deployment_id",
+            "in": "path",
+            "description": "Deployment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Wake accepted (no-op if the deployment is already up or booting)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Deployment is stopped/failed and cannot wake"
           },
           "404": {
             "description": "Not found or not owned by the caller"
@@ -3655,7 +3819,46 @@
               "null"
             ],
             "format": "int32",
-            "description": "VS-341: number of GPU-box replicas to launch (fixed N; no autoscaling in\nthis chunk). Omitted => 1, which is byte-for-byte today's single-box\nbehavior. Validated 1..=8 at create."
+            "description": "VS-341: number of GPU-box replicas to launch. Omitted => 1, which is\nbyte-for-byte today's single-box behavior. Validated 1..=8 at create.\nSugar for min_replicas == max_replicas == N (the CLI --replicas flag)."
+          },
+          "min_replicas": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Scaling foundation (§10): replica-count bounds. min == max => fixed N\n(autoscaling off — there is no boolean flag). Omitted => both default to\nnum_replicas (fixed N). min = 0 arms scale-to-zero (VS-313): the fleet\nparks after the idle window and wakes on the next request."
+          },
+          "max_replicas": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "concurrency_target": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Per-replica concurrency setpoint the (VS-342) autoscaler targets:\ndesired = ceil(total_ongoing / concurrency_target), clamped to\n[min_replicas, max_replicas]. Stored as target_ongoing_requests.\nOmitted => 8 (throughput-biased; lower it for latency-sensitive chat)."
+          },
+          "scale_to_zero_window_seconds": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "VS-313: idle seconds before a min_replicas=0 deployment parks\n(scaled_to_zero). Omitted => 3600. Floor 300 (Fireworks' convention)."
+          },
+          "idle_delete_after_days": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "VS-313: optional GC — a deployment parked at zero with no traffic for\nthis many days goes terminal (stopped). Omitted => kept forever."
           }
         }
       },
@@ -3714,20 +3917,6 @@
             ],
             "format": "double"
           },
-          "prefix_cache_hits_total": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "prefix_cache_queries_total": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
           "prompt_tokens_per_second": {
             "type": [
               "number",
@@ -3736,13 +3925,6 @@
             "format": "double"
           },
           "generation_tokens_per_second": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "prefix_cache_hit_rate": {
             "type": [
               "number",
               "null"
@@ -3759,7 +3941,8 @@
           "from",
           "to",
           "interval",
-          "buckets"
+          "buckets",
+          "replica_series"
         ],
         "properties": {
           "object": {
@@ -3779,10 +3962,23 @@
           "interval": {
             "$ref": "#/components/schemas/MetricsInterval"
           },
+          "replica_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Set when the response is scoped to one replica (?replica_id=); absent\nfor deployment-wide scope."
+          },
           "buckets": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/DeploymentEngineMetricsBucket"
+            }
+          },
+          "replica_series": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeploymentReplicaEngineMetricsSeries"
             }
           }
         }
@@ -4016,6 +4212,13 @@
           "interval": {
             "$ref": "#/components/schemas/MetricsInterval"
           },
+          "replica_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Set when the response is scoped to one replica (?replica_id=); absent\nfor deployment-wide scope."
+          },
           "summary": {
             "$ref": "#/components/schemas/DeploymentMetricsSummary"
           },
@@ -4034,6 +4237,145 @@
                 "$ref": "#/components/schemas/DeploymentCostEfficiency"
               }
             ]
+          }
+        }
+      },
+      "DeploymentReplicaEngineMetricsBucket": {
+        "type": "object",
+        "required": [
+          "timestamp",
+          "samples"
+        ],
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "samples": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "generation_tokens_per_second": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          }
+        }
+      },
+      "DeploymentReplicaEngineMetricsSeries": {
+        "type": "object",
+        "required": [
+          "replica_id",
+          "buckets"
+        ],
+        "properties": {
+          "replica_id": {
+            "type": "string",
+            "description": "`legacy` represents pre-replica samples recorded directly on a deployment."
+          },
+          "buckets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeploymentReplicaEngineMetricsBucket"
+            }
+          }
+        }
+      },
+      "DeploymentReplicaResponse": {
+        "type": "object",
+        "description": "A frontend-safe view of a serving replica. The endpoint itself remains\nprivate to the control plane; the topology only needs to know whether an\nendpoint is currently routable.",
+        "required": [
+          "id",
+          "status",
+          "endpoint_available"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "endpoint_available": {
+            "type": "boolean"
+          },
+          "region": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Cloud region the box launched into; None when the provider path does\nnot expose it (pre-placement rows, non-AWS providers)."
+          },
+          "gpu_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "gpu_count": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "instance_type": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Provider instance shape (e.g. an EC2 instance type); None when the\nlaunch path does not resolve it in the control plane."
+          },
+          "cost_per_box_hour_usd": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Per-box hourly rate: the rate snapshotted on the replica at launch,\nelse the deployment's per-box fallback."
+          },
+          "started_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "last_heartbeat_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "requests_running": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "requests_waiting": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "kv_cache_usage": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
           }
         }
       },
@@ -4243,7 +4585,45 @@
           "num_replicas": {
             "type": "integer",
             "format": "int32",
-            "description": "VS-341: number of serving replicas (GPU boxes) behind this deployment."
+            "description": "VS-341: DESIRED replica count (GPU boxes) behind this deployment. The\nobserved count is ready_replicas — the K8s spec/status split; the CLI\nrenders \"ready/desired\" (e.g. 2/3)."
+          },
+          "ready_replicas": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Observed: replicas currently serving with a routable endpoint."
+          },
+          "min_replicas": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Replica-count bounds. min == max => fixed N (autoscaling off)."
+          },
+          "max_replicas": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "concurrency_target": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Per-replica concurrency setpoint (stored as target_ongoing_requests)."
+          },
+          "scale_to_zero_window_seconds": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "VS-313: idle window before a min=0 deployment parks (None = 3600s)."
+          },
+          "idle_delete_after_days": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "VS-313: parked-deployment GC in days (None = kept forever)."
           },
           "cost_per_hour_usd": {
             "type": [
@@ -4301,8 +4681,59 @@
           "serving",
           "unhealthy",
           "stopped",
-          "failed"
+          "failed",
+          "scaled_to_zero",
+          "waking"
         ]
+      },
+      "DeploymentUpdate": {
+        "type": "object",
+        "description": "PATCH /v1/deployments/{id} — the mutable-field whitelist. Everything else on\na deployment (model, source, gpu, engine, provider) is immutable, matching\nevery surveyed platform (Fireworks/Baseten/K8s): changing those is a new\ndeployment. deny_unknown_fields makes an attempt to PATCH an immutable field\na validation error instead of a silent no-op.\n\nDesired-state semantics: the PATCH validates + persists the new bounds and\nreturns immediately (desired + observed); the reconciler's scaling pass\nconverges the replica fleet asynchronously.",
+        "properties": {
+          "num_replicas": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "min_replicas": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "max_replicas": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "concurrency_target": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "scale_to_zero_window_seconds": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "idle_delete_after_days": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
       },
       "DepsSpec": {
         "type": "object",
@@ -6025,6 +6456,121 @@
           }
         }
       },
+      "PaginatedList_DeploymentReplicaResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "data",
+          "has_more"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "description": "A frontend-safe view of a serving replica. The endpoint itself remains\nprivate to the control plane; the topology only needs to know whether an\nendpoint is currently routable.",
+              "required": [
+                "id",
+                "status",
+                "endpoint_available"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "provider": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "endpoint_available": {
+                  "type": "boolean"
+                },
+                "region": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Cloud region the box launched into; None when the provider path does\nnot expose it (pre-placement rows, non-AWS providers)."
+                },
+                "gpu_type": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "gpu_count": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "int32"
+                },
+                "instance_type": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Provider instance shape (e.g. an EC2 instance type); None when the\nlaunch path does not resolve it in the control plane."
+                },
+                "cost_per_box_hour_usd": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "format": "double",
+                  "description": "Per-box hourly rate: the rate snapshotted on the replica at launch,\nelse the deployment's per-box fallback."
+                },
+                "started_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "last_heartbeat_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "requests_running": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "format": "double"
+                },
+                "requests_waiting": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "format": "double"
+                },
+                "kv_cache_usage": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "format": "double"
+                }
+              }
+            }
+          },
+          "has_more": {
+            "type": "boolean"
+          }
+        }
+      },
       "PaginatedList_DeploymentRequestResponse": {
         "type": "object",
         "required": [
@@ -6263,7 +6809,45 @@
                 "num_replicas": {
                   "type": "integer",
                   "format": "int32",
-                  "description": "VS-341: number of serving replicas (GPU boxes) behind this deployment."
+                  "description": "VS-341: DESIRED replica count (GPU boxes) behind this deployment. The\nobserved count is ready_replicas — the K8s spec/status split; the CLI\nrenders \"ready/desired\" (e.g. 2/3)."
+                },
+                "ready_replicas": {
+                  "type": "integer",
+                  "format": "int32",
+                  "description": "Observed: replicas currently serving with a routable endpoint."
+                },
+                "min_replicas": {
+                  "type": "integer",
+                  "format": "int32",
+                  "description": "Replica-count bounds. min == max => fixed N (autoscaling off)."
+                },
+                "max_replicas": {
+                  "type": "integer",
+                  "format": "int32"
+                },
+                "concurrency_target": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "format": "double",
+                  "description": "Per-replica concurrency setpoint (stored as target_ongoing_requests)."
+                },
+                "scale_to_zero_window_seconds": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "int32",
+                  "description": "VS-313: idle window before a min=0 deployment parks (None = 3600s)."
+                },
+                "idle_delete_after_days": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "int32",
+                  "description": "VS-313: parked-deployment GC in days (None = kept forever)."
                 },
                 "cost_per_hour_usd": {
                   "type": [
