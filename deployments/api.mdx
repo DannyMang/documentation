@@ -14,6 +14,8 @@ Reference for `/v1/deployments/*`. All endpoints require Bearer token auth (`Aut
 | `POST` | `/v1/deployments` | Create a deployment |
 | `GET` | `/v1/deployments` | List (paginated, filter by `status`) |
 | `GET` | `/v1/deployments/{id}` | Get one |
+| `PATCH` | `/v1/deployments/{id}` | Update scaling settings (replica bounds, concurrency target, idle windows) |
+| `POST` | `/v1/deployments/{id}/wake` | Pre-warm a `scaled_to_zero` deployment (202, idempotent) |
 | `POST` | `/v1/deployments/{id}/stop` | Transition to `stopped` |
 | `POST` | `/v1/deployments/{id}/chat/completions` | OpenAI-compatible chat |
 | `GET` | `/v1/deployments/{id}/requests` | Request log |
@@ -71,7 +73,7 @@ Create a deployment from a base HF model or a completed training job.
 
 ## GET /v1/deployments
 
-List your deployments. Filter by `status` (`queued` / `provisioning` / `serving` / `unhealthy` / `stopped` / `failed`).
+List your deployments. Filter by `status` (`queued` / `provisioning` / `serving` / `unhealthy` / `scaled_to_zero` / `waking` / `stopped` / `failed`).
 
 ```bash
 curl "https://api.veri.studio/v1/deployments?status=serving" \
@@ -83,6 +85,24 @@ Returns `PaginatedList[DeploymentResponse]`.
 ## GET /v1/deployments/{id}
 
 Single deployment. Same shape as create response, with timestamps populated as it runs.
+
+## PATCH /v1/deployments/{id}
+
+Partial update of the scaling settings on a live deployment. Mutable fields: `num_replicas`, `min_replicas`, `max_replicas`, `concurrency_target`, `scale_to_zero_window_seconds`, `idle_delete_after_days`. Anything else (model, gpu, source, engine, provider) is immutable and fails validation.
+
+Returns the updated deployment immediately with the new *desired* state; the control plane converges the replica fleet in the background. Compare `ready_replicas` (observed) against `num_replicas` (desired) to watch convergence.
+
+```python
+dep = client.deployments.update(deployment_id, min_replicas=1, max_replicas=4)
+```
+
+## POST /v1/deployments/{id}/wake
+
+Pre-warm a `scaled_to_zero` deployment. Returns `202` with the deployment; idempotent (a no-op if it's already up or booting). A chat request to a parked deployment also wakes it, but that request receives `503` with a `Retry-After` header and error code `deployment_waking` while the GPU boots — fire `wake` early on a predictive signal to hide the cold start.
+
+```python
+client.deployments.wake(deployment_id)
+```
 
 ## POST /v1/deployments/{id}/stop
 

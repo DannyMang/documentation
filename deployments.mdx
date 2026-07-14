@@ -32,17 +32,20 @@ You set these at create time, whether from the SDK (`client.deployments.create(.
 | `gpu.gpu_count` | No | `1` | GPUs per replica, for multi-GPU model parallelism. |
 | `engine` | No | `vllm` | Inference engine: `vllm` or `max` (Modular MAX). |
 | `provider` | No | auto | Cloud to serve on. Omit to let Veri choose. |
-| `replicas` | No | `1` | Number of GPU-box replicas behind one endpoint (1-8). Experimental, see the note below. |
+| `replicas` | No | `1` | GPU-box replicas behind one endpoint (1-8). Shorthand for equal `min_replicas`/`max_replicas` (a fixed fleet). |
+| `min_replicas` | No | `replicas` | Lower replica bound. Set below `max_replicas` to enable autoscaling; set to `0` to enable scale to zero. |
+| `max_replicas` | No | `replicas` | Upper replica bound (1-8). |
+| `concurrency_target` | No | `8` | In-flight requests per replica the autoscaler aims for. Lower it for latency-sensitive traffic, raise it for batch throughput. |
+| `scale_to_zero_window_seconds` | No | `3600` | Idle seconds before a `min_replicas: 0` deployment parks. Minimum `300`. |
+| `idle_delete_after_days` | No | off | Auto-stop a deployment that has been parked at zero with no traffic for this many days. |
+
+`min_replicas`, `max_replicas`, `concurrency_target`, `scale_to_zero_window_seconds`, and `idle_delete_after_days` can also be changed later on a live deployment — see [Scaling](/cli/deployments#replicas-autoscaling-and-scale-to-zero). Model, GPU, and provider are immutable: changing those means a new deployment.
 
 At call time, `chat` also accepts a session key for cache-warm routing across replicas.
 
 | Parameter | Where | What it does |
 | --- | --- | --- |
-| `session_id` | `X-Veri-Session-Id` header, or the OpenAI `user` field | Pins a conversation to one replica so its KV cache stays warm across turns. Only affects multi-replica deployments. Experimental. |
-
-<Warning>
-  `replicas` and session affinity are a work in progress. The router and failover are shipped but lightly tested, and autoscaling (changing the replica count with load) is not implemented yet, so expect bugs. See [Multiple replicas and session affinity](/cli/deployments#multiple-replicas-and-session-affinity).
-</Warning>
+| `session_id` | `X-Veri-Session-Id` header, or the OpenAI `user` field | Pins a conversation to one replica so its KV cache stays warm across turns. Only affects multi-replica deployments. |
 
 ## The deployment lifecycle
 
@@ -50,21 +53,25 @@ At call time, `chat` also accepts a session key for cache-warm routing across re
 stateDiagram-v2
     [*] --> queued
     queued --> provisioning : reconciler picks up
-    provisioning --> serving : pod ready, endpoint reachable
-    provisioning --> failed : pod lease failed / image pull error
+    provisioning --> serving : replica ready, endpoint reachable
+    provisioning --> failed : GPU lease failed / image pull error
     serving --> unhealthy : health check fails
     unhealthy --> serving : recovers
+    serving --> scaled_to_zero : idle past window (min_replicas 0 only)
+    scaled_to_zero --> waking : request arrives or POST /wake
+    waking --> provisioning : reconciler re-provisions
     serving --> stopped : user called stop
     unhealthy --> stopped : user called stop
-    serving --> failed : pod evicted
+    scaled_to_zero --> stopped : user called stop / idle_delete_after_days
+    serving --> failed : replicas lost
     stopped --> [*]
     failed --> [*]
 ```
 
-Deployments consume GPU credit **only while `serving` or `unhealthy`**. No charge during `queued` or `provisioning`. Once `stopped`, billing stops; the deployment row stays for history.
+Deployments consume GPU credit **only while replicas are running** — billing is metered per replica, from each GPU box's launch (warmup included) to its termination. `scaled_to_zero` charges nothing. Once `stopped`, billing stops; the deployment row stays for history.
 
 <Warning>
-  There is **no idle auto-stop today**. If you forget to call `stop`, the deployment keeps billing, so the safest pattern is `stop` as soon as you're done.
+  A deployment with `min_replicas` of 1 or more (the default) **never stops billing on its own** — you asked for an always-warm floor. Either call `stop` when you're done, or create with `min_replicas: 0` so it parks itself after the idle window and wakes on the next request.
 </Warning>
 
 ## Calling a deployment
@@ -147,7 +154,7 @@ veri deployments requests <id> --limit 50 --format jsonl
 
 ## Billing
 
-Running deployments consume GPU credit until you stop them.
+Running deployments consume GPU credit until you stop them (or, with `min_replicas: 0`, until they park themselves). See [Billing](/deployments/cost) for states and cadence.
 
 ## Where to go next
 

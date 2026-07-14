@@ -1,36 +1,38 @@
 ---
 title: "Billing"
 sidebarTitle: "Billing"
-description: "Deployment billing states, cadence, and the idle-stop warning."
-keywords: ["billing", "serving", "idle", "auto-stop"]
+description: "Deployment billing states, per-replica metering, and scale to zero."
+keywords: ["billing", "serving", "idle", "scale to zero", "replicas"]
 ---
 
-Deployments consume GPU credit while they're running. There's no idle auto-stop today — **if you forget to call `stop`, the deployment keeps billing.**
+Deployments consume GPU credit while their replicas are running. Billing is metered **per replica**: each GPU box charges from its launch (warmup included) until it's terminated, so a deployment that scales from 1 to 3 replicas and back pays for exactly the box-minutes that ran.
 
 ## Billing cadence
 
-Billing starts after the deployment reaches `serving` and continues while it remains `serving` or `unhealthy`.
-
-When you call `stop`, Veri settles the deployment and stops billing.
+Charges accrue per minute while any replica is up. When you call `stop` — or a `min_replicas: 0` deployment parks itself — Veri settles each replica up to the moment its GPU was freed.
 
 ## Billing states
 
 | Status | Charging? |
 | --- | --- |
 | `queued` | No |
-| `provisioning` | No |
-| `serving` | **Yes** |
+| `provisioning` | Replica warmup is billed retroactively once the deployment serves |
+| `serving` | **Yes** (per running replica, draining replicas included) |
 | `unhealthy` | **Yes** (transient state during health failure) |
+| `scaled_to_zero` | No |
+| `waking` | No (the new boxes bill once they launch) |
 | `stopped` | No |
 | `failed` | No |
 
-## Idle-stop warning
+## Avoiding idle bills
 
-There is **no idle auto-stop**. A deployment that's `serving` with zero requests for 24 hours will still bill for 24 hours.
+A deployment with `min_replicas` of 1 or more (the default) keeps its warm floor running until you stop it — that's what you asked for, so there's **no idle auto-stop** on those.
 
-Patterns to avoid surprise bills:
+Options, from most to least automatic:
 
-1. **Wrap deployments in try/finally** — guarantees `stop` even if your code errors:
+1. **Create with `min_replicas: 0`** — the deployment parks itself (`scaled_to_zero`, $0) after its idle window (`scale_to_zero_window_seconds`, default 1 hour) and wakes on the next request. Expect a multi-minute cold start on the first request after parking.
+2. **Add `idle_delete_after_days`** — a parked deployment with no traffic for that many days is auto-stopped for good.
+3. **Wrap deployments in try/finally** — guarantees `stop` even if your code errors:
    ```python
    dep = client.deployments.create(...)
    try:
@@ -39,9 +41,8 @@ Patterns to avoid surprise bills:
    finally:
        dep.stop()
    ```
-
-2. **Monitor active deployments** — regularly list deployments and stop anything no longer in use.
-3. **Set up the low-balance webhook** — Stripe will email at configurable balance thresholds
+4. **Monitor active deployments** — regularly list deployments and stop anything no longer in use.
+5. **Set up the low-balance webhook** — Stripe will email at configurable balance thresholds
 
 ## Comparison vs training jobs
 

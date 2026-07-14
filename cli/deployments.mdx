@@ -14,7 +14,9 @@ The `veri deployments` group creates and manages inference endpoints. Each deplo
 | `create <config>` or inline | Bring up a deployment. |
 | `list` | List deployments. |
 | `get <id>` | Show one deployment. |
-| `stop <id>` | Pause without deleting. Billing pauses. |
+| `update <id>` | Change replica bounds / scaling settings on a live deployment. |
+| `wake <id>` | Pre-warm a scaled-to-zero deployment. |
+| `stop <id>` | Stop for good. Billing stops. |
 | `chat <id>` | Send a one-shot message for smoke testing. |
 | `bench <id>` | Load-test the endpoint; report TTFB/TTFT/ITL/TPS/e2e at p50/p90/p99. |
 | `metrics <id>` | RPS, latency, GPU utilization. |
@@ -57,7 +59,14 @@ veri deployments create \
 | `--name` | Display name. |
 | `--gpu-type` | Required in inline form. |
 | `--gpu-count` | Default `1`. |
-| `--replicas` | Number of GPU-box replicas behind one endpoint (1-8). Default `1`. Experimental, see [Multiple replicas and session affinity](#multiple-replicas-and-session-affinity). |
+| `--replicas` | GPU-box replicas behind one endpoint (1-8). Default `1`. Shorthand for equal `--min-replicas`/`--max-replicas`. |
+| `--min-replicas` | Lower replica bound. Below `--max-replicas` enables autoscaling; `0` enables scale to zero. |
+| `--max-replicas` | Upper replica bound (1-8). |
+| `--concurrency-target` | In-flight requests per replica the autoscaler aims for. Default `8`. |
+| `--scale-to-zero-window` | Idle seconds before a `--min-replicas 0` deployment parks. Default `3600`, minimum `300`. |
+| `--idle-delete-after` | Auto-stop a parked deployment after N idle days. Default: keep it wakeable forever. |
+
+See [Replicas, autoscaling, and scale to zero](#replicas-autoscaling-and-scale-to-zero) for how the bounds behave.
 
 ## Smoke-test with `chat`
 
@@ -79,25 +88,58 @@ The CLI calls the OpenAI-compatible endpoint with a single user message and prin
 
 For programmatic chat, point any OpenAI-compatible client at the deployment's `endpoint_url` (visible in `veri deployments get`).
 
-## Multiple replicas and session affinity
+## Replicas, autoscaling, and scale to zero
 
-<Warning>
-  Multiple replicas and session affinity are a work in progress. The router, per-replica lifecycle, and failover are shipped but lightly tested, so expect rough edges and bugs. Autoscaling (growing or shrinking the replica count with load) is not implemented yet: the count you set is fixed until you recreate the deployment.
-</Warning>
+One endpoint can be served by several GPU boxes behind a load-balancing router. The replica bounds decide how the fleet behaves:
 
-Pass `--replicas N` (1-8) at create to serve one endpoint from several GPU boxes behind a load-balancing router. The endpoint, billing, and chat surface are unchanged; only throughput scales.
+| Bounds | Behavior |
+| --- | --- |
+| `--replicas N` (or equal min/max) | Fixed fleet of N boxes. |
+| `--min-replicas` below `--max-replicas` | Autoscaling: the fleet grows and shrinks with load. |
+| `--min-replicas 0` | Scale to zero: the fleet also parks entirely when idle and wakes on demand. |
 
 ```bash
+# Fixed fleet of 2:
 veri deployments create \
-  --from-hf Qwen/Qwen3-4B \
-  --name qwen-prod \
+  --from-hf Qwen/Qwen3-4B --name qwen-prod \
   --gpu-type L4-24GB --gpu-count 1 \
   --replicas 2
+
+# Autoscale 1-4 boxes, park after 30 idle minutes:
+veri deployments create \
+  --from-hf Qwen/Qwen3-4B --name qwen-dev \
+  --gpu-type L4-24GB --gpu-count 1 \
+  --min-replicas 0 --max-replicas 4 \
+  --scale-to-zero-window 1800
 ```
 
-The deployment reports `serving` once at least one replica is up, and billing is the per-box rate times the replica count.
+The deployment reports `serving` once at least one replica is up. `list` and `get` show the fleet as `ready/desired` (for example `2/3` while a scale-up is still provisioning). A replica that dies is replaced automatically; the deployment keeps serving at reduced capacity in the meantime.
 
-Routing:
+### Autoscaling
+
+With `min-replicas` below `max-replicas`, the fleet targets `--concurrency-target` in-flight requests per replica (default 8). Scale-up is fast (within about a minute of sustained load); scale-down is deliberately slow (about 15 minutes of sustained low load per step) because a wrong scale-down costs a multi-minute GPU boot. Lower the target for latency-sensitive chat; raise it for batch throughput.
+
+### Scale to zero
+
+With `--min-replicas 0`, a deployment idle past `--scale-to-zero-window` (default 1 hour) parks: replicas terminate, billing stops, status becomes `scaled_to_zero`. The next chat request wakes it — that request gets `503` with a `Retry-After` header and error code `deployment_waking` while the GPU boots (a few minutes; the SDK and CLI surface this as "retry shortly"). To hide the cold start from your users, pre-warm on a predictive signal instead:
+
+```bash
+veri deployments wake dep_abc     # 202; no-op if already up
+```
+
+Then poll `veri deployments get dep_abc` until it's `serving`. Optionally set `--idle-delete-after N` to auto-stop a deployment that stays parked with no traffic for N days.
+
+### Change scaling on a live deployment
+
+```bash
+veri deployments update dep_abc --replicas 4                    # fixed fleet of 4
+veri deployments update dep_abc --min-replicas 1 --max-replicas 6
+veri deployments update dep_abc --concurrency-target 4
+```
+
+`update` returns immediately with the new desired state; the fleet converges in the background (watch the `replicas` column approach `desired/desired`). Model, GPU, and provider are immutable — recreate the deployment to change those.
+
+### Session affinity
 
 - **With `--session-id <key>`** (or the OpenAI `user` field, which sets the `X-Veri-Session-Id` header), a conversation is pinned to one replica so its KV cache stays warm across turns. The same key always lands on the same replica; if that replica is unavailable, the request fails over to another.
 - **Without a session key**, requests go to the least-loaded replica.
@@ -108,16 +150,16 @@ veri deployments chat dep_abc -m "Continue our story" --session-id chat-42
 
 Reuse the same `--session-id` for every turn of a conversation to keep it on its cache-warm replica.
 
-## Pause to control billing
+## Stop to end billing
 
 ```bash
 veri deployments stop dep_abc
 ```
 
-`stop` pauses billing without deleting the deployment. There is no inverse `start` command in Phase-1 — bring the deployment back up by creating a new one.
+`stop` ends billing and is final — a stopped deployment can't wake; bring it back by creating a new one. For a deployment you'll come back to, prefer `--min-replicas 0` and let it park instead.
 
 <Note>
-  `start`, `scale`, `rollback`, and `history` are Phase-2. Each depends on backend work that is not yet shipped.
+  `start`, `rollback`, and `history` are Phase-2. Each depends on backend work that is not yet shipped.
 </Note>
 
 ## Inspect traffic
@@ -152,7 +194,7 @@ veri deployments get dep_abc                        # one deployment, with its s
 
 | Flag | Purpose |
 | --- | --- |
-| `--status` | Filter by status: `queued`, `provisioning`, `serving`, `unhealthy`, `stopped`, or `failed`. |
+| `--status` | Filter by status: `queued`, `provisioning`, `serving`, `unhealthy`, `scaled_to_zero`, `waking`, `stopped`, or `failed`. |
 | `--limit` | Maximum number to return. Default `20`. |
 | `--after <id>` | Pagination cursor: return deployments created after this ID. |
 
