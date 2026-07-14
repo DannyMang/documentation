@@ -135,14 +135,16 @@ Serving usually needs **less** GPU than training the same model. A 7B you traine
 
 ## Observability
 
-Every deployment carries running counters:
+Every deployment records request, token, latency, error, cost, and engine-health telemetry. The [Deployment observability guide](/deployments/observability) includes an end-to-end smoke test plus dashboard, SDK, REST, and MCP workflows.
+
+Lifetime counters and recent requests are available directly from the SDK:
 
 ```python
 dep_metrics = client.deployments.metrics(dep.id)
-# total_requests, total_prompt_tokens, total_completion_tokens, avg_latency_ms, error_rate, uptime_seconds
+# request and token totals, latency percentiles, error rate, cost, and uptime
 
 recent = client.deployments.requests(dep.id, limit=50)
-# last N requests with prompt + completion previews + latency
+# terminal request timing, usage, status, errors, and cancellation state
 ```
 
 Or via CLI:

@@ -59,6 +59,7 @@
             "icon": "server",
             "pages": [
               "deployments",
+              "deployments/observability",
               "deployments/custom-models",
               "deployments/hosting",
               "deployments/cost",
@@ -110,8 +111,7 @@
               "demos/slime-glm-4-7-flash-8xh100",
               "demos/verl-gsm8k-ppo",
               "demos/prime-rl-reverse-text-rft",
-              "demos/tool-calling-sft",
-              "demos/deployment-analytics"
+              "demos/tool-calling-sft"
             ]
           }
         ]
@@ -168,6 +168,8 @@
               "GET /v1/deployments/{deployment_id}",
               "POST /v1/deployments/{deployment_id}/chat/completions",
               "GET /v1/deployments/{deployment_id}/metrics",
+              "GET /v1/deployments/{deployment_id}/metrics/timeseries",
+              "GET /v1/deployments/{deployment_id}/metrics/engine-timeseries",
               "GET /v1/deployments/{deployment_id}/requests",
               "POST /v1/deployments/{deployment_id}/stop"
             ]
@@ -261,6 +263,10 @@
     ]
   },
   "redirects": [
+    {
+      "source": "/demos/deployment-analytics",
+      "destination": "/deployments/observability"
+    },
     {
       "source": "/api-reference/training-jobs",
       "destination": "/api-reference/introduction"

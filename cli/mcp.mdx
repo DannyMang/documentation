@@ -1,11 +1,11 @@
 ---
 title: "Model Context Protocol (MCP)"
 sidebarTitle: "Model Context Protocol (MCP)"
-description: "Set up a local MCP server so Claude Code, Claude Desktop, and Cursor can drive Veri: list and inspect jobs and deployments, estimate cost, and create or cancel runs."
+description: "Set up a local MCP server so agents can inspect Veri jobs, deployment telemetry, billing, and evals or start approved runs."
 keywords: ["veri mcp", "MCP", "Model Context Protocol", "Claude Code", "Claude Desktop", "Cursor", "agent"]
 ---
 
-`veri mcp serve` runs a [Model Context Protocol](https://modelcontextprotocol.io) server over stdio that exposes Veri as a set of tools. MCP clients such as Claude Code, Claude Desktop, and Cursor can then list and inspect your training jobs and deployments, estimate cost, check your balance, chat with a running deployment, and submit or cancel runs on your behalf.
+`veri mcp serve` runs a [Model Context Protocol](https://modelcontextprotocol.io) server over stdio that exposes Veri as a set of tools. MCP clients such as Claude Code, Claude Desktop, and Cursor can inspect deployment metrics and request failures, query bounded training metrics, check account burn, compare eval runs, and—when writes are enabled—submit or cancel runs on your behalf.
 
 The server runs on your own machine. Your MCP client starts it as a subprocess and talks to it over stdin/stdout, so there is nothing to host and no port to open. It authenticates with the same credentials the CLI uses, so it can do exactly what you can do from the CLI, nothing more.
 
@@ -124,11 +124,22 @@ Setting the environment variable `VERI_MCP_READONLY=1` has the same effect.
 | `veri_get_training_job` | Get one job: status, cost, dashboard URL, and any error. |
 | `veri_list_deployments` | List deployments, with an optional status filter. |
 | `veri_get_deployment` | Get one deployment: status, endpoint, GPU, and running cost. |
+| `veri_get_deployment_metrics` | Get compact lifetime request, token, percentile latency, error, uptime, and cost metrics. |
+| `veri_query_deployment_metrics` | Query up to 500 server-aggregated metric buckets for a time range (seven days by default). |
+| `veri_list_deployment_requests` | List compact request telemetry, optionally restricted to failures or a time range. |
+| `veri_get_training_metrics` | Get bounded native training curves and the W&B run URL when available. |
 | `veri_list_models` | List custom models in your registry. |
 | `veri_list_datasets` | List datasets available for training. |
 | `veri_list_regions` | List the launch regions you can target. |
 | `veri_estimate_cost` | Estimate the cost of a GPU job before submitting it. |
 | `veri_billing_balance` | Get your current credit balance. |
+| `veri_get_billing_overview` | Get balance, training and deployment burn, runway, active resources, and recent transactions. |
+| `veri_get_cost_summary` | Get the supported historical cost breakdown for up to 30 days. |
+| `veri_list_benchmarks` | List the curated benchmark catalog. |
+| `veri_list_evals` / `veri_get_eval` | List or inspect evaluation definitions. |
+| `veri_list_eval_runs` / `veri_get_eval_run` | List or inspect evaluation runs, results, usage, and gates. |
+| `veri_list_eval_run_items` | Inspect bounded per-item outputs and scores. |
+| `veri_compare_eval_runs` | Compare a candidate eval run with its baseline. |
 | `veri_chat_deployment` | Send a chat request to a running deployment. |
 
 ### Write tools (available unless read-only)
@@ -140,6 +151,42 @@ Setting the environment variable `VERI_MCP_READONLY=1` has the same effect.
 | `veri_cancel_training_job` | Cancel a queued or running job. |
 | `veri_stop_deployment` | Stop a running deployment. |
 | `veri_register_model` | Register a completed job's checkpoint as a reusable custom model. |
+| `veri_create_eval` | Create an evaluation definition. |
+| `veri_start_eval_run` | Start a billable evaluation run after confirming model and sample count. |
+| `veri_cancel_eval_run` | Cancel an evaluation run. |
+| `veri_rescore_eval_run` | Rescore stored outputs; paid model scorers may incur cost. |
+
+## Test deployment observability with MCP
+
+MCP is optional for deployment observability—the dashboard, SDK, and REST API expose the same underlying telemetry. MCP is the agent-facing interface for investigating that telemetry in natural language.
+
+For a safe test, register the server in read-only mode:
+
+```bash
+claude mcp add veri-observe -- veri mcp serve --readonly
+```
+
+Send a buffered and a streaming request to a serving deployment, then ask:
+
+> Inspect deployment `dep_...` over the past hour. Report request volume, p50/p95/p99 TTFT and end-to-end latency, token throughput, error rate, and cost efficiency. List failed requests grouped by error category. Do not modify resources.
+
+The agent should use:
+
+1. `veri_get_deployment_metrics` for compact lifetime health and cost context.
+2. `veri_query_deployment_metrics` for server-aggregated time-series buckets.
+3. `veri_list_deployment_requests` for the terminal records behind errors.
+
+Time-series queries return at most 500 buckets, and request-history queries return at most 50 rows per call. Pass an explicit deployment ID and time window when you want repeatable results.
+
+<Card title="Deployment observability smoke test" icon="chart-line" href="/deployments/observability">
+  Generate buffered and streaming traffic, verify dashboard charts, test SDK and REST queries, and interpret every metric.
+</Card>
+
+## Training analysis with W&B
+
+Use Veri MCP for infrastructure, lifecycle, deployment telemetry, billing, and eval comparisons. Connect the official W&B MCP alongside it for rich cross-run training analysis, artifacts, and reports.
+
+Veri returns a bounded native training metric series and the W&B run URL when available. It does not proxy W&B credentials or reimplement W&B's query surface.
 
 ## Working with datasets and reward functions
 

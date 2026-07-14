@@ -1,0 +1,253 @@
+---
+title: "Deployment Observability"
+sidebarTitle: "Observability"
+description: "Inspect request, latency, token, error, cost, cache, queue, throughput, and replica telemetry for inference deployments."
+keywords: ["observability", "analytics", "deployments", "MCP", "latency", "tokens", "errors"]
+---
+
+Veri records terminal telemetry for buffered and streaming inference requests. Use the Analytics dashboard for visual investigation, the SDK or REST API for automation, and MCP when you want an agent to investigate a deployment.
+
+This guide is also a smoke test: follow [Verify observability end to end](#verify-observability-end-to-end) after deploying a model to confirm that request telemetry, time-series aggregation, and agent tools are working.
+
+## Choose an interface
+
+| Interface | Best for |
+| --- | --- |
+| Analytics dashboard | Charts, percentile trends, cost efficiency, engine health, and recent requests |
+| Python SDK | Automated checks, notebooks, alerts, and custom analysis |
+| REST API | Direct integration with any language or monitoring system |
+| Veri MCP | Asking an agent to find regressions, errors, or cost changes with bounded context |
+| Official W&B MCP | Deep training-run analysis, artifacts, and W&B reports |
+
+MCP is optional. It is useful for agent-driven investigation, but the dashboard, SDK, and REST API expose deployment observability without it.
+
+## Verify observability end to end
+
+### 1. Select a serving deployment
+
+```bash
+veri deployments list --status serving --format json
+```
+
+Copy the deployment `id` and export it for the REST examples:
+
+```bash
+export DEPLOYMENT_ID=dep_...
+```
+
+### 2. Generate buffered and streaming traffic
+
+Send a regular request with the Veri CLI:
+
+```bash
+veri deployments chat "$DEPLOYMENT_ID" \
+  --message "Reply with exactly: buffered telemetry works"
+```
+
+Then send a streaming request. Replace the model name with the deployment's configured name:
+
+```bash
+curl -N "https://api.veri.studio/v1/deployments/$DEPLOYMENT_ID/chat/completions" \
+  -H "Authorization: Bearer $VERI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "your-deployment-name",
+    "messages": [{"role": "user", "content": "Reply with exactly: streaming telemetry works"}],
+    "stream": true,
+    "stream_options": {"include_usage": true}
+  }'
+```
+
+`include_usage` gives Veri authoritative token counts for the stream. Veri requests it automatically when traffic passes through the deployment proxy, but setting it explicitly makes the test self-documenting.
+
+### 3. Inspect the dashboard
+
+Open **Analytics** in the Veri dashboard and select the deployment. Choose **Past hour**, then click refresh.
+
+After the two requests finish, expect:
+
+- Request and token volume to be non-zero.
+- The recent requests table to contain both requests.
+- End-to-end latency samples for successful buffered and streaming requests.
+- TTFT and TPOT samples for the streaming request.
+- A zero or near-zero error rate.
+- Cost-efficiency values once the window contains successful requests with output tokens.
+
+Engine charts populate from replica heartbeats rather than request rows. Queue depth, KV-cache usage, prefix-cache hit rate, generation throughput, and replica count can therefore appear on a different cadence.
+
+### 4. Verify with the Python SDK
+
+```python
+from datetime import datetime, timedelta, timezone
+
+from veri_sdk import Client
+
+client = Client()
+deployment_id = "dep_..."
+now = datetime.now(timezone.utc)
+
+lifetime = client.deployments.metrics(deployment_id)
+series = client.deployments.metrics_timeseries(
+    deployment_id,
+    from_time=now - timedelta(hours=1),
+    to_time=now,
+    interval="auto",
+)
+errors = client.deployments.requests(
+    deployment_id,
+    from_time=now - timedelta(hours=1),
+    to_time=now,
+    errors_only=True,
+    limit=50,
+)
+
+print(lifetime)
+print(series["summary"])
+print(f"{len(series['buckets'])} buckets")
+print(f"{len(errors)} failed requests")
+```
+
+`datetime` values are serialized as RFC 3339 timestamps. You can also pass RFC 3339 strings directly.
+
+A minimal automated smoke test can assert:
+
+```python
+assert lifetime["total_requests"] >= 2
+assert series["summary"]["requests"] >= 2
+assert series["summary"]["successfulRequests"] >= 2
+assert series["summary"]["e2e_ms"]["samples"] >= 2
+assert errors == []
+```
+
+### 5. Verify with REST
+
+Lifetime counters:
+
+```bash
+curl "https://api.veri.studio/v1/deployments/$DEPLOYMENT_ID/metrics" \
+  -H "Authorization: Bearer $VERI_API_KEY"
+```
+
+Time-series metrics default to the past seven days when `from` and `to` are omitted:
+
+```bash
+curl "https://api.veri.studio/v1/deployments/$DEPLOYMENT_ID/metrics/timeseries?interval=auto" \
+  -H "Authorization: Bearer $VERI_API_KEY"
+```
+
+Only failed requests in a bounded window:
+
+```bash
+curl --get "https://api.veri.studio/v1/deployments/$DEPLOYMENT_ID/requests" \
+  -H "Authorization: Bearer $VERI_API_KEY" \
+  --data-urlencode "errors_only=true" \
+  --data-urlencode "limit=50" \
+  --data-urlencode "from=2026-07-14T00:00:00Z" \
+  --data-urlencode "to=2026-07-14T01:00:00Z"
+```
+
+See the interactive [API reference](/api-reference/introduction) for complete response schemas.
+
+## Investigate with MCP
+
+Set up Veri MCP by following [Model Context Protocol](/cli/mcp). In read-only mode, all observability tools remain available; only tools that create, cancel, stop, or rescore resources are removed.
+
+Useful deployment tools:
+
+| Tool | Use |
+| --- | --- |
+| `veri_get_deployment_metrics` | Compact lifetime counters, percentiles, error rate, uptime, and cost |
+| `veri_query_deployment_metrics` | Bounded time-series buckets with optional metric selection |
+| `veri_list_deployment_requests` | Recent requests, time filters, and error-only investigation |
+| `veri_get_billing_overview` | Balance, current burn, runway, active resources, and recent transactions |
+| `veri_get_cost_summary` | Historical training, deployment, and evaluation costs |
+
+Try these prompts:
+
+> Inspect deployment `dep_...` over the past hour. Summarize request volume, p50/p95/p99 TTFT and end-to-end latency, token throughput, error rate, and cost efficiency. Then list failed requests and group them by error category. Do not modify resources.
+
+> Compare the past 24 hours with the preceding 24 hours for deployment `dep_...`. Identify latency, error-rate, throughput, or cost regressions and cite the metric values behind each conclusion.
+
+> Review deployment `dep_...` and my billing overview. Explain whether request volume, output-token efficiency, errors, or the current GPU burn rate is the main cost risk. Do not modify resources.
+
+Agent responses are only as complete as the telemetry window. Include the deployment ID and an explicit period in prompts when you need reproducible results.
+
+## Metric semantics
+
+### Request timing
+
+| Metric | Meaning |
+| --- | --- |
+| TTFB | Request start until upstream response headers arrive |
+| TTFT | Request start until the first non-empty content or reasoning token |
+| E2E latency | Request start until the response body or stream terminates |
+| Generation time | TTFT until stream completion |
+| TPOT | Generation time divided across reported output-token intervals |
+
+TTFT and TPOT are most meaningful for streaming responses. TPOT is only calculated when the upstream engine reports usage. Latency percentiles use successful requests so application and transport failures do not distort the serving-latency distribution.
+
+### Traffic and errors
+
+Each terminal request record can include:
+
+- Prompt, cached prompt, and completion tokens.
+- Request and response byte counts.
+- HTTP status and finish reason.
+- Whether the response streamed and whether usage was reported.
+- A bounded error category and diagnostic message.
+- Client cancellation or disconnection state.
+- Request start and completion timestamps.
+
+Error charts separate client errors from server or interrupted-stream errors. Use request history to inspect the underlying `error_category` and message.
+
+### Cost efficiency
+
+The dashboard and time-series response derive:
+
+- Cost per successful request.
+- Cost per million output tokens.
+- Tokens per dollar.
+- Total deployment cost for the selected window.
+
+Cost-per-token values require reported completion tokens. A request can be successful while lacking usage, so compare `usage_reported` when investigating missing efficiency data.
+
+### Engine health
+
+Replica heartbeats provide:
+
+- Running and waiting requests.
+- KV-cache utilization.
+- Prefix-cache hit rate.
+- Generation token throughput.
+- Active replica count.
+
+Request telemetry and engine telemetry are intentionally separate. Request rows describe completed client operations; engine history describes sampled replica state.
+
+## Troubleshooting
+
+| Symptom | Check |
+| --- | --- |
+| No requests in charts | Confirm the deployment ID, time range, and that requests reached the Veri deployment URL |
+| E2E exists but TTFT/TPOT is empty | Use streaming; confirm the stream emitted content and reported usage |
+| Tokens or cost efficiency are empty | Request streaming usage and inspect `usage_reported` |
+| Errors appear but latency percentiles do not change | Expected: percentiles include successful requests only |
+| Engine charts are empty | Wait for replica heartbeats and confirm the deployment is serving |
+| A stream has `client_cancelled=true` | The downstream client stopped reading before the upstream stream completed |
+| MCP cannot create or rescore an eval | The server is read-only; observability queries still work |
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="MCP setup" icon="robot" href="/cli/mcp">
+    Let an agent query deployment, training, billing, and evaluation context.
+  </Card>
+  <Card title="Deployment commands" icon="terminal" href="/cli/deployments">
+    Generate traffic, benchmark an endpoint, and inspect recent requests.
+  </Card>
+  <Card title="API reference" icon="code" href="/api-reference/introduction">
+    Integrate metrics and request history into your own systems.
+  </Card>
+  <Card title="Deployment billing" icon="coins" href="/deployments/cost">
+    Understand hourly GPU billing and scale-to-zero behavior.
+  </Card>
+</CardGroup>

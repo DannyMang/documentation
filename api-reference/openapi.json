@@ -739,6 +739,144 @@
         ]
       }
     },
+    "/v1/deployments/{deployment_id}/metrics/engine-timeseries": {
+      "get": {
+        "tags": [
+          "Deployments"
+        ],
+        "summary": "Get deployment engine metrics timeseries",
+        "operationId": "engine_metrics_timeseries",
+        "parameters": [
+          {
+            "name": "deployment_id",
+            "in": "path",
+            "description": "Deployment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "interval",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/MetricsInterval"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Server-filled engine metric buckets",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentEngineMetricsTimeseries"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid range or interval"
+          },
+          "404": {
+            "description": "Not found or not owned by the caller"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/deployments/{deployment_id}/metrics/timeseries": {
+      "get": {
+        "tags": [
+          "Deployments"
+        ],
+        "summary": "Get deployment metrics timeseries",
+        "operationId": "metrics_timeseries",
+        "parameters": [
+          {
+            "name": "deployment_id",
+            "in": "path",
+            "description": "Deployment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "interval",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/MetricsInterval"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Server-filled inference metrics buckets",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentMetricsTimeseries"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid range or interval"
+          },
+          "404": {
+            "description": "Not found or not owned by the caller"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/deployments/{deployment_id}/requests": {
       "get": {
         "tags": [
@@ -771,6 +909,32 @@
             "required": false,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "errors_only",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
             }
           }
         ],
@@ -2832,6 +2996,53 @@
   },
   "components": {
     "schemas": {
+      "ActiveDeploymentEntry": {
+        "type": "object",
+        "required": [
+          "deployment_id",
+          "name",
+          "gpu_count",
+          "burn_rate_usd_per_hour",
+          "elapsed_seconds",
+          "accrued_cost_usd"
+        ],
+        "properties": {
+          "deployment_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "gpu_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "gpu_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "burn_rate_usd_per_hour": {
+            "type": "number",
+            "format": "double"
+          },
+          "elapsed_seconds": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "accrued_cost_usd": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
       "ActiveJobEntry": {
         "type": "object",
         "required": [
@@ -3025,7 +3236,8 @@
         "required": [
           "balance_usd",
           "burn_rate_usd_per_hour",
-          "active_jobs"
+          "active_jobs",
+          "active_deployments"
         ],
         "properties": {
           "balance_usd": {
@@ -3047,6 +3259,12 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/ActiveJobEntry"
+            }
+          },
+          "active_deployments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActiveDeploymentEntry"
             }
           }
         }
@@ -3365,6 +3583,39 @@
           }
         }
       },
+      "DeploymentCostEfficiency": {
+        "type": "object",
+        "required": [
+          "cost_usd"
+        ],
+        "properties": {
+          "cost_usd": {
+            "type": "number",
+            "format": "double"
+          },
+          "cost_per_request_usd": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "cost_per_million_tokens_usd": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "tokens_per_dollar": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          }
+        }
+      },
       "DeploymentCreate": {
         "type": "object",
         "required": [
@@ -3408,6 +3659,134 @@
           }
         }
       },
+      "DeploymentEngineMetricsBucket": {
+        "type": "object",
+        "required": [
+          "timestamp",
+          "samples",
+          "replicas"
+        ],
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "samples": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "replicas": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "requests_running": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "requests_waiting": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "kv_cache_usage": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "prompt_tokens_total": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "generation_tokens_total": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "prefix_cache_hits_total": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "prefix_cache_queries_total": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "prompt_tokens_per_second": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "generation_tokens_per_second": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "prefix_cache_hit_rate": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          }
+        }
+      },
+      "DeploymentEngineMetricsTimeseries": {
+        "type": "object",
+        "required": [
+          "object",
+          "deployment_id",
+          "from",
+          "to",
+          "interval",
+          "buckets"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "deployment_id": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "to": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "interval": {
+            "$ref": "#/components/schemas/MetricsInterval"
+          },
+          "buckets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeploymentEngineMetricsBucket"
+            }
+          }
+        }
+      },
       "DeploymentMetrics": {
         "type": "object",
         "properties": {
@@ -3448,6 +3827,13 @@
             ],
             "format": "double"
           },
+          "p95_latency_ms": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
           "p99_latency_ms": {
             "type": [
               "number",
@@ -3468,6 +3854,189 @@
           }
         }
       },
+      "DeploymentMetricsBucket": {
+        "type": "object",
+        "required": [
+          "timestamp",
+          "requests",
+          "successful_requests",
+          "client_errors",
+          "server_or_stream_errors",
+          "request_rate_per_second",
+          "error_rate",
+          "prompt_tokens",
+          "cached_prompt_tokens",
+          "completion_tokens",
+          "output_tokens_per_second",
+          "ttft_ms",
+          "e2e_ms",
+          "tpot_ms"
+        ],
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "requests": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "successful_requests": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "client_errors": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "server_or_stream_errors": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "request_rate_per_second": {
+            "type": "number",
+            "format": "double"
+          },
+          "error_rate": {
+            "type": "number",
+            "format": "double"
+          },
+          "prompt_tokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "cached_prompt_tokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "completion_tokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "output_tokens_per_second": {
+            "type": "number",
+            "format": "double"
+          },
+          "ttft_ms": {
+            "$ref": "#/components/schemas/MetricPercentiles"
+          },
+          "e2e_ms": {
+            "$ref": "#/components/schemas/MetricPercentiles"
+          },
+          "tpot_ms": {
+            "$ref": "#/components/schemas/MetricPercentiles"
+          }
+        }
+      },
+      "DeploymentMetricsSummary": {
+        "type": "object",
+        "required": [
+          "requests",
+          "successfulRequests",
+          "clientErrors",
+          "serverErrors",
+          "promptTokens",
+          "cachedPromptTokens",
+          "completionTokens",
+          "errorRate",
+          "ttft_ms",
+          "e2e_ms",
+          "tpot_ms"
+        ],
+        "properties": {
+          "requests": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "successfulRequests": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "clientErrors": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "serverErrors": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "promptTokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "cachedPromptTokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "completionTokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "errorRate": {
+            "type": "number",
+            "format": "double"
+          },
+          "ttft_ms": {
+            "$ref": "#/components/schemas/MetricPercentiles"
+          },
+          "e2e_ms": {
+            "$ref": "#/components/schemas/MetricPercentiles"
+          },
+          "tpot_ms": {
+            "$ref": "#/components/schemas/MetricPercentiles"
+          }
+        }
+      },
+      "DeploymentMetricsTimeseries": {
+        "type": "object",
+        "required": [
+          "object",
+          "deployment_id",
+          "from",
+          "to",
+          "interval",
+          "summary",
+          "buckets"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "deployment_id": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "to": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "interval": {
+            "$ref": "#/components/schemas/MetricsInterval"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/DeploymentMetricsSummary"
+          },
+          "buckets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeploymentMetricsBucket"
+            }
+          },
+          "cost_efficiency": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DeploymentCostEfficiency"
+              }
+            ]
+          }
+        }
+      },
       "DeploymentRequestResponse": {
         "type": "object",
         "required": [
@@ -3475,7 +4044,10 @@
           "id",
           "deployment_id",
           "prompt_tokens",
+          "cached_prompt_tokens",
           "completion_tokens",
+          "streamed",
+          "usage_reported",
           "latency_ms",
           "status_code",
           "created_at"
@@ -3490,7 +4062,17 @@
           "deployment_id": {
             "type": "string"
           },
+          "replica_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "prompt_tokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "cached_prompt_tokens": {
             "type": "integer",
             "format": "int32"
           },
@@ -3498,13 +4080,81 @@
             "type": "integer",
             "format": "int32"
           },
+          "streamed": {
+            "type": "boolean"
+          },
+          "usage_reported": {
+            "type": "boolean"
+          },
           "latency_ms": {
             "type": "number",
+            "format": "double",
+            "description": "Backward-compatible alias for e2e_latency_ms on newly recorded requests."
+          },
+          "ttfb_ms": {
+            "type": [
+              "number",
+              "null"
+            ],
             "format": "double"
+          },
+          "ttft_ms": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "e2e_latency_ms": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "generation_ms": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "tpot_ms": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "request_bytes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "response_bytes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
           },
           "status_code": {
             "type": "integer",
             "format": "int32"
+          },
+          "finish_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "error_category": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "error_message": {
             "type": [
@@ -3512,8 +4162,21 @@
               "null"
             ]
           },
+          "client_cancelled": {
+            "type": "boolean"
+          },
+          "client_disconnected": {
+            "type": "boolean"
+          },
           "created_at": {
             "type": "string",
+            "format": "date-time"
+          },
+          "completed_at": {
+            "type": [
+              "string",
+              "null"
+            ],
             "format": "date-time"
           }
         }
@@ -5068,6 +5731,46 @@
           }
         }
       },
+      "MetricPercentiles": {
+        "type": "object",
+        "required": [
+          "samples"
+        ],
+        "properties": {
+          "samples": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "p50": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "p90": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "p95": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "p99": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          }
+        }
+      },
       "MetricPoint": {
         "type": "object",
         "required": [
@@ -5081,6 +5784,16 @@
           },
           "values": {}
         }
+      },
+      "MetricsInterval": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "minute",
+          "five_minutes",
+          "hour",
+          "day"
+        ]
       },
       "MetricsResponse": {
         "type": "object",
@@ -5332,7 +6045,10 @@
                 "id",
                 "deployment_id",
                 "prompt_tokens",
+                "cached_prompt_tokens",
                 "completion_tokens",
+                "streamed",
+                "usage_reported",
                 "latency_ms",
                 "status_code",
                 "created_at"
@@ -5347,7 +6063,17 @@
                 "deployment_id": {
                   "type": "string"
                 },
+                "replica_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
                 "prompt_tokens": {
+                  "type": "integer",
+                  "format": "int32"
+                },
+                "cached_prompt_tokens": {
                   "type": "integer",
                   "format": "int32"
                 },
@@ -5355,13 +6081,81 @@
                   "type": "integer",
                   "format": "int32"
                 },
+                "streamed": {
+                  "type": "boolean"
+                },
+                "usage_reported": {
+                  "type": "boolean"
+                },
                 "latency_ms": {
                   "type": "number",
+                  "format": "double",
+                  "description": "Backward-compatible alias for e2e_latency_ms on newly recorded requests."
+                },
+                "ttfb_ms": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
                   "format": "double"
+                },
+                "ttft_ms": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "format": "double"
+                },
+                "e2e_latency_ms": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "format": "double"
+                },
+                "generation_ms": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "format": "double"
+                },
+                "tpot_ms": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "format": "double"
+                },
+                "request_bytes": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "int64"
+                },
+                "response_bytes": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "int64"
                 },
                 "status_code": {
                   "type": "integer",
                   "format": "int32"
+                },
+                "finish_reason": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "error_category": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 },
                 "error_message": {
                   "type": [
@@ -5369,8 +6163,21 @@
                     "null"
                   ]
                 },
+                "client_cancelled": {
+                  "type": "boolean"
+                },
+                "client_disconnected": {
+                  "type": "boolean"
+                },
                 "created_at": {
                   "type": "string",
+                  "format": "date-time"
+                },
+                "completed_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
                   "format": "date-time"
                 }
               }
