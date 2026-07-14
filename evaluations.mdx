@@ -121,6 +121,8 @@ Per-sample rows (`items`) include the input, the model's output, the reference l
 
 Runs target `deployment:<id>` — a [deployment](/deployments) in the `serving` state. Inference cost is attributed through the deployment's normal request accounting; there is no separate eval billing.
 
+Targeting a `scaled_to_zero` deployment triggers its wake, and the run fails immediately with a hint to retry: the engine doesn't hold eval samples open through a multi-minute GPU cold start. Retry the run once the deployment is back to `serving`, or pre-warm it first with `veri deployments wake <id>` ([scale to zero](/cli/deployments#scale-to-zero)).
+
 ## Next steps
 
 - [Benchmarks](/evaluations/benchmarks) — the curated catalog and how code execution is sandboxed

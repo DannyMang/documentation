@@ -121,7 +121,7 @@ With `min-replicas` below `max-replicas`, the fleet targets `--concurrency-targe
 
 ### Scale to zero
 
-With `--min-replicas 0`, a deployment idle past `--scale-to-zero-window` (default 1 hour) parks: replicas terminate, billing stops, status becomes `scaled_to_zero`. The next chat request wakes it — that request gets `503` with a `Retry-After` header and error code `deployment_waking` while the GPU boots (a few minutes; the SDK and CLI surface this as "retry shortly"). To hide the cold start from your users, pre-warm on a predictive signal instead:
+With `--min-replicas 0`, a deployment idle past `--scale-to-zero-window` (default 1 hour) parks: replicas terminate, billing stops, status becomes `scaled_to_zero`. The next chat request wakes it. While the GPU boots (a few minutes), the server answers that request with `503`, a `Retry-After` header, and error code `deployment_waking`. The SDK and CLI absorb this for you: `veri deployments chat` prints a "waking from zero" note and waits for the answer, and the Python SDK's `chat()` retries in the background until the deployment is up (see [chat and waking](/deployments/api#post-v1deploymentsidchatcompletions) for the knobs). Only raw HTTP clients need to handle the `503` themselves. To hide the cold start from your users, pre-warm on a predictive signal instead:
 
 ```bash
 veri deployments wake dep_abc     # 202; no-op if already up

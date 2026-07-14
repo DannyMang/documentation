@@ -98,7 +98,7 @@ dep = client.deployments.update(deployment_id, min_replicas=1, max_replicas=4)
 
 ## POST /v1/deployments/{id}/wake
 
-Pre-warm a `scaled_to_zero` deployment. Returns `202` with the deployment; idempotent (a no-op if it's already up or booting). A chat request to a parked deployment also wakes it, but that request receives `503` with a `Retry-After` header and error code `deployment_waking` while the GPU boots — fire `wake` early on a predictive signal to hide the cold start.
+Pre-warm a `scaled_to_zero` deployment. Returns `202` with the deployment; idempotent (a no-op if it's already up or booting). A chat request to a parked deployment also wakes it: raw HTTP clients receive `503` with a `Retry-After` header and error code `deployment_waking` while the GPU boots, while the Python SDK's `chat()` retries through the wake automatically (see [the chat endpoint](#post-v1deploymentsidchatcompletions)). Fire `wake` early on a predictive signal to hide the cold start entirely.
 
 ```python
 client.deployments.wake(deployment_id)
@@ -141,6 +141,30 @@ OpenAI-compatible. See [OpenAI compatibility](/deployments/openai-compat) for th
   ],
   "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}
 }
+```
+
+### Waking from zero
+
+A chat request to a `scaled_to_zero` deployment triggers its wake and answers `503` with a `Retry-After` header while the GPU boots:
+
+```json
+{
+  "error": {
+    "code": "deployment_waking",
+    "message": "Deployment was scaled to zero and is waking up; retry shortly"
+  }
+}
+```
+
+Raw HTTP clients should retry after `Retry-After` seconds. The Python SDK retries for you: `chat()` sleeps and re-sends until the deployment serves the request or `wake_timeout_s` (default `900`) elapses, calling `on_waking(message)` on each `503` so you can surface progress. Set `wake_timeout_s=0` to fail fast with the `503` instead.
+
+```python
+response = client.deployments.chat(
+    deployment_id,
+    messages=[{"role": "user", "content": "Hi"}],
+    on_waking=lambda msg: print(msg),   # optional progress hook
+    wake_timeout_s=900,                 # 0 = fail fast
+)
 ```
 
 ## GET /v1/deployments/{id}/requests
@@ -212,14 +236,14 @@ The SDK wraps the create flow into a `Deployment` dataclass with bound methods:
 
 ```python
 dep = client.deployments.create(model="...", source="huggingface", name="...", gpu={...})
-dep.wait()                                          # polls until serving
+dep.wait()                                          # polls until the status settles
 response = dep.chat([{"role": "user", "content": "Hi"}])
 metrics = dep.metrics()
 recent = dep.requests(limit=20)
 dep.stop()
 ```
 
-These all hit the endpoints above.
+These all hit the endpoints above. `wait()` returns once the status settles: `serving`, `failed`, `stopped`, or `scaled_to_zero` (a parked deployment won't move again without traffic, so waiting on it would just burn the timeout). `dep.chat()` retries through a wake with the default 15-minute budget; call `client.deployments.chat()` directly to tune `wake_timeout_s` or `on_waking`.
 
 ## Related
 

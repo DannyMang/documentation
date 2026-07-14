@@ -101,6 +101,10 @@ The `model` field in the request is **echoed back** in the response — it's not
 
 `finish_reason` values: `stop` (normal end), `length` (hit `max_tokens`).
 
+## Scaled-to-zero deployments
+
+If the deployment [scaled to zero](/cli/deployments#scale-to-zero), the first request triggers a wake and returns `503` with a `Retry-After` header and error code `deployment_waking` while the GPU boots (a few minutes). The OpenAI client's built-in retries give up well before that, so either retry on `503` yourself until the cold start completes, or pre-warm with `veri deployments wake <id>` before sending traffic. The Veri SDK's `chat()` handles this retry loop for you.
+
 ## LangChain example
 
 ```python
