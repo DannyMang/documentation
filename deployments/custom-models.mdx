@@ -1,27 +1,33 @@
 ---
 title: "Custom models"
 sidebarTitle: "Custom models"
-description: "Your model library: trained checkpoints, Hugging Face imports, and direct uploads, all stored on Veri and ready to deploy."
-keywords: ["custom models", "model library", "checkpoint", "hugging face import", "upload model", "trained model"]
+description: "Your model library: save a trained checkpoint as a named, deployable model on Veri."
+keywords: ["custom models", "model library", "checkpoint", "save model", "trained model", "deploy checkpoint"]
 ---
 
-A custom model is a set of weights you own, stored on Veri and deployable from a single named entry. Every custom model lands in the same place (Veri-managed storage) no matter how it got there, so deploying one is always the same one step regardless of where the weights came from.
+A custom model is a set of weights you own, stored on Veri and deployable from a single named entry. Today you build your library by saving a completed Veri training job: the checkpoint is already on Veri storage, so saving it is a metadata-only step that names it and makes it deployable. No weights are copied.
 
-Your custom models live in the **model library** in the dashboard. From there you deploy, download, or copy a model's ID for the API.
+Your custom models live in the **model library** in the dashboard. From there you deploy a model or copy its ID for the API.
 
-## Where custom models come from
+<Note>
+  Hugging Face import and direct upload are not available yet. For now, a custom model comes from a completed Veri training job. To serve a Hugging Face repo directly, deploy it with `source="huggingface"` (see [Deployments](/deployments)).
+</Note>
 
-| Source | What it is | How it gets there |
-| --- | --- | --- |
-| Training job | A checkpoint from a completed Veri training job | Already on Veri storage; add it to your library with one click |
-| Hugging Face import | Any model on the Hugging Face Hub, including private and gated repos | Veri pulls the weights server-side into your library |
-| Direct upload | Weights from your machine | Upload through the dashboard |
+## Save a training job as a model
 
-Whatever the source, the result is one library entry whose weights live on Veri. When you deploy it, there is no second download from an outside host at serve time.
+When a training job completes, its checkpoint is already on Veri-managed storage. Save it to give it a name and make it reusable and deployable.
 
-## From a training job
+```bash
+veri models save <job-id> --name support-agent-v2
+```
 
-When a training job completes, its checkpoint is already on Veri-managed storage. Add it to your library to give it a name and make it deployable like any other model.
+```python
+model = client.models.create_from_training_job("<job-id>", name="support-agent-v2")
+```
+
+Saving is idempotent per job: saving the same completed job again returns the existing model rather than creating a duplicate. The saved model reuses the completed checkpoint already in Veri storage; it does not copy the weights.
+
+Only completed jobs that produced a Hugging Face checkpoint can be saved. Jobs that are still running, failed, or ran a custom script (which produces arbitrary output rather than a standard checkpoint) cannot be saved as a model.
 
 You can also keep working with the raw checkpoint directly:
 
@@ -31,51 +37,23 @@ veri jobs download <job-id> --output-dir ./checkpoint
 
 See [Training](/training) for the full training flow.
 
-## Import from Hugging Face
-
-Importing copies the weights from the Hugging Face Hub into your Veri library. The download runs on Veri, not on your machine, so a large model never round-trips through your laptop.
-
-```bash
-veri models import Qwen/Qwen2.5-0.5B-Instruct --name qwen-base
-```
-
-The import runs as a background job. Track it with:
+## Manage your library
 
 ```bash
 veri models list
+veri models rename <model-id> --name new-name
+veri models delete <model-id>
 ```
 
-The model is `importing` while the weights copy, then `ready` once it can be deployed.
-
-### Private and gated models
-
-For a private or gated repo, pass a Hugging Face access token. Veri uses the token only to authenticate the one-time download and does not store it.
-
-```bash
-veri models import meta-llama/Llama-3.1-8B-Instruct \
-  --name llama-3-8b \
-  --hf-token "$HF_TOKEN"
-```
-
-<Note>
-  Use a [fine-grained read token](https://huggingface.co/docs/hub/security-tokens) scoped to the repos you import. Gated models (for example, Llama) require that you have already accepted the model's license on Hugging Face with the same account the token belongs to.
-</Note>
-
-## Upload from your machine
-
-Upload weights directly through the dashboard. The model must use the standard Hugging Face layout: `config.json`, the weight files (`.safetensors`), and the tokenizer files.
-
-<Note>
-  Direct upload through the dashboard is sized for small models and LoRA adapters. For anything larger, import from Hugging Face instead. The server-side pull is faster and does not depend on your connection. CLI upload is on the roadmap.
-</Note>
+Renaming changes only the library label. Removing a model from the library deletes only the registry entry: it never deletes the training checkpoint, and it does not interrupt a deployment that is already serving that checkpoint. A model with an active deployment cannot be removed until you stop the deployment.
 
 ## Model states
 
 | State | Meaning |
 | --- | --- |
-| `importing` | Weights are copying into your library. Not yet deployable. |
-| `ready` | Weights are stored and the model can be deployed. |
-| `failed` | The import or upload did not finish. The error explains why (for example, a gated repo without a valid token). |
+| `ready` | The checkpoint is stored and the model can be deployed. |
+
+Saving a completed training job produces a `ready` model directly.
 
 ## Size limits
 
@@ -83,24 +61,28 @@ A custom model must fit on a single GPU node, the same ceiling as a deployment. 
 
 ## Deploy a custom model
 
-Once a model is `ready`, deploy it the same way you deploy any model: pass its ID. Custom models always serve from Veri storage, so cold starts skip the external download step.
+Once a model is `ready`, deploy it by ID with `source="custom_model"`. Custom models always serve from Veri storage, so cold starts skip any external download step.
 
 ```python
-dep = client.deployments.create(
-    model="<your-model-id>",
-    name="my-deploy",
+dep = client.deployments.create_from_model(
+    "<your-model-id>",
+    name="support-prod",
     gpu={"gpu_type": "A100-80GB", "gpu_count": 1},
 )
 ```
+
+```bash
+veri deployments create --from-model <your-model-id> \
+  --name support-prod --gpu-type A100-80GB --gpu-count 1
+```
+
+The deployment records both the saved model and its source checkpoint, so you can always trace what a running endpoint is serving. Because the checkpoint location is captured when the deployment is created, later renaming or removing the model from your library does not affect a running deployment.
 
 See [Deployments](/deployments) for the serving lifecycle and the OpenAI-compatible chat surface.
 
 ## Getting started without a model
 
-If your library is empty, you have not trained or imported anything yet. Two ways to start:
-
-- Browse the model library in the dashboard and import a base model to deploy right away.
-- [Train your own model](/training), then add the resulting checkpoint to your library.
+If your library is empty, you have not saved a trained model yet. [Train a model](/training), then save the resulting checkpoint with `veri models save`. To deploy an open-source model without training, deploy a Hugging Face repo directly from [Deployments](/deployments).
 
 ## Where to go next
 
@@ -109,7 +91,7 @@ If your library is empty, you have not trained or imported anything yet. Two way
     Spin up a deployment and chat with it in ~10 minutes.
   </Card>
   <Card title="Train your own model" icon="brain" href="/training">
-    Train a checkpoint, then add it to your library.
+    Train a checkpoint, then save it to your library.
   </Card>
   <Card title="Hosting & GPU sizing" icon="server" href="/deployments/hosting">
     Pick the right GPU for your model size.

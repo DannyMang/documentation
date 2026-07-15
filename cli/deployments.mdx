@@ -44,6 +44,13 @@ veri deployments create \
   --gpu-type A100-80GB \
   --gpu-count 1
 
+# From a saved model in your library:
+veri deployments create \
+  --from-model mdl_abc \
+  --name support-prod \
+  --gpu-type A100-80GB \
+  --gpu-count 1
+
 # Directly from HuggingFace (no training):
 veri deployments create \
   --from-hf Qwen/Qwen3-4B \
@@ -55,7 +62,8 @@ veri deployments create \
 | Flag | Purpose |
 | --- | --- |
 | `--model <job-id>` | Deploy a training job's checkpoint. |
-| `--from-hf <repo>` | Deploy a HuggingFace repo. Mutually exclusive with `--model`. |
+| `--from-model <model-id>` | Deploy a saved [custom model](/deployments/custom-models). |
+| `--from-hf <repo>` | Deploy a HuggingFace repo. |
 | `--name` | Display name. |
 | `--gpu-type` | Required in inline form. |
 | `--gpu-count` | Default `1`. |

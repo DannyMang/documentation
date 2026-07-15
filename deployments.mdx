@@ -10,23 +10,24 @@ A deployment is a model running on a GPU you control, exposed at an HTTPS endpoi
 
 The smallest viable example is in the [Deploy a HF model quickstart](/demos/deploy-hf-quickstart). This page is the mental model and the surface map.
 
-## Two sources
+## Model sources
 
 | `source` | What you pass as `model` | When to use |
 | --- | --- | --- |
 | `huggingface` | Any HF model name (`Qwen/Qwen2.5-0.5B-Instruct`) | Serving an off-the-shelf model |
 | `training_job` | A completed training job ID | Serving your own trained model |
+| `custom_model` | A saved model ID | Serving a model from your [library](/deployments/custom-models) |
 
-To name, store, and reuse your own weights (trained checkpoints, Hugging Face imports, or direct uploads), see [Custom models](/deployments/custom-models).
+To name, store, and reuse a trained checkpoint as a deployable model, see [Custom models](/deployments/custom-models).
 
 ## Deployment parameters
 
-You set these at create time, whether from the SDK (`client.deployments.create(...)`), the CLI (`veri deployments create`), or a `kind = "deploy"` config.
+You set these at create time, whether from the [SDK](/deployments/examples) (`client.deployments.create(...)`), the [CLI](/cli/deployments#create-from-a-config) (`veri deployments create`), or a [`kind = "deploy"` config](/cli/run#configs-deploy-toml).
 
 | Parameter | Required | Default | What it does |
 | --- | --- | --- | --- |
 | `model` | Yes | — | What to serve: a Hugging Face repo id, a completed training job id, or a [custom model](/deployments/custom-models) id, paired with `source`. |
-| `source` | No | `training_job` | Where `model` comes from: `huggingface`, `training_job`, or `s3_model`. See [Two sources](#two-sources). |
+| `source` | No | `training_job` | Where `model` comes from: `huggingface`, `training_job`, or `custom_model`. See [Model sources](#model-sources). |
 | `name` | Yes | — | Display name, also the `model` value clients send in requests. |
 | `gpu.gpu_type` | Yes | — | GPU SKU (for example `L4-24GB`, `A100-80GB`). Run `veri gpu list` for offered shapes and [Sizing the GPU](#sizing-the-gpu) for guidance. |
 | `gpu.gpu_count` | No | `1` | GPUs per replica, for multi-GPU model parallelism. |

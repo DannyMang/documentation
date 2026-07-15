@@ -1907,9 +1907,30 @@
         ],
         "summary": "List models",
         "operationId": "list",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size (default 20, max 100)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "description": "Cursor: return models created before this model id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
-            "description": "A list of the caller's custom models",
+            "description": "A page of the caller's models",
             "content": {
               "application/json": {
                 "schema": {
@@ -1924,28 +1945,26 @@
             "bearerAuth": []
           }
         ]
-      }
-    },
-    "/v1/models/import": {
+      },
       "post": {
         "tags": [
           "Models"
         ],
-        "summary": "Import model",
-        "operationId": "import",
+        "summary": "Save a model",
+        "operationId": "create",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ImportRequest"
+                "$ref": "#/components/schemas/CreateModelRequest"
               }
             }
           },
           "required": true
         },
         "responses": {
-          "202": {
-            "description": "The model row (import driven to its terminal state)",
+          "200": {
+            "description": "The existing model (idempotent repeat save)",
             "content": {
               "application/json": {
                 "schema": {
@@ -1954,8 +1973,43 @@
               }
             }
           },
-          "422": {
-            "description": "Request body failed validation"
+          "201": {
+            "description": "The saved model (first save)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid name, non-completed job, or a job with no deployable checkpoint"
+          },
+          "404": {
+            "description": "Training job not found or not owned by the caller"
+          },
+          "501": {
+            "description": "Source type not yet supported (huggingface, upload)"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/models/import": {
+      "post": {
+        "tags": [
+          "Models"
+        ],
+        "summary": "Import model (not yet supported)",
+        "operationId": "import",
+        "responses": {
+          "501": {
+            "description": "HuggingFace import is not yet available"
           }
         },
         "security": [
@@ -1970,7 +2024,7 @@
         "tags": [
           "Models"
         ],
-        "summary": "Register model",
+        "summary": "Save a model (compat alias)",
         "operationId": "register",
         "requestBody": {
           "content": {
@@ -1983,8 +2037,8 @@
           "required": true
         },
         "responses": {
-          "201": {
-            "description": "The registered custom model",
+          "200": {
+            "description": "The existing model (idempotent repeat save)",
             "content": {
               "application/json": {
                 "schema": {
@@ -1993,8 +2047,15 @@
               }
             }
           },
-          "422": {
-            "description": "Request body failed validation"
+          "201": {
+            "description": "The saved model",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelResponse"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -2015,7 +2076,7 @@
           {
             "name": "id",
             "in": "path",
-            "description": "Custom model ID",
+            "description": "Model ID",
             "required": true,
             "schema": {
               "type": "string"
@@ -2024,7 +2085,7 @@
         ],
         "responses": {
           "200": {
-            "description": "The custom model",
+            "description": "The model",
             "content": {
               "application/json": {
                 "schema": {
@@ -2042,20 +2103,52 @@
             "bearerAuth": []
           }
         ]
-      }
-    },
-    "/v1/models/{id}/presigned-upload": {
-      "post": {
+      },
+      "delete": {
         "tags": [
           "Models"
         ],
-        "summary": "Create model upload URL",
-        "operationId": "presigned_upload",
+        "summary": "Remove model from library",
+        "operationId": "delete",
         "parameters": [
           {
             "name": "id",
             "in": "path",
-            "description": "Custom model ID",
+            "description": "Model ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Removed from the library (job artifacts untouched)"
+          },
+          "404": {
+            "description": "Not found or not owned by the caller"
+          },
+          "409": {
+            "description": "Active deployments still reference this model"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "Models"
+        ],
+        "summary": "Rename model",
+        "operationId": "rename",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Model ID",
             "required": true,
             "schema": {
               "type": "string"
@@ -2066,7 +2159,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PresignedUploadRequest"
+                "$ref": "#/components/schemas/RenameRequest"
               }
             }
           },
@@ -2074,20 +2167,50 @@
         },
         "responses": {
           "200": {
-            "description": "A presigned single-PUT upload URL + S3 key",
+            "description": "The renamed model",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PresignedUploadResponse"
+                  "$ref": "#/components/schemas/ModelResponse"
                 }
               }
             }
           },
+          "400": {
+            "description": "Invalid name"
+          },
           "404": {
             "description": "Not found or not owned by the caller"
-          },
-          "422": {
-            "description": "Request body failed validation"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/models/{id}/presigned-upload": {
+      "post": {
+        "tags": [
+          "Models"
+        ],
+        "summary": "Create model upload URL (not yet supported)",
+        "operationId": "presigned_upload",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Model ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "501": {
+            "description": "Direct upload is not yet available"
           }
         },
         "security": [
@@ -3523,6 +3646,26 @@
           }
         ]
       },
+      "CreateModelRequest": {
+        "type": "object",
+        "description": "Generic create body. `source.type` selects the ingress path; Phase 1 accepts\nonly training_job (huggingface/upload return 501).",
+        "required": [
+          "name",
+          "source"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/SourceSpec"
+          },
+          "replace_name": {
+            "type": "boolean",
+            "description": "Apply `name` to an already-saved model on a repeat save (idempotent save\notherwise leaves the original name untouched)."
+          }
+        }
+      },
       "CreateSSHKeyRequest": {
         "type": "object",
         "required": [
@@ -4553,6 +4696,13 @@
           },
           "source": {
             "type": "string"
+          },
+          "source_model_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "For a custom_model deployment, the saved model this was created from\n(provenance). Null for other sources."
           },
           "endpoint_url": {
             "type": [
@@ -6048,27 +6198,6 @@
           }
         }
       },
-      "ImportRequest": {
-        "type": "object",
-        "required": [
-          "hf_id",
-          "name"
-        ],
-        "properties": {
-          "hf_id": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "hf_token": {
-            "type": [
-              "string",
-              "null"
-            ]
-          }
-        }
-      },
       "JobError": {
         "type": "object",
         "properties": {
@@ -6303,12 +6432,6 @@
             ]
           },
           "huggingface_id": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "s3_key": {
             "type": [
               "string",
               "null"
@@ -6777,6 +6900,13 @@
                 },
                 "source": {
                   "type": "string"
+                },
+                "source_model_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "For a custom_model deployment, the saved model this was created from\n(provenance). Null for other sources."
                 },
                 "endpoint_url": {
                   "type": [
@@ -7389,12 +7519,6 @@
                     "null"
                   ]
                 },
-                "s3_key": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
                 "size_bytes": {
                   "type": [
                     "integer",
@@ -7792,37 +7916,6 @@
           }
         }
       },
-      "PresignedUploadRequest": {
-        "type": "object",
-        "required": [
-          "filename",
-          "size_bytes"
-        ],
-        "properties": {
-          "filename": {
-            "type": "string"
-          },
-          "size_bytes": {
-            "type": "integer",
-            "format": "int64"
-          }
-        }
-      },
-      "PresignedUploadResponse": {
-        "type": "object",
-        "required": [
-          "upload_url",
-          "key"
-        ],
-        "properties": {
-          "upload_url": {
-            "type": "string"
-          },
-          "key": {
-            "type": "string"
-          }
-        }
-      },
       "PythonScorerConfig": {
         "type": "object",
         "required": [
@@ -7912,6 +8005,7 @@
       },
       "RegisterRequest": {
         "type": "object",
+        "description": "Legacy flat body for POST /v1/models/register (compat alias).",
         "required": [
           "training_job_id",
           "name"
@@ -7931,6 +8025,17 @@
           "ors",
           "open_env"
         ]
+      },
+      "RenameRequest": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          }
+        }
       },
       "RewardFunctionFormat": {
         "type": "string",
@@ -8322,6 +8427,23 @@
           "seed": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "SourceSpec": {
+        "type": "object",
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "training_job_id": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
