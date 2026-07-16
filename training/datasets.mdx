@@ -66,7 +66,28 @@ veri datasets connect-hf openai/gsm8k \
 ```
 </CodeGroup>
 
-For private HF datasets, set the Hugging Face token via your integrations settings; the token is encrypted at rest and applied automatically.
+Private and gated Hugging Face datasets are not supported yet; connect public datasets, or upload the data directly.
+
+## Supported formats
+
+Veri detects the dataset's format from its columns and converts it to the shape the trainer expects, so you can connect community datasets as they are:
+
+| Format | Columns | What Veri does |
+| --- | --- | --- |
+| Chat (ChatML) | `messages: [{role, content}]` | Used as is. |
+| ShareGPT | `conversations: [{from, value}]` | Converted to `messages`; roles like `human`/`gpt` (also `prompter`, `USER`) are mapped to `user`/`assistant`. |
+| Alpaca | `instruction`, `input`, `output` (optional `system`) | Composed into a `messages` conversation. |
+| Plain text | `text` | Used as is. |
+| Prompt-completion | `prompt`, `completion` | Used as is. |
+| Preference | `prompt`, `chosen`, `rejected` | Used as is (DPO). |
+
+Datasets that don't match any of these formats, or use tool-calling roles (`observation`, `function_call`), are rejected with a `dataset_format_incompatible` error at the start of the job rather than trained on incorrectly. Use `column_mapping` to rename columns into one of the shapes above.
+
+Each method still needs the right shape: SFT trains on `text`, `messages`, or prompt-completion rows; GRPO needs a `prompt` column; DPO needs `chosen` and `rejected`.
+
+### Snapshot caching
+
+The first training job on a connected HF dataset downloads it from the Hub, converts it, and caches the result. Later jobs on the same dataset read the cache directly: faster starts, and your data can't change mid-experiment if the upstream dataset is edited. To pick up upstream changes, connect the dataset again under a new name.
 
 ## Connect from a Veri Volume
 
