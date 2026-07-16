@@ -27,12 +27,12 @@ from veri_sdk import Client
 
 client = Client()
 
-# Connect a conversational dataset (rows of role/content "messages").
-# The trainer applies the model's chat template automatically.
+# The notebook's dataset. FineTome is stored in ShareGPT format; Veri
+# converts it and applies the model's chat template automatically.
 dataset = client.datasets.connect(
-    name="capybara",
+    name="finetome-100k",
     source_type="hf",
-    huggingface_dataset="trl-lib/Capybara",
+    huggingface_dataset="mlabonne/FineTome-100k",
 )
 
 # Submit the job with the notebook's training config.
@@ -71,13 +71,13 @@ The notebook's setup cells become hyperparameters on the job; Veri's worker runs
 | `get_peft_model(r=32, lora_alpha=32)` | `"lora_rank": 32, "lora_alpha": 32` |
 | `max_seq_length=2048` | `"max_seq_length": 2048` |
 | `SFTConfig(learning_rate=2e-4, max_steps=60)` | `"learning_rate": 2e-4, "max_steps": 60` |
-| `get_chat_template` + `formatting_prompts_func` | Automatic. Chat rows (`messages`) get the model's chat template applied by the trainer. |
+| `standardize_data_formats` + `get_chat_template` + `formatting_prompts_func` | Automatic. Veri converts ShareGPT rows to chat `messages` and the trainer applies the model's chat template. |
 | Free Colab T4 | `gpu_type="L4-24GB"` (QLoRA and Unsloth are single-GPU) |
 
 Batch size, warmup, and optimizer settings are managed by Veri's defaults. The notebook's `train_on_responses_only` step is not currently exposed; loss is computed on the full conversation.
 
 <Note>
-  The original notebook trains on `mlabonne/FineTome-100k`, which is stored in ShareGPT format (`{"from": "human", "value": ...}`). Veri's SFT reads conversational rows as role/content `messages`, so this demo uses `trl-lib/Capybara`, a multi-turn chat dataset already in that shape. To train on FineTome, convert it to role/content `messages` first (see [dataset formats](/training/sft#dataset-format)).
+  FineTome-100k is stored in ShareGPT format (`{"from": "human", "value": ...}`). Veri detects and converts it (and other common formats like Alpaca) automatically; see [supported formats](/training/datasets#supported-formats).
 </Note>
 
 ## Get the checkpoint
