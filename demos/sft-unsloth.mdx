@@ -1,10 +1,100 @@
 ---
 title: "SFT with Unsloth"
 sidebarTitle: "SFT w/ Unsloth"
-description: "A planned supervised fine-tuning walkthrough using Unsloth."
-keywords: ["demo", "SFT", "Unsloth", "fine-tuning"]
+description: "Run Unsloth's Qwen3-4B QLoRA fine-tuning recipe as a managed SFT job on Veri: one dataset connect and one job submit."
+keywords: ["demo", "SFT", "Unsloth", "QLoRA", "LoRA", "Qwen3", "supervised fine-tuning"]
 ---
 
-This demo is not ready yet.
+{/* doctest-page-gpu-required */}
 
-It will cover a lightweight supervised fine-tuning workflow with Unsloth, dataset prep, adapter export, and deployment through Veri.
+Unsloth's popular [Qwen3 (4B) Colab notebook](https://colab.research.google.com/github/unslothai/notebooks/blob/main/nb/Qwen3_%284B%29-Instruct.ipynb) fine-tunes a 4-bit Qwen3-4B-Instruct with LoRA adapters on a chat dataset. This demo runs the same recipe as a managed [SFT job](/training/sft) on Veri: you submit one job, and Veri provisions the GPU, installs the stack, runs the training loop, and uploads the checkpoint. No notebook, no CUDA setup, no runtime babysitting.
+
+<Warning>
+  This spends real GPU credit. Check your balance with `veri billing balance` first.
+</Warning>
+
+## Prerequisites
+
+- Install the SDK: `pip install veri-sdk`
+- Authenticate: `veri login` (or set `VERI_API_KEY`)
+
+## The script
+
+Save and run as `sft_unsloth.py`:
+
+```python sft_unsloth.py
+from veri_sdk import Client
+
+client = Client()
+
+# Connect a conversational dataset (rows of role/content "messages").
+# The trainer applies the model's chat template automatically.
+dataset = client.datasets.connect(
+    name="capybara",
+    source_type="hf",
+    huggingface_dataset="trl-lib/Capybara",
+)
+
+# Submit the job with the notebook's training config.
+job = client.training_jobs.create(
+    base_model="Qwen/Qwen3-4B-Instruct-2507",
+    dataset_id=dataset.id,
+    output_name="qwen3-4b-sft-unsloth",
+    method="sft_text",
+    hyperparameters={
+        "learning_rate": 2e-4,
+        "max_steps": 60,        # smoke test; remove and set "num_epochs": 1 for a full run
+        "max_seq_length": 2048,
+        "lora_rank": 32,
+        "lora_alpha": 32,
+        "load_in_4bit": True,   # QLoRA: 4-bit NF4 base + LoRA adapters
+        "use_unsloth": True,    # Unsloth memory optimization
+    },
+    gpu_type="L4-24GB",
+    gpu_count=1,
+)
+print(f"Submitted job {job.id}")
+
+job.wait(poll_interval=15)
+job.download(output_dir="./checkpoints")
+```
+
+Sixty steps is a fast smoke test, same as the notebook. For a real run, remove `max_steps` and set `num_epochs` to `1`.
+
+## How the notebook maps to Veri
+
+The notebook's setup cells become hyperparameters on the job; Veri's worker runs the same TRL `SFTTrainer` underneath, with Unsloth patching it when `use_unsloth` is on.
+
+| In the notebook | On Veri |
+| --- | --- |
+| `FastLanguageModel.from_pretrained(load_in_4bit=True)` | `"load_in_4bit": true` |
+| `get_peft_model(r=32, lora_alpha=32)` | `"lora_rank": 32, "lora_alpha": 32` |
+| `max_seq_length=2048` | `"max_seq_length": 2048` |
+| `SFTConfig(learning_rate=2e-4, max_steps=60)` | `"learning_rate": 2e-4, "max_steps": 60` |
+| `get_chat_template` + `formatting_prompts_func` | Automatic. Chat rows (`messages`) get the model's chat template applied by the trainer. |
+| Free Colab T4 | `gpu_type="L4-24GB"` (QLoRA and Unsloth are single-GPU) |
+
+Batch size, warmup, and optimizer settings are managed by Veri's defaults. The notebook's `train_on_responses_only` step is not currently exposed; loss is computed on the full conversation.
+
+<Note>
+  The original notebook trains on `mlabonne/FineTome-100k`, which is stored in ShareGPT format (`{"from": "human", "value": ...}`). Veri's SFT reads conversational rows as role/content `messages`, so this demo uses `trl-lib/Capybara`, a multi-turn chat dataset already in that shape. To train on FineTome, convert it to role/content `messages` first (see [dataset formats](/training/sft#dataset-format)).
+</Note>
+
+## Get the checkpoint
+
+`job.download` pulls the trained checkpoint once the job completes. You can also grab it from the CLI:
+
+```bash
+veri jobs download <job-id> --output-dir ./checkpoints
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="SFT (text)" icon="graduation-cap" href="/training/sft">
+    Every SFT hyperparameter, dataset formats, and the LoRA/QLoRA rules.
+  </Card>
+  <Card title="Deploy your checkpoint" icon="cloud" href="/deployments">
+    Serve the trained model with an OpenAI-compatible API.
+  </Card>
+</CardGroup>
