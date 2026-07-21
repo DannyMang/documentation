@@ -1900,6 +1900,32 @@
         ]
       }
     },
+    "/v1/me": {
+      "get": {
+        "tags": [
+          "Account"
+        ],
+        "summary": "Get current user",
+        "operationId": "me",
+        "responses": {
+          "200": {
+            "description": "The authenticated caller's identity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/models": {
       "get": {
         "tags": [
@@ -3624,6 +3650,13 @@
         "properties": {
           "name": {
             "type": "string"
+          },
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Server-injected display email for the authenticated user. Set by the web\nproxy from the signed-in Clerk session (never trusted from a browser\nbody). Absent for keys minted outside the proxy (SDK, CI). When present,\nit upserts `users.email` so `/v1/me` and the CLI can show the account."
           }
         }
       },
@@ -6288,6 +6321,42 @@
               "string",
               "null"
             ]
+          }
+        }
+      },
+      "MeResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "user_id"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "string"
+          },
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Display email, synced from the signed-in session when a key was minted.\nNull until the user mints a key through the web proxy."
+          },
+          "plan": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Reserved for future billing plan surfacing."
+          },
+          "org_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Reserved for future org membership surfacing."
           }
         }
       },
@@ -9088,6 +9157,10 @@
     {
       "name": "API keys",
       "description": "Create and revoke API keys."
+    },
+    {
+      "name": "Account",
+      "description": "The authenticated caller's identity."
     },
     {
       "name": "SSH keys",

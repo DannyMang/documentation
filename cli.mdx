@@ -59,7 +59,7 @@ veri whoami
 veri doctor
 ```
 
-`veri whoami` shows the active key + config file path. `veri doctor` runs a health check against the control plane.
+`veri whoami` shows the account it resolves to (user, email, plan) alongside the active key, config file path, and credit balance. `veri doctor` runs a health check against the control plane.
 
 <Note>
   Credentials live at `~/.config/veri/config.toml` (or `$XDG_CONFIG_HOME/veri/config.toml`). The CLI auto-migrates from the legacy `~/.veri/credentials.json` path when neither `VERI_API_KEY` nor `VERI_API_URL` is set in the environment. Env vars take precedence over the file.
