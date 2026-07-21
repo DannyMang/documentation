@@ -2,7 +2,7 @@
 title: "SFT with Unsloth"
 sidebarTitle: "SFT w/ Unsloth"
 description: "Run Unsloth's Qwen3-4B QLoRA fine-tuning recipe as a managed SFT job on Veri: one dataset connect and one job submit."
-keywords: ["demo", "SFT", "Unsloth", "QLoRA", "LoRA", "Qwen3", "supervised fine-tuning"]
+keywords: ["demo", "SFT", "Unsloth", "QLoRA", "LoRA", "Qwen3", "supervised fine-tuning", "custom script"]
 ---
 
 {/* doctest-page-gpu-required */}
@@ -61,24 +61,165 @@ job.download(output_dir="./checkpoints")
 
 Sixty steps is a fast smoke test, same as the notebook. For a real run, remove `max_steps` and set `num_epochs` to `1`.
 
-## How the notebook maps to Veri
+## What the hyperparameters do
 
-The notebook's setup cells become hyperparameters on the job; Veri's worker runs the same TRL `SFTTrainer` underneath, with Unsloth patching it when `use_unsloth` is on.
+Each key in `hyperparameters` is one setting from the notebook. Veri's worker runs the same TRL `SFTTrainer` underneath, with Unsloth patching it when `use_unsloth` is on.
 
-| In the notebook | On Veri |
+| Hyperparameter | What it does |
 | --- | --- |
-| `FastLanguageModel.from_pretrained(load_in_4bit=True)` | `"load_in_4bit": true` |
-| `get_peft_model(r=32, lora_alpha=32)` | `"lora_rank": 32, "lora_alpha": 32` |
-| `max_seq_length=2048` | `"max_seq_length": 2048` |
-| `SFTConfig(learning_rate=2e-4, max_steps=60)` | `"learning_rate": 2e-4, "max_steps": 60` |
-| `standardize_data_formats` + `get_chat_template` + `formatting_prompts_func` | Automatic. Veri converts ShareGPT rows to chat `messages` and the trainer applies the model's chat template. |
-| Free Colab T4 | `gpu_type="L4-24GB"` (QLoRA and Unsloth are single-GPU) |
+| `learning_rate: 2e-4` | AdamW step size. Higher than a full finetune because you are only training small LoRA adapters. |
+| `max_steps: 60` | Caps the run at 60 gradient steps for a fast smoke test. Remove it and set `num_epochs: 1` for a full pass over the data (see [how many steps is one epoch](#how-many-steps-is-one-epoch) below). |
+| `max_seq_length: 2048` | Token ceiling per example, measured after the chat template renders. Longer sequences are truncated; shorter ones are padded up for the batch. The main memory lever (see [the example](#sequence-length-by-example) below). |
+| `lora_rank: 32` | Train rank-32 LoRA adapters instead of the full model (the notebook's `get_peft_model(r=32)`). |
+| `lora_alpha: 32` | LoRA scaling factor. Defaults to `lora_rank` when unset. |
+| `load_in_4bit: true` | QLoRA: load the base in 4-bit NF4 and train adapters on top, so a 4B model fits on one GPU. |
+| `use_unsloth: true` | Turn on Unsloth's memory and speed patches. Single-GPU only. |
 
-Batch size, warmup, and optimizer settings are managed by Veri's defaults. The notebook's `train_on_responses_only` step is not currently exposed; loss is computed on the full conversation.
+For every SFT option and its default, see [SFT hyperparameters](/training/sft#hyperparameters).
+
+### How many steps is one epoch?
+
+One epoch is one full pass over the dataset, so it depends on dataset size and effective batch, not on `max_steps` directly:
+
+```text
+steps_per_epoch      = dataset_size / effective_batch_size
+effective_batch_size = per_device_batch × grad_accum × num_gpus
+```
+
+For this demo, FineTome-100k has about 100,000 examples and an effective batch of `2 × 4 × 1 = 8`, so one epoch is about `100,000 / 8 = 12,500` steps. The `max_steps: 60` smoke test is roughly 0.5% of that, which is why switching to `num_epochs: 1` is a much longer (and more expensive) run.
+
+### Sequence length, by example
+
+`max_seq_length` caps the tokenized conversation after the chat template renders it to text, not characters or the number of turns. As a rough guide, one token is about three-quarters of an English word.
+
+- A short exchange ("What color is the sky?" / "It is blue.") renders to roughly 30 tokens, trains in full, and is padded up to the longest example in its batch.
+- A long multi-turn conversation that tokenizes to 3,000 tokens is truncated to the first 2,048; the tail (often the final assistant answer) is dropped. Raise `max_seq_length` when your data runs long, at the cost of more GPU memory.
+
+Veri handles the notebook's data prep for you, so `standardize_data_formats`, `get_chat_template`, and `formatting_prompts_func` have no equivalent here (see the note below). Batch size, warmup, and optimizer settings use Veri's defaults. The notebook's `train_on_responses_only` step is not exposed on the managed path, so loss is computed on the full conversation; use the [custom-script variant](#run-the-same-recipe-as-a-custom-script) if you need response-only loss.
 
 <Note>
   FineTome-100k is stored in ShareGPT format (`{"from": "human", "value": ...}`). Veri detects and converts it (and other common formats like Alpaca) automatically; see [supported formats](/training/datasets#supported-formats).
 </Note>
+
+## Run the same recipe as a custom script
+
+If you want the parts the managed method does not expose (like `train_on_responses_only`, or any other change to the loop), run the notebook code itself as a [custom script](/training/custom-script). Veri still provisions the GPU, streams logs, and uploads the checkpoint; the difference is that you own the training loop and its dependencies.
+
+<Note>
+  Preview: this variant is ported verbatim from the notebook but is pending an end-to-end verification run on a live GPU.
+</Note>
+
+A two-file project directory:
+
+```text
+sft-unsloth-custom/
+  train.py
+  requirements.txt
+```
+
+`train.py` is the notebook, adapted to the Veri contract: read nothing but env, write the checkpoint to `VERI_OUTPUT_DIR`.
+
+```python train.py
+import os
+from pathlib import Path
+
+from datasets import load_dataset
+from trl import SFTConfig, SFTTrainer
+from unsloth import FastLanguageModel
+from unsloth.chat_templates import (
+    get_chat_template,
+    standardize_data_formats,
+    train_on_responses_only,
+)
+
+output_dir = Path(os.environ["VERI_OUTPUT_DIR"])
+
+model, tokenizer = FastLanguageModel.from_pretrained(
+    model_name="unsloth/Qwen3-4B-Instruct-2507",
+    max_seq_length=2048,
+    load_in_4bit=True,
+)
+model = FastLanguageModel.get_peft_model(
+    model,
+    r=32,
+    lora_alpha=32,
+    target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
+                    "gate_proj", "up_proj", "down_proj"],
+    lora_dropout=0,
+    bias="none",
+    use_gradient_checkpointing="unsloth",
+    random_state=3407,
+)
+
+# The data prep the managed path does for you: ShareGPT rows -> chat-template text.
+tokenizer = get_chat_template(tokenizer, chat_template="qwen3-instruct")
+dataset = load_dataset("mlabonne/FineTome-100k", split="train")
+dataset = standardize_data_formats(dataset)
+
+def formatting_prompts_func(examples):
+    texts = [
+        tokenizer.apply_chat_template(c, tokenize=False, add_generation_prompt=False)
+        for c in examples["conversations"]
+    ]
+    return {"text": texts}
+
+dataset = dataset.map(formatting_prompts_func, batched=True)
+
+trainer = SFTTrainer(
+    model=model,
+    tokenizer=tokenizer,
+    train_dataset=dataset,
+    args=SFTConfig(
+        dataset_text_field="text",
+        per_device_train_batch_size=2,
+        gradient_accumulation_steps=4,
+        warmup_steps=5,
+        max_steps=60,  # smoke test; swap for num_train_epochs=1 for a full run
+        learning_rate=2e-4,
+        logging_steps=1,
+        optim="adamw_8bit",
+        weight_decay=0.01,
+        lr_scheduler_type="linear",
+        seed=3407,
+        report_to="none",
+        output_dir=str(output_dir / "trainer"),
+    ),
+)
+
+# The notebook step the managed method does not expose:
+# compute loss only on assistant tokens.
+trainer = train_on_responses_only(
+    trainer,
+    instruction_part="<|im_start|>user\n",
+    response_part="<|im_start|>assistant\n",
+)
+
+trainer.train()
+
+# Everything under VERI_OUTPUT_DIR is uploaded as your checkpoint.
+model.save_pretrained(output_dir / "final")
+tokenizer.save_pretrained(output_dir / "final")
+```
+
+`requirements.txt` layers Unsloth (which pulls in TRL and bitsandbytes) on top of the `veri/base` image:
+
+```text requirements.txt
+unsloth
+```
+
+Submit it with the same GPU shape as the managed job:
+
+```bash
+veri run-script ./sft-unsloth-custom \
+  --entrypoint "python train.py" \
+  --base-image veri/base \
+  --gpu-type L4-24GB \
+  --gpu-count 1 \
+  --output-name qwen3-4b-sft-unsloth-custom \
+  --requirements ./sft-unsloth-custom/requirements.txt
+```
+
+Both paths end the same way: a job you can watch live and a checkpoint in your account, so the [download step below](#get-the-checkpoint) is unchanged. Trade-offs: the custom script gives you the full notebook (including response-only loss) and any edit you want, but you own dataset prep, hyperparameter defaults, and dependency versions, and cold start is a little slower while `unsloth` installs.
 
 ## Get the checkpoint
 

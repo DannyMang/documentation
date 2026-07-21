@@ -103,11 +103,11 @@ from veri_sdk import Client
 
 client = Client()
 
-artifact = client.code_artifacts.upload("./rft-prime-rl")  # dir holding rl.toml + run.sh
+artifact_id = client.code_artifacts.upload("./rft-prime-rl")  # dir holding rl.toml + run.sh
 
 job = client.training_jobs.create_custom_script(
     entrypoint="bash run.sh",
-    code_artifact_id=artifact.id,
+    code_artifact_id=artifact_id,
     base_image="veri/base-vllm",
     gpu_type="H100-80GB",
     gpu_count=2,
