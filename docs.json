@@ -106,8 +106,7 @@
             "group": "Managed training",
             "pages": [
               "demos/managed-grpo-quickstart",
-              "demos/sft-unsloth",
-              "demos/tool-calling-sft"
+              "demos/sft-unsloth"
             ]
           },
           {

@@ -58,7 +58,7 @@ Create a job. Returns immediately with status `queued`.
 - `gpu.gpu_count` in `[1, 8]`
 
 **Errors:**
-- `402 Payment Required` — credit balance too low for the requested resources (see [Billing](/account/billing))
+- `402 Payment Required` — credit balance too low for the requested resources (see [Billing](/deployments/cost))
 - `404 Not Found` — `dataset_id` or `reward_function_id` doesn't exist or belongs to another user
 - `422 Unprocessable Entity` — schema validation failed
 
@@ -248,7 +248,7 @@ checkpoint_destination = {"type": "gs", "uri": "gs://..."}
 checkpoint_destination = {"type": "az", "uri": "az://..."}
 ```
 
-For `s3`, `gs`, `az`, you'll need credentials configured via [Account integrations](/account/integrations) (or pass them inline — schema accepts a `credentials` field).
+For `s3`, `gs`, `az`, you'll need credentials configured via account integrations (or pass them inline — schema accepts a `credentials` field).
 
 ## Worker callbacks (appendix)
 
