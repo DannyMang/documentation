@@ -1,0 +1,80 @@
+---
+title: "Weights & Biases"
+sidebarTitle: "Weights & Biases"
+description: "Connect your W&B account once and every training job streams loss, reward, and throughput charts to your W&B project automatically."
+keywords: ["Weights & Biases", "wandb", "training charts", "observability", "metrics", "integrations"]
+---
+
+Veri has a built-in [Weights & Biases](https://wandb.ai) integration for training observability. Connect your W&B account once, and from then on every training job logs its metrics (loss, reward, learning rate, throughput) to your own W&B project while it runs. No per-job configuration and no key in your code.
+
+Each job's W&B run link is surfaced everywhere the job appears:
+
+- **Dashboard**: a "View in W&B" button on the job page.
+- **API / SDK**: the `wandb_run_url` field on the training job object.
+
+## Connect your account
+
+Grab an API key from [wandb.ai/authorize](https://wandb.ai/authorize), then connect it one of three ways:
+
+<Tabs>
+  <Tab title="CLI">
+    ```bash
+    veri wandb set
+    # W&B API key (input hidden): ...
+    ```
+
+    Optionally pick the default W&B project runs log to:
+
+    ```bash
+    veri wandb set --project my-experiments
+    ```
+
+    Check or remove the connection any time:
+
+    ```bash
+    veri wandb status
+    veri wandb remove
+    ```
+  </Tab>
+  <Tab title="Dashboard">
+    Open **Settings → Integrations**, paste your W&B API key, and optionally set a default project. Save, and you're done.
+  </Tab>
+  <Tab title="SDK">
+    ```python
+    from veri_sdk import Client
+
+    client = Client()
+    client.integrations.set_wandb(api_key="...", project="my-experiments")
+
+    client.integrations.get_wandb()     # {"configured": true, "project": "my-experiments"}
+    client.integrations.delete_wandb()  # disconnect
+    ```
+  </Tab>
+</Tabs>
+
+## What gets logged
+
+Once connected, managed LLM training jobs (`grpo`, `sft_text`, `dpo`) report to W&B automatically:
+
+- **Project**: your configured default, or `veri-training` if you didn't set one.
+- **Run name**: the job's `output_name`.
+- **Run ID**: the Veri job ID, so runs and jobs correlate one-to-one.
+- **Metrics**: everything the trainer emits per step (loss, reward, grad norm, learning rate, tokens/s).
+
+The same metrics also stream to Veri's native charts on the job page. W&B is additive, not a replacement, and jobs behave identically if W&B is ever unreachable: training never fails because of a logging integration.
+
+<Note>
+  `sft_video_gen` jobs don't report to W&B yet; their metrics are available on the Veri job page.
+</Note>
+
+## Custom scripts
+
+For [custom-script jobs](/training/custom-script), Veri injects `WANDB_API_KEY`, `WANDB_PROJECT`, and `WANDB_RUN_ID` into your container's environment. A bare `wandb.init()`, or any framework with W&B support (verl, OpenRLHF, slime, TRL), lands in your account with no code change. Your script's own `env` values take precedence if you set the same variables yourself.
+
+After the run, Veri scans the script output for the W&B run link and attaches it to the job as `wandb_run_url`, same as managed jobs.
+
+## How your key is handled
+
+- Stored encrypted at rest, scoped to your account. The API never returns it.
+- Delivered to the training machine at runtime over a job-scoped authenticated channel; it is never written into job config files or logs.
+- `veri wandb remove` disconnects immediately: jobs submitted afterwards no longer receive the key.

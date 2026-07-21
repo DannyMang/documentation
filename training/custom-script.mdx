@@ -182,7 +182,7 @@ Everything shows up in the Veri UI for the job, alongside your managed jobs and 
 For reward and loss curves you have two options:
 
 1. **`veri_sdk.log_metrics`** (shown above): append `{"step": n, "reward": ..., "loss": ...}` records and Veri renders them natively. Add `veri-sdk` to your `requirements.txt`.
-2. **Weights & Biases**: set your `WANDB_API_KEY` as a secret and your framework's existing `wandb` logging flows to your own W&B account. Veri deep-links the run from the job page. Frameworks like OpenRLHF, verl, and slime support this out of the box, so they light up with no code change.
+2. **Weights & Biases**: [connect your W&B account](/training/wandb) once (`veri wandb set`) and Veri injects `WANDB_API_KEY`, `WANDB_PROJECT`, and `WANDB_RUN_ID` into the container, so your framework's existing `wandb` logging flows to your own W&B account with no code change (OpenRLHF, verl, slime, and TRL all support it out of the box). Veri deep-links the run from the job page. Any `WANDB_*` value you set yourself in `env` takes precedence.
 
 ## Limits
 

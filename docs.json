@@ -51,7 +51,8 @@
               "training/datasets",
               "training/reward-functions",
               "training/grpo",
-              "training/dpo"
+              "training/dpo",
+              "training/wandb"
             ]
           },
           {

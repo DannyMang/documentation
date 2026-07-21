@@ -2390,6 +2390,89 @@
         ]
       }
     },
+    "/v1/settings/integrations/wandb": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Get W&B integration status",
+        "operationId": "get_wandb",
+        "responses": {
+          "200": {
+            "description": "Whether a W&B API key is configured (the key itself is never returned)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WandbIntegrationResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Set W&B integration",
+        "operationId": "set_wandb",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WandbIntegrationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Key stored (encrypted). Subsequent training jobs auto-log to W&B.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WandbIntegrationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Empty API key"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Remove W&B integration",
+        "operationId": "delete_wandb",
+        "responses": {
+          "200": {
+            "description": "Integration removed; future jobs stop logging to W&B"
+          },
+          "404": {
+            "description": "No W&B integration configured"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/ssh_keys": {
       "get": {
         "tags": [
@@ -9098,6 +9181,42 @@
             "format": "int64"
           }
         }
+      },
+      "WandbIntegrationRequest": {
+        "type": "object",
+        "required": [
+          "api_key"
+        ],
+        "properties": {
+          "api_key": {
+            "type": "string",
+            "description": "W&B API key (from wandb.ai/authorize). Stored encrypted at rest; never\nreturned by the API."
+          },
+          "project": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Default W&B project training runs log to. Defaults to \"veri-training\"."
+          }
+        }
+      },
+      "WandbIntegrationResponse": {
+        "type": "object",
+        "required": [
+          "configured"
+        ],
+        "properties": {
+          "configured": {
+            "type": "boolean"
+          },
+          "project": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
       }
     },
     "securitySchemes": {
@@ -9165,6 +9284,10 @@
     {
       "name": "SSH keys",
       "description": "Manage SSH key pairs for compute access."
+    },
+    {
+      "name": "Settings",
+      "description": "Account-level integrations (Weights & Biases)."
     }
   ]
 }

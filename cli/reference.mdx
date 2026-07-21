@@ -165,6 +165,21 @@ veri billing balance
 veri billing transactions --limit 50 --format jsonl
 ```
 
+## `veri wandb` {#wandb}
+
+Account-level [Weights & Biases integration](/training/wandb): store your key once and every training job logs to your W&B account.
+
+| Command | Purpose |
+| --- | --- |
+| `set [--api-key K] [--project P]` | Store your W&B API key (prompted with hidden input if omitted). |
+| `status` | Whether a key is configured + the default project. The key is never shown. |
+| `remove` | Disconnect; future jobs stop logging to W&B. |
+
+```bash
+veri wandb set --project my-experiments
+veri wandb status
+```
+
 ## Shell completion
 
 Typer ships completion for free:

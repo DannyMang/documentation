@@ -61,6 +61,16 @@ job.download(output_dir="./checkpoints")
 
 Sixty steps is a fast smoke test, same as the notebook. For a real run, remove `max_steps` and set `num_epochs` to `1`.
 
+## Watch it train in W&B
+
+If your [W&B account is connected](/training/wandb) (`veri wandb set`, one time), this job streams the notebook's loss curve to your W&B project live, and the finished job carries the run link:
+
+```python
+print(job.wandb_run_url)  # https://wandb.ai/<you>/veri-training/runs/<job-id>
+```
+
+The dashboard's job page shows the same link as a "View in W&B" button. Not connected? Metrics still stream to Veri's native charts on the job page.
+
 ## What the hyperparameters do
 
 Each key in `hyperparameters` is one setting from the notebook. Veri's worker runs the same TRL `SFTTrainer` underneath, with Unsloth patching it when `use_unsloth` is on.
