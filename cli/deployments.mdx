@@ -7,6 +7,32 @@ keywords: ["veri deployments", "inference", "endpoint", "openai compatible", "ch
 
 The `veri deployments` group creates and manages inference endpoints. Each deployment exposes an OpenAI-compatible `/chat/completions` API backed by a Veri-trained or HuggingFace model.
 
+## Deploy a Hugging Face model in one step
+
+`veri deploy` is the shortest path from a Hugging Face repo to a live endpoint. It accepts a bare repo id or a pasted `huggingface.co` link:
+
+```bash
+veri deploy Qwen/Qwen3-4B
+# or
+veri deploy https://huggingface.co/Qwen/Qwen3-4B
+```
+
+In a terminal, it asks whether to cache the model in Veri storage for faster starts next time. Caching saves the downloaded weights to your [model library](/deployments/custom-models) in the background while the deployment serves; once the cached copy is ready, every later deploy of the same repo starts from Veri storage automatically instead of pulling from the Hugging Face hub.
+
+| Flag | Purpose |
+| --- | --- |
+| `--name` | Endpoint name. Default: derived from the repo name (`qwen3-4b`). |
+| `--gpu-type` | GPU shape. Default `A100-80GB`. |
+| `--gpu-count` | Default `1`. |
+| `--engine` | `vllm` (default) or `max`. |
+| `--replicas` | GPU-box replicas behind the endpoint. Default `1`. |
+| `--cache` / `--no-cache` | Cache the model in your library (or don't) without prompting. |
+| `--yes` / `-y` | Skip the prompt. No caching unless `--cache` is passed. |
+
+Outside a terminal (scripts, CI) the prompt is skipped and caching stays off unless `--cache` is explicit.
+
+`veri deploy` is sugar for `veri deployments create --from-hf`; every other lifecycle command below applies to the resulting deployment.
+
 ## Commands
 
 | Command | Purpose |
@@ -73,6 +99,7 @@ veri deployments create \
 | `--concurrency-target` | In-flight requests per replica the autoscaler aims for. Default `8`. |
 | `--scale-to-zero-window` | Idle seconds before a `--min-replicas 0` deployment parks. Default `3600`, minimum `300`. |
 | `--idle-delete-after` | Auto-stop a parked deployment after N idle days. Default: keep it wakeable forever. |
+| `--cache` / `--no-cache` | With `--from-hf` only: also save the downloaded model to your [library](/deployments/custom-models) so later deploys of the repo start from Veri storage. |
 
 See [Replicas, autoscaling, and scale to zero](#replicas-autoscaling-and-scale-to-zero) for how the bounds behave.
 

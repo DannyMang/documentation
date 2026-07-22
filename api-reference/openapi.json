@@ -4118,6 +4118,13 @@
             ],
             "format": "int32",
             "description": "VS-313: optional GC — a deployment parked at zero with no traffic for\nthis many days goes terminal (stopped). Omitted => kept forever."
+          },
+          "cache": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "HF cache-through (source=huggingface only): also save the downloaded\nsnapshot to the caller's model library so later deploys of this repo\nstart from S3 instead of the HF hub. Best-effort — a failed upload\nnever affects this deployment. Omitted => no caching."
           }
         }
       },
@@ -4818,7 +4825,14 @@
               "string",
               "null"
             ],
-            "description": "For a custom_model deployment, the saved model this was created from\n(provenance). Null for other sources."
+            "description": "For a custom_model deployment, the saved model this was created from\n(provenance). Also set on a source=huggingface deployment that took the\ntransparent cache hit (serving from the caller's cached S3 copy). Null\notherwise."
+          },
+          "cache_model_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "HF cache-through: the library model (status importing) this\ndeployment's box is uploading its snapshot into. Null unless the\ndeployment was created with cache=true and the upload is the one this\nboot owns."
           },
           "endpoint_url": {
             "type": [
@@ -7058,7 +7072,14 @@
                     "string",
                     "null"
                   ],
-                  "description": "For a custom_model deployment, the saved model this was created from\n(provenance). Null for other sources."
+                  "description": "For a custom_model deployment, the saved model this was created from\n(provenance). Also set on a source=huggingface deployment that took the\ntransparent cache hit (serving from the caller's cached S3 copy). Null\notherwise."
+                },
+                "cache_model_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "HF cache-through: the library model (status importing) this\ndeployment's box is uploading its snapshot into. Null unless the\ndeployment was created with cache=true and the upload is the one this\nboot owns."
                 },
                 "endpoint_url": {
                   "type": [

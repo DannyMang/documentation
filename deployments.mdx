@@ -20,6 +20,8 @@ The smallest viable example is in the [Deploy a HF model quickstart](/demos/depl
 
 To name, store, and reuse a trained checkpoint as a deployable model, see [Custom models](/deployments/custom-models).
 
+A `huggingface` deployment can also [cache the model in your library](/deployments/custom-models#cache-a-hugging-face-model-while-deploying-it) (`cache: true`), and it automatically serves from a cached copy when you have one — faster starts, no hub download.
+
 ## Deployment parameters
 
 You set these at create time, whether from the [SDK](/deployments/examples) (`client.deployments.create(...)`), the [CLI](/cli/deployments#create-from-a-config) (`veri deployments create`), or a [`kind = "deploy"` config](/cli/run#configs-deploy-toml).
@@ -39,6 +41,7 @@ You set these at create time, whether from the [SDK](/deployments/examples) (`cl
 | `concurrency_target` | No | `8` | In-flight requests per replica the autoscaler aims for. Lower it for latency-sensitive traffic, raise it for batch throughput. |
 | `scale_to_zero_window_seconds` | No | `3600` | Idle seconds before a `min_replicas: 0` deployment parks. Minimum `300`. |
 | `idle_delete_after_days` | No | off | Auto-stop a deployment that has been parked at zero with no traffic for this many days. |
+| `cache` | No | `false` | `source: huggingface` only: also [save the model to your library](/deployments/custom-models#cache-a-hugging-face-model-while-deploying-it) for faster future starts. Best-effort; never affects this deployment. |
 
 `min_replicas`, `max_replicas`, `concurrency_target`, `scale_to_zero_window_seconds`, and `idle_delete_after_days` can also be changed later on a live deployment — see [Scaling](/cli/deployments#replicas-autoscaling-and-scale-to-zero). Model, GPU, and provider are immutable: changing those means a new deployment.
 

@@ -5,12 +5,12 @@ description: "Your model library: save a trained checkpoint as a named, deployab
 keywords: ["custom models", "model library", "checkpoint", "save model", "trained model", "deploy checkpoint"]
 ---
 
-A custom model is a set of weights you own, stored on Veri and deployable from a single named entry. Today you build your library by saving a completed Veri training job: the checkpoint is already on Veri storage, so saving it is a metadata-only step that names it and makes it deployable. No weights are copied.
+A custom model is a set of weights you own, stored on Veri and deployable from a single named entry. You build your library two ways: save a completed Veri training job (a metadata-only step; the checkpoint is already on Veri storage), or cache a Hugging Face model while deploying it.
 
 Your custom models live in the **model library** in the dashboard. From there you deploy a model or copy its ID for the API.
 
 <Note>
-  Hugging Face import and direct upload are not available yet. For now, a custom model comes from a completed Veri training job. To serve a Hugging Face repo directly, deploy it with `source="huggingface"` (see [Deployments](/deployments)).
+  Standalone Hugging Face import and direct upload are not available yet. To bring a Hugging Face model into your library, deploy it with caching enabled (below); to serve one without caching, deploy it with `source="huggingface"` (see [Deployments](/deployments)).
 </Note>
 
 ## Save a training job as a model
@@ -37,6 +37,28 @@ veri jobs download <job-id> --output-dir ./checkpoint
 
 See [Training](/training) for the full training flow.
 
+## Cache a Hugging Face model while deploying it
+
+Deploying a Hugging Face repo can also save it to your library, so later deploys start from Veri storage instead of downloading from the Hugging Face hub:
+
+```bash
+veri deploy Qwen/Qwen3-4B --cache
+```
+
+```python
+dep = client.deployments.create(
+    model="Qwen/Qwen3-4B",
+    source="huggingface",
+    cache=True,
+    name="qwen-prod",
+    gpu={"gpu_type": "A100-80GB", "gpu_count": 1},
+)
+```
+
+The library entry appears immediately as `importing` and flips to `ready` when the serving machine finishes uploading the weights in the background. Caching is best-effort: a failed upload marks the entry `failed` (retry by deploying with caching again) and never affects the deployment that requested it.
+
+Once a cached copy is `ready`, **every** deploy of that repo with `source="huggingface"` uses it automatically — no flag needed. The created deployment shows the cached model in `source_model_id`, and the CLI prints "Using your cached copy". Cached copies are private to your account.
+
 ## Manage your library
 
 ```bash
@@ -51,9 +73,11 @@ Renaming changes only the library label. Removing a model from the library delet
 
 | State | Meaning |
 | --- | --- |
-| `ready` | The checkpoint is stored and the model can be deployed. |
+| `ready` | The weights are stored and the model can be deployed. |
+| `importing` | A cached Hugging Face upload is in progress; the model cannot be deployed yet. |
+| `failed` | The cache upload failed (see the entry's error). Deploy the repo with caching again to retry. |
 
-Saving a completed training job produces a `ready` model directly.
+Saving a completed training job produces a `ready` model directly; a cached Hugging Face model passes through `importing` first.
 
 ## Size limits
 
