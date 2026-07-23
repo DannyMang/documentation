@@ -1417,6 +1417,9 @@
           "204": {
             "description": "The evaluation was deleted"
           },
+          "400": {
+            "description": "A run is still queued or running"
+          },
           "404": {
             "description": "Not found or not owned by the caller"
           }
@@ -1613,6 +1616,9 @@
         "responses": {
           "204": {
             "description": "The evaluation run was deleted"
+          },
+          "400": {
+            "description": "The run is still queued or running"
           },
           "404": {
             "description": "Not found or not owned by the caller"
