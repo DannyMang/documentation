@@ -182,6 +182,43 @@ Time-series queries return at most 500 buckets, and request-history queries retu
   Generate buffered and streaming traffic, verify dashboard charts, test SDK and REST queries, and interpret every metric.
 </Card>
 
+## Remote server over HTTP
+
+Beyond the local stdio server, `veri mcp serve-http` runs the same tool surface as a multi-tenant streamable HTTP service. This is the server behind Veri's hosted MCP endpoint, and you can also run it yourself (for example on an internal host shared by a team of agents).
+
+```bash
+veri mcp serve-http --host 0.0.0.0 --port 8321
+```
+
+The HTTP server does not use your local `veri login` credentials. Every request must carry your Veri API key as a bearer token, and each call acts as that key's owner:
+
+<CodeGroup>
+```bash Claude Code
+claude mcp add --transport http veri https://your-host:8321/mcp \
+  --header "Authorization: Bearer $VERI_API_KEY"
+```
+
+```json Claude Desktop / Cursor
+{
+  "mcpServers": {
+    "veri": {
+      "url": "https://your-host:8321/mcp",
+      "headers": { "Authorization": "Bearer vk_..." }
+    }
+  }
+}
+```
+</CodeGroup>
+
+Two endpoints are served:
+
+| Path | Tools |
+| --- | --- |
+| `/mcp` | Full surface — write tools gated by your MCP client's per-call approval, same as stdio. |
+| `/readonly/mcp` | Read tools only. The HTTP analogue of `--readonly` for unattended agents. |
+
+The transport is stateless, so the service scales horizontally behind a plain load balancer, and `GET /healthz` is an unauthenticated liveness probe. Requests are forwarded to the Veri API with the caller's own key — the server holds no credentials of its own. Point it at a different control plane with `--upstream-url` or `VERI_MCP_UPSTREAM_URL`.
+
 ## Training analysis with W&B
 
 Use Veri MCP for infrastructure, lifecycle, deployment telemetry, billing, and eval comparisons. Connect the official W&B MCP alongside it for rich cross-run training analysis, artifacts, and reports.
