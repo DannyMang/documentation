@@ -94,6 +94,11 @@ job.wait(poll_interval=15)
 job.download(output_dir="./checkpoints")
 ```
 
+`download()` fetches the complete Hugging Face checkpoint — weights plus
+adapter config and tokenizer files — into `./checkpoints/<job_id>/`, a
+directory you can load directly with `from_pretrained(...)` or push to the
+Hugging Face Hub.
+
 ### Choosing a launch region
 
 Capacity is per-region. If your job fails with `CAPACITY_UNAVAILABLE`, another region may have the GPU you need right now:

@@ -3689,6 +3689,23 @@
           "az"
         ]
       },
+      "CheckpointFile": {
+        "type": "object",
+        "required": [
+          "path",
+          "url"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Path relative to the checkpoint root (e.g. \"adapter_model.safetensors\",\n\"tokenizer.json\")."
+          },
+          "url": {
+            "type": "string",
+            "description": "Presigned GET URL for this file (expires in 1h)."
+          }
+        }
+      },
       "CodeArtifactResponse": {
         "type": "object",
         "required": [
@@ -6552,11 +6569,20 @@
       "ModelDownload": {
         "type": "object",
         "required": [
-          "download_url"
+          "download_url",
+          "files"
         ],
         "properties": {
           "download_url": {
-            "type": "string"
+            "type": "string",
+            "description": "Presigned URL of the primary weights file. Legacy single-file field:\nan HF checkpoint is a directory, so downloading only this yields an\nunloadable model — use `files` instead."
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CheckpointFile"
+            },
+            "description": "Every file of the final HF checkpoint. Download all of them, preserving\npaths, to get a directory loadable with `from_pretrained`."
           }
         }
       },
