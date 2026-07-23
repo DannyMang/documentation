@@ -125,18 +125,24 @@ veri jobs delete job_abc                    # finished jobs only; removes the st
 
 `list` supports `--limit`, `--after`, `--status`, `--method`. All commands accept `--format json`.
 
-### Watch progress
+### Stream logs
 
-There is no `--follow` log tailer in Phase-1 (deferred until the SDK exposes streaming). For now:
+`veri jobs logs` prints everything the job has logged so far (bootstrap and worker output) and exits. Pass `-f`/`--follow` to attach to the live stream until the job reaches a terminal state:
 
 ```bash
-# Poll status in a script:
+veri jobs logs job_abc                    # full log so far
+veri jobs logs job_abc -f                 # follow until completed/failed/cancelled
+veri jobs create configs/train.toml -f    # submit + follow in one step
+```
+
+Ctrl+C while following detaches; the job keeps running. Cancel explicitly with `veri jobs cancel`. Following an already-finished job prints its full log.
+
+For scripting, poll status instead:
+
+```bash
 while [ "$(veri jobs get $JOB_ID --format json | jq -r .status)" = "running" ]; do
   sleep 30
 done
-
-# Or open the dashboard for live logs:
-veri jobs get $JOB_ID --format json | jq -r .dashboard_url | xargs open
 ```
 
 ### Download a completed checkpoint
@@ -155,6 +161,7 @@ The download URL is only populated after the job reaches `completed`. Trying to 
 | `1` | User error (missing flag, bad config, job not downloadable). |
 | `2` | API error. |
 | `4` | Auth error. |
+| `130` | Interrupted: Ctrl+C detached from a followed log stream (the job keeps running). |
 
 ## What's next
 

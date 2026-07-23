@@ -94,6 +94,17 @@ job.wait(poll_interval=15)
 job.download(output_dir="./checkpoints")
 ```
 
+`wait()` streams the job's logs to your terminal while it polls: provisioning,
+installs, and training steps appear live with no extra flags. Streaming is
+best-effort: if the log stream drops, `wait()` keeps polling silently and still
+returns the finished job. Pass `stream=False` for quiet polling only. You can
+also tail any job from another terminal:
+
+```bash
+veri jobs logs job_abc       # print everything so far
+veri jobs logs job_abc -f    # follow until the job finishes (Ctrl+C detaches)
+```
+
 `download()` fetches the complete Hugging Face checkpoint — weights plus
 adapter config and tokenizer files — into `./checkpoints/<job_id>/`, a
 directory you can load directly with `from_pretrained(...)` or push to the
