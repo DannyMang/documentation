@@ -43,6 +43,7 @@ Outside a terminal (scripts, CI) the prompt is skipped and caching stays off unl
 | `update <id>` | Change replica bounds / scaling settings on a live deployment. |
 | `wake <id>` | Pre-warm a scaled-to-zero deployment. |
 | `stop <id>` | Stop for good. Billing stops. |
+| `delete <id>` | Permanently remove a stopped deployment and its request history. |
 | `chat <id>` | Send a one-shot message for smoke testing. |
 | `bench <id>` | Load-test the endpoint; report TTFB/TTFT/ITL/TPS/e2e at p50/p90/p99. |
 | `metrics <id>` | RPS, latency, GPU utilization. |
@@ -192,6 +193,8 @@ veri deployments stop dep_abc
 ```
 
 `stop` ends billing and is final — a stopped deployment can't wake; bring it back by creating a new one. For a deployment you'll come back to, prefer `--min-replicas 0` and let it park instead.
+
+Once a deployment is stopped (or failed), `veri deployments delete <id>` removes it and its request history for good. Deletion waits for the final billing settlement, so if you delete within a minute of stopping you may be asked to retry shortly.
 
 <Note>
   `start`, `rollback`, and `history` are Phase-2. Each depends on backend work that is not yet shipped.

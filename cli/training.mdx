@@ -70,6 +70,7 @@ veri rewards delete rf_abc
 | `get <id>` | Show one job. |
 | `cancel <id>` | Cancel a running job. |
 | `download <id>` | Download the completed checkpoint. |
+| `delete <id>` | Permanently delete a finished job and its stored checkpoint files. |
 
 ### Submit from a config
 
@@ -111,7 +112,7 @@ veri jobs create configs/train.toml \
 
 The convenience flags `--base-model`, `--gpu-type`, `--gpu-count`, `--dataset`, `--reward` expand to `--set` internally. See [Override syntax](/cli/run#override-toml-fields-from-the-cli) for type coercion and conflict detection.
 
-### List, get, cancel
+### List, get, cancel, delete
 
 ```bash
 veri jobs list                              # most recent 20
@@ -119,6 +120,7 @@ veri jobs list --status running             # filter
 veri jobs list --method grpo
 veri jobs get job_abc
 veri jobs cancel job_abc
+veri jobs delete job_abc                    # finished jobs only; removes the stored checkpoint
 ```
 
 `list` supports `--limit`, `--after`, `--status`, `--method`. All commands accept `--format json`.
