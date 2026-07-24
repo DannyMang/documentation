@@ -39,8 +39,9 @@ Every field of the GRPO hyperparameters, with defaults:
 | `lora_alpha` | `null` | LoRA scaling factor. Defaults to `lora_rank` when unset. |
 | `load_in_4bit` | `false` | QLoRA: load the base in 4-bit (NF4) and train LoRA adapters on top. Requires `lora_rank`. Single-GPU. |
 | `use_unsloth` | `false` | Opt-in Unsloth memory optimization. Off by default; vanilla TRL is the base path. Single-GPU only. |
-| `use_liger` | `false` | Opt-in [liger-kernel](https://github.com/linkedin/Liger-Kernel) fused training kernels. Works on AMD (ROCm) and NVIDIA; requires the package on the worker image (preinstalled on AMD providers). |
+| `use_liger` | `false` | Opt-in [liger-kernel](https://github.com/linkedin/Liger-Kernel) fused training kernels. Recommended for ≥4B models at batch sizes >1; measurably slower on small models at batch 1. Requires the package on the worker image (preinstalled on AMD providers). |
 | `tunableop` | `false` | Opt-in PyTorch TunableOp GEMM autotuning (most useful on AMD MI300X). Tunes at runtime, so best for long runs with steady shapes. |
+| `hipblaslt` | `false` | Opt-in hipBLASLt GEMM routing on AMD (ROCm). Aimed at large-GEMM workloads; benchmarked slower on small models at batch 1, so measure before adopting. No-op on NVIDIA. |
 
 ## LoRA and QLoRA
 
