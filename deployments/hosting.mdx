@@ -20,20 +20,31 @@ Rough sizing for **inference only** (training needs more headroom):
 
 **Rule of thumb:** Serving uses ~half the GPU you trained on. A 7B model trained on 8×A100 typically serves on 1×A100.
 
-## Supported GPU types
+## Serving shapes by provider
 
-| `gpu_type` | Memory | Common use |
-| --- | --- | --- |
-| `L4-24GB` | 24 GB | Single-GPU shape for small models (up to ~3B) |
-| `A10G-24GB` | 24 GB | Single-GPU shape for small models |
-| `A100-80GB` | 80 GB | Default sweet spot; launches as an 8-GPU node on AWS |
-| `H100-80GB` | 80 GB | ~2x throughput vs A100-80GB; launches as an 8-GPU node on AWS |
+Each provider sells fixed node shapes. The `gpu_count` you request must match one of the counts below — asking for a shape a provider doesn't sell returns a 400 at create, before anything boots.
 
-H200 and MI300X support are on the roadmap.
+| Provider | `gpu_type` | Memory | GPUs per node | Status |
+| --- | --- | --- | --- | --- |
+| `aws` (default) | `L4-24GB` | 24 GB | 1 | Available |
+| `aws` (default) | `A10G-24GB` | 24 GB | 1 | Available |
+| `aws` (default) | `A100-80GB` | 80 GB | 8 (whole node) | Available |
+| `aws` (default) | `H100-80GB` | 80 GB | 8 (whole node) | Available |
+| `gcp` | `A100-80GB` | 80 GB | 1 | Available |
+| `gcp` | `H100-80GB` | 80 GB | 1 | Available |
+| `azure` | `A100-80GB` | 80 GB | 1 | Coming soon |
+| `azure` | `H100-80GB` | 80 GB | 1 | Coming soon |
+| `digitalocean` | `H100-80GB` | 80 GB | 1 | Coming soon |
+
+<Note>
+  AWS has no single-GPU A100/H100 instance — the smallest SKU is the whole 8-GPU node, and you pay for all of it. For a single A100/H100, pick a provider with a genuine 1-GPU shape.
+</Note>
+
+The live version of this matrix (including current prices) is `veri gpu list`, backed by `GET /v1/gpu/catalog`. Rows marked coming soon are wired but feature-gated: a create returns a 400 until the gate lifts.
 
 ## Provider routing
 
-Deployments run on **AWS**. The `provider` field defaults to `aws`; there are no other providers to select today.
+The `provider` field defaults to `aws`. There is no automatic cross-provider routing — you pick the provider explicitly, and capacity errors don't spill to another cloud.
 
 ```python
 client.deployments.create(
@@ -41,7 +52,7 @@ client.deployments.create(
     source="huggingface",
     name="my-deploy",
     gpu={"gpu_type": "H100-80GB", "gpu_count": 1},
-    provider="aws",
+    provider="gcp",
 )
 ```
 

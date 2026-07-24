@@ -131,15 +131,19 @@ veri doctor --format json | jq -e '.[] | select(.status == "fail")' && exit 1
 
 | Command | Purpose |
 | --- | --- |
-| `list` | Available GPU node SKUs, with per-GPU and whole-node $/hr. |
+| `list` | The GPU offering matrix: per (GPU, provider), which node shapes you can order for training and serving, plus per-GPU $/hr. |
+| `list --provider/--region/--gpu-type` | LIVE availability by region for the given filter. |
 | `describe <sku>` | Hardware specs (VRAM, vCPU, host RAM, node size) + $/hr for one SKU. |
 | `compare` | Compare cost across providers for a given GPU config. |
 
 ```bash
 veri gpu list
+veri gpu list --provider digitalocean
 veri gpu describe A100-80GB
 veri gpu compare --gpu-type A100-80GB --gpu-count 1
 ```
+
+Bare `veri gpu list` is served from `GET /v1/gpu/catalog`: the `training` and `serving` columns show the GPUs-per-node shapes you can order (`1,8` means 1x and 8x nodes; `-` means the provider doesn't offer that workload; `(soon)` means wired but not enabled yet). Prices are per GPU per hour and appear once the provider's rate is seeded.
 
 ## `veri regions` {#regions}
 
