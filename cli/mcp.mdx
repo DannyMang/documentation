@@ -1,15 +1,48 @@
 ---
 title: "Model Context Protocol (MCP)"
 sidebarTitle: "Model Context Protocol (MCP)"
-description: "Set up a local MCP server so agents can inspect Veri jobs, deployment telemetry, billing, and evals or start approved runs."
+description: "Connect agents to Veri over MCP — hosted endpoint or local server — to inspect jobs, deployment telemetry, billing, and evals or start approved runs."
 keywords: ["veri mcp", "MCP", "Model Context Protocol", "Claude Code", "Claude Desktop", "Cursor", "agent"]
 ---
 
-`veri mcp serve` runs a [Model Context Protocol](https://modelcontextprotocol.io) server over stdio that exposes Veri as a set of tools. MCP clients such as Claude Code, Claude Desktop, and Cursor can inspect deployment metrics and request failures, query bounded training metrics, check account burn, compare eval runs, and—when writes are enabled—submit or cancel runs on your behalf.
+Veri speaks the [Model Context Protocol](https://modelcontextprotocol.io), so MCP clients such as Claude Code, Claude Desktop, and Cursor can inspect deployment metrics and request failures, query bounded training metrics, check account burn, compare eval runs, and—when writes are enabled—submit or cancel runs on your behalf.
 
-The server runs on your own machine. Your MCP client starts it as a subprocess and talks to it over stdin/stdout, so there is nothing to host and no port to open. It authenticates with the same credentials the CLI uses, so it can do exactly what you can do from the CLI, nothing more.
+There are two ways to connect, with the same tools either way:
 
-## Setup
+- **Hosted endpoint (recommended):** `https://api.veri.studio/mcp` — nothing to install, authenticated with your API key.
+- **Local server:** `veri mcp serve` runs as a subprocess of your MCP client and uses your `veri login` credentials. Use it if you prefer not to place an API key in client config.
+
+## Hosted endpoint
+
+Connect with your Veri API key as a bearer header (create one from the dashboard's API keys page). Every call acts as that key's owner — the same permissions you have from the CLI, nothing more.
+
+**Claude Code:**
+
+```bash
+claude mcp add --transport http veri https://api.veri.studio/mcp \
+  --header "Authorization: Bearer $VERI_API_KEY"
+```
+
+**Claude Desktop** and **Cursor** take a URL entry under `mcpServers`:
+
+```json
+{
+  "mcpServers": {
+    "veri": {
+      "url": "https://api.veri.studio/mcp",
+      "headers": { "Authorization": "Bearer vk_..." }
+    }
+  }
+}
+```
+
+For an unattended agent, use `https://api.veri.studio/readonly/mcp` instead — the creation and cancellation tools are not registered at all on that path (see [Read-only mode](#read-only-mode)).
+
+Verify with `/mcp` inside a Claude Code session, or ask the agent "what is my Veri credit balance?"
+
+## Local server setup
+
+The local server runs on your own machine: your MCP client starts it as a subprocess and talks to it over stdin/stdout, so there is no port to open and no API key in client config — it authenticates with your stored `veri login` credentials.
 
 <Steps>
 
@@ -114,6 +147,13 @@ claude mcp add veri -- veri mcp serve --readonly
 
 Setting the environment variable `VERI_MCP_READONLY=1` has the same effect.
 
+On the hosted endpoint, use the `/readonly/mcp` path instead:
+
+```bash
+claude mcp add --transport http veri-readonly https://api.veri.studio/readonly/mcp \
+  --header "Authorization: Bearer $VERI_API_KEY"
+```
+
 ## Available tools
 
 ### Read tools (always available)
@@ -182,9 +222,9 @@ Time-series queries return at most 500 buckets, and request-history queries retu
   Generate buffered and streaming traffic, verify dashboard charts, test SDK and REST queries, and interpret every metric.
 </Card>
 
-## Remote server over HTTP
+## Self-hosting the HTTP server
 
-Beyond the local stdio server, `veri mcp serve-http` runs the same tool surface as a multi-tenant streamable HTTP service. This is the server behind Veri's hosted MCP endpoint, and you can also run it yourself (for example on an internal host shared by a team of agents).
+`veri mcp serve-http` is the multi-tenant streamable HTTP server behind the hosted `https://api.veri.studio/mcp` endpoint. You can also run it yourself, for example on an internal host shared by a team of agents:
 
 ```bash
 veri mcp serve-http --host 0.0.0.0 --port 8321
