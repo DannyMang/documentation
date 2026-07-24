@@ -1,0 +1,94 @@
+---
+title: "Serving providers"
+sidebarTitle: "Overview"
+description: "Choose where your deployment runs: AWS (default), GCP, Hot Aisle (AMD MI300X), Azure, or DigitalOcean — and how to check the live catalog from the CLI."
+keywords: ["providers", "serving", "deployments", "AWS", "GCP", "Azure", "Hot Aisle", "AMD", "MI300X", "DigitalOcean"]
+---
+
+Deployments run on five providers. You pick one at create time with the `provider` field; it defaults to `aws`. There is no automatic cross-provider routing — you pick the provider explicitly, and capacity errors don't spill to another cloud.
+
+## Providers at a glance
+
+| Provider | `gpu_type` | Memory | GPUs per node | Status |
+| --- | --- | --- | --- | --- |
+| [`aws`](/deployments/providers/aws) (default) | `L4-24GB` | 24 GB | 1 | Available |
+| [`aws`](/deployments/providers/aws) (default) | `A10G-24GB` | 24 GB | 1 | Available |
+| [`aws`](/deployments/providers/aws) (default) | `A100-80GB` | 80 GB | 8 (whole node) | Available |
+| [`aws`](/deployments/providers/aws) (default) | `H100-80GB` | 80 GB | 8 (whole node) | Available |
+| [`gcp`](/deployments/providers/gcp) | `A100-80GB` | 80 GB | 1 | Available |
+| [`gcp`](/deployments/providers/gcp) | `H100-80GB` | 80 GB | 1 | Available |
+| [`hotaisle`](/deployments/providers/hotaisle) | `MI300X-192GB` | 192 GB | 1 | Available |
+| [`azure`](/deployments/providers/azure) | `A100-80GB`, `H100-80GB` | 80 GB | 1 | Coming soon |
+| [`digitalocean`](/deployments/providers/digitalocean) | `H100-80GB`, `L40S-48GB`, `MI300X-192GB` | 80/48/192 GB | 1 | Coming soon |
+
+Each provider sells fixed node shapes. The `gpu_count` you request must match one of the counts above — asking for a shape a provider doesn't sell returns a 400 at create, before anything boots.
+
+<Note>
+  Rows marked coming soon are wired but feature-gated: a create returns a 400 until the gate lifts.
+</Note>
+
+## Choosing a provider
+
+```python
+client.deployments.create(
+    model="Qwen/Qwen2.5-0.5B-Instruct",
+    source="huggingface",
+    name="my-deploy",
+    gpu={"gpu_type": "H100-80GB", "gpu_count": 1},
+    provider="gcp",
+)
+```
+
+Omit `provider` to use the default (AWS).
+
+## Checking providers from the CLI
+
+The live version of the matrix above (including current prices) is one command:
+
+```bash
+veri gpu list
+```
+
+This renders the GPU catalog: one row per (GPU type, provider) with a **training** and a **serving** column — the node counts you can order for each workload (`-` = not offered, `(soon)` = wired but feature-gated off) and the per-GPU $/hr.
+
+Any filter switches to the live availability view:
+
+```bash
+veri gpu list --provider hotaisle       # live MI300X quantity
+veri gpu list --gpu-type H100-80GB      # one SKU across providers
+veri gpu list --provider digitalocean   # per-region droplet capacity
+veri gpu list --format json             # machine-readable, incl. usd_per_hour
+```
+
+`AVAILABLE` is a real-time count (Hot Aisle live quantity, DigitalOcean per-region catalog); `OFFERED` (AWS) is catalog + a Spot placement-score proxy, not a launch guarantee.
+
+## Provider guides
+
+<CardGroup cols={2}>
+  <Card title="AWS (default)" icon="aws" href="/deployments/providers/aws">
+    L4/A10G single GPUs and whole-node A100/H100.
+  </Card>
+  <Card title="GCP" icon="google" href="/deployments/providers/gcp">
+    Genuine single-GPU A100/H100 VMs.
+  </Card>
+  <Card title="Hot Aisle (AMD MI300X)" icon="microchip" href="/deployments/providers/hotaisle">
+    192 GB on one card — 70B-class models without tensor parallel.
+  </Card>
+  <Card title="Azure" icon="microsoft" href="/deployments/providers/azure">
+    Single-GPU A100/H100 — coming soon.
+  </Card>
+  <Card title="DigitalOcean" icon="droplet" href="/deployments/providers/digitalocean">
+    H100, L40S, and MI300X droplets — coming soon.
+  </Card>
+</CardGroup>
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="Hosting & GPU sizing" icon="server" href="/deployments/hosting">
+    Pick the right GPU for your model size; cold-start expectations.
+  </Card>
+  <Card title="Billing" icon="dollar-sign" href="/deployments/cost">
+    Billing states and the idle-stop warning.
+  </Card>
+</CardGroup>

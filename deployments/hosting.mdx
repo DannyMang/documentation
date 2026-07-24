@@ -22,46 +22,15 @@ Rough sizing for **inference only** (training needs more headroom):
 
 ## Serving shapes by provider
 
-Each provider sells fixed node shapes. The `gpu_count` you request must match one of the counts below — asking for a shape a provider doesn't sell returns a 400 at create, before anything boots.
-
-| Provider | `gpu_type` | Memory | GPUs per node | Status |
-| --- | --- | --- | --- | --- |
-| `aws` (default) | `L4-24GB` | 24 GB | 1 | Available |
-| `aws` (default) | `A10G-24GB` | 24 GB | 1 | Available |
-| `aws` (default) | `A100-80GB` | 80 GB | 8 (whole node) | Available |
-| `aws` (default) | `H100-80GB` | 80 GB | 8 (whole node) | Available |
-| `gcp` | `A100-80GB` | 80 GB | 1 | Available |
-| `gcp` | `H100-80GB` | 80 GB | 1 | Available |
-| `azure` | `A100-80GB` | 80 GB | 1 | Coming soon |
-| `azure` | `H100-80GB` | 80 GB | 1 | Coming soon |
-| `digitalocean` | `H100-80GB` | 80 GB | 1 | Coming soon |
-| `digitalocean` | `L40S-48GB` | 48 GB | 1 | Coming soon |
-| `digitalocean` | `MI300X-192GB` | 192 GB | 1 | Coming soon |
-| `hotaisle` | `MI300X-192GB` | 192 GB | 1 | Available |
+Each provider sells fixed node shapes — asking for a shape a provider doesn't sell returns a 400 at create, before anything boots. The full matrix (with status and per-provider guides) lives on the [Serving providers](/deployments/providers) page; the live version, including current prices, is `veri gpu list`.
 
 <Tip>
-  The AMD MI300X carries 192 GB of VRAM on a single GPU — enough to serve a 70B model in bf16 on one card, where NVIDIA equivalents need a multi-GPU node.
+  The AMD MI300X ([Hot Aisle](/deployments/providers/hotaisle)) carries 192 GB of VRAM on a single GPU — enough to serve a 70B model in bf16 on one card, where NVIDIA equivalents need a multi-GPU node.
 </Tip>
 
 <Note>
-  AWS has no single-GPU A100/H100 instance — the smallest SKU is the whole 8-GPU node, and you pay for all of it. For a single A100/H100, pick a provider with a genuine 1-GPU shape.
+  AWS has no single-GPU A100/H100 instance — the smallest SKU is the whole 8-GPU node, and you pay for all of it. For a single A100/H100, pick a provider with a genuine 1-GPU shape ([GCP](/deployments/providers/gcp)).
 </Note>
-
-The live version of this matrix (including current prices) is `veri gpu list`, backed by `GET /v1/gpu/catalog`. Rows marked coming soon are wired but feature-gated: a create returns a 400 until the gate lifts.
-
-## Provider routing
-
-The `provider` field defaults to `aws`. There is no automatic cross-provider routing — you pick the provider explicitly, and capacity errors don't spill to another cloud.
-
-```python
-client.deployments.create(
-    model="Qwen/Qwen2.5-0.5B-Instruct",
-    source="huggingface",
-    name="my-deploy",
-    gpu={"gpu_type": "H100-80GB", "gpu_count": 1},
-    provider="gcp",
-)
-```
 
 ## Cold start
 

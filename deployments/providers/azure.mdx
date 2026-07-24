@@ -1,0 +1,30 @@
+---
+title: "Azure"
+sidebarTitle: "Azure (coming soon)"
+description: "Single-GPU A100/H100 serving on Azure — wired but feature-gated; creates return a 400 until the gate lifts."
+keywords: ["Azure", "serving", "deployments", "A100", "H100", "coming soon"]
+---
+
+Azure serving is wired but currently feature-gated: a `provider="azure"` create returns a "coming soon" 400 until the gate lifts.
+
+## Planned serving shapes
+
+| `gpu_type` | Memory | GPUs per node | Status |
+| --- | --- | --- | --- |
+| `A100-80GB` | 80 GB | 1 | Coming soon |
+| `H100-80GB` | 80 GB | 1 | Coming soon |
+
+Azure is one of the few clouds with stable on-demand single-GPU A100 *and* H100 VMs (the H100 SKU is an H100 NVL 94 GB — a superset of the 80 GB request). Azure is serving-only: a training submit with `provider="azure"` is always rejected.
+
+Watch `veri gpu list` — the `(soon)` marker on the serving column disappears when the gate lifts.
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="All serving providers" icon="server" href="/deployments/providers">
+    Compare shapes, status, and the live CLI catalog.
+  </Card>
+  <Card title="GCP" icon="google" href="/deployments/providers/gcp">
+    Single-GPU A100/H100 that's available today.
+  </Card>
+</CardGroup>

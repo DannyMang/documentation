@@ -1,0 +1,46 @@
+---
+title: "AWS"
+sidebarTitle: "AWS (default)"
+description: "The default serving provider: single-GPU L4/A10G and whole-node A100/H100 on EC2."
+keywords: ["AWS", "serving", "deployments", "L4", "A10G", "A100", "H100"]
+---
+
+AWS is the default serving provider — omit the `provider` field to use it.
+
+## Serving shapes
+
+| `gpu_type` | Memory | GPUs per node | Good for |
+| --- | --- | --- | --- |
+| `L4-24GB` | 24 GB | 1 | Small models (≤3B), cost-sensitive endpoints |
+| `A10G-24GB` | 24 GB | 1 | Same tier as L4, Ampere |
+| `A100-80GB` | 80 GB | 8 (whole node) | Large models with tensor parallel |
+| `H100-80GB` | 80 GB | 8 (whole node) | Fastest per-request latency, TP up to 8 |
+
+<Note>
+  AWS has no single-GPU A100/H100 instance — the smallest SKU is the whole 8-GPU node, and you pay for all of it. For a single A100/H100, pick a provider with a genuine 1-GPU shape ([GCP](/deployments/providers/gcp), or DigitalOcean when it lands).
+</Note>
+
+## Creating a deployment
+
+```python
+client.deployments.create(
+    model="Qwen/Qwen2.5-0.5B-Instruct",
+    source="huggingface",
+    name="my-deploy",
+    gpu={"gpu_type": "L4-24GB", "gpu_count": 1},
+    # provider defaults to "aws"
+)
+```
+
+Both engines (`vllm` default, `max`) are supported. Replicas, autoscaling, and scale-to-zero work as documented in [Scaling](/cli/deployments#replicas-autoscaling-and-scale-to-zero).
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="All serving providers" icon="server" href="/deployments/providers">
+    Compare shapes, status, and the live CLI catalog.
+  </Card>
+  <Card title="GPU sizing" icon="ruler" href="/deployments/hosting">
+    Match GPU memory to model size.
+  </Card>
+</CardGroup>

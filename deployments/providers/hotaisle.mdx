@@ -1,0 +1,53 @@
+---
+title: "Hot Aisle (AMD MI300X)"
+sidebarTitle: "Hot Aisle (AMD)"
+description: "Serve on AMD MI300X: 192 GB of HBM3 on a single GPU — 70B-class models in bf16 without tensor parallel, on the ROCm vLLM stack."
+keywords: ["Hot Aisle", "AMD", "MI300X", "ROCm", "vLLM", "serving", "deployments"]
+---
+
+Hot Aisle serves on AMD MI300X VMs. The headline: **192 GB of HBM3 on a single GPU** — enough to serve a 70B model in bf16 on one card, where NVIDIA equivalents need a multi-GPU node.
+
+## Serving shapes
+
+| `gpu_type` | Memory | GPUs per node | Status |
+| --- | --- | --- | --- |
+| `MI300X-192GB` | 192 GB | 1 | Available |
+
+Serving is single-GPU per deployment for now (multi-GPU ROCm tensor parallel is unvalidated).
+
+## Creating a deployment
+
+```python
+client.deployments.create(
+    model="Qwen/Qwen2.5-7B-Instruct",
+    source="huggingface",
+    name="my-amd-deploy",
+    gpu={"gpu_type": "MI300X-192GB", "gpu_count": 1},
+    provider="hotaisle",
+)
+```
+
+## Engines
+
+The default `vllm` engine runs the ROCm vLLM container.
+
+<Warning>
+  `engine="max"` is not yet supported on AMD GPUs — a create returns a 400 naming the vllm alternative. (MAX on MI300X currently crash-loops after passing health; the gate lifts once the MAX ROCm path stabilizes.)
+</Warning>
+
+## Notes
+
+- Boxes run ROCm, not CUDA; the serving stack is the ROCm vLLM docker image, so the OpenAI-compatible surface is identical to NVIDIA deployments.
+- Check live MI300X capacity before creating: `veri gpu list --provider hotaisle` shows a real-time quantity.
+- Training on the same silicon: see [Hot Aisle for training](/training/providers/hotaisle), including MI300X performance tuning.
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="All serving providers" icon="server" href="/deployments/providers">
+    Compare shapes, status, and the live CLI catalog.
+  </Card>
+  <Card title="Train on MI300X" icon="graduation-cap" href="/training/providers/hotaisle">
+    The training side of the AMD stack.
+  </Card>
+</CardGroup>

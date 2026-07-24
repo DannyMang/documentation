@@ -72,6 +72,17 @@
               "deployments/observability",
               "deployments/custom-models",
               "deployments/hosting",
+              {
+                "group": "Providers",
+                "pages": [
+                  "deployments/providers",
+                  "deployments/providers/aws",
+                  "deployments/providers/gcp",
+                  "deployments/providers/hotaisle",
+                  "deployments/providers/azure",
+                  "deployments/providers/digitalocean"
+                ]
+              },
               "deployments/cost",
               "deployments/openai-compat"
             ]
