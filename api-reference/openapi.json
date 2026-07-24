@@ -3716,6 +3716,13 @@
             "type": "integer",
             "format": "int32",
             "description": "Total rows in the source split; cap with `sample_limit`."
+          },
+          "primary_metric": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "lm-eval `<metric>,<filter>` key surfaced as the run's score."
           }
         }
       },

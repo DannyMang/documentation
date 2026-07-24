@@ -1,7 +1,7 @@
 ---
 title: "Evaluations"
-description: "Score deployed models against datasets or curated benchmarks, with concurrent execution and per-sample results"
-keywords: ["evaluations", "scorers", "benchmarks", "gsm8k", "humaneval", "model evaluation"]
+description: "Score deployed models against your own datasets or standard benchmarks, with concurrent execution and per-sample results"
+keywords: ["evaluations", "scorers", "benchmarks", "lm-eval-harness", "gsm8k", "mmlu", "model evaluation"]
 ---
 
 Evaluations score a deployed model and give you both an aggregate score and per-sample results, so you can see exactly which inputs a model gets wrong — and compare checkpoints before promoting one.
@@ -9,16 +9,16 @@ Evaluations score a deployed model and give you both an aggregate score and per-
 There are two ways to provide test data:
 
 - **Your own dataset** — a JSONL dataset you've uploaded, scored with [scorers](/evaluations/scorers) like `exact_match` and `contains`.
-- **A curated benchmark** — GSM8K, HumanEval, and friends. [Benchmarks](/evaluations/benchmarks) bring their own data, prompting, and scoring; you only pick a model.
+- **A standard benchmark** — GSM8K, MMLU, IFEval, and any other lm-eval-harness task. [Benchmarks](/evaluations/benchmarks) run on the community-standard harness with their own data, prompting, and scoring; you only pick a model, and scores are comparable with published numbers.
 
 ## How it works
 
 1. Create an **eval** — a reusable definition: a dataset + scorers, or a benchmark task.
 2. Start a **run** — the eval × a model target (`deployment:<id>`, a serving deployment).
-3. The eval engine fans samples out **concurrently** (up to 100 in flight) against your deployment's serving replicas. Code benchmarks execute each completion in an isolated sandbox.
+3. The eval engine fans dataset samples out **concurrently** (up to 100 in flight) against your deployment's serving replicas. Benchmark runs execute in an isolated sandbox driven by lm-eval-harness.
 4. Watch progress live; read the aggregate score and drill into per-sample items when it completes.
 
-Runs are resumable: progress is checkpointed per item, so a run interrupted by a platform deploy picks up where it left off instead of starting over.
+Dataset runs are resumable: progress is checkpointed per item, so a run interrupted by a platform deploy picks up where it left off. Benchmark runs restart from scratch if interrupted, which keeps the harness's sampling exactly as published.
 
 ## Quickstart (CLI)
 
@@ -125,6 +125,6 @@ Targeting a `scaled_to_zero` deployment triggers its wake, and the run fails imm
 
 ## Next steps
 
-- [Benchmarks](/evaluations/benchmarks) — the curated catalog and how code execution is sandboxed
+- [Benchmarks](/evaluations/benchmarks) — the lm-eval-harness catalog and how sandboxed execution works
 - [Scorers](/evaluations/scorers) — configuration reference for every scorer type
 - [CLI reference](/cli/evals) — every `veri evals` command and flag

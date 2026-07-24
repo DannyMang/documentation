@@ -1,18 +1,31 @@
 ---
 title: "Benchmarks"
 sidebarTitle: "Benchmarks"
-description: "Curated benchmark tasks — GSM8K and HumanEval — with concurrent execution and sandboxed code scoring"
-keywords: ["benchmarks", "gsm8k", "humaneval", "pass@1", "sandbox", "evaluation"]
+description: "Standard benchmark tasks run by lm-eval-harness in isolated sandboxes, with results comparable to published numbers"
+keywords: ["benchmarks", "lm-eval-harness", "gsm8k", "mmlu", "ifeval", "humaneval", "evaluation"]
 ---
 
-Benchmarks are curated eval tasks that bring their own data, prompting, and scoring. You pick a task and a model; the platform handles the rest. Unlike dataset evals, a benchmark eval takes **no `dataset_id`** — the task supplies its own rows.
+Benchmarks are standard eval tasks that bring their own data, prompting, and scoring. You pick a task and a model; the platform handles the rest. Unlike dataset evals, a benchmark eval takes **no `dataset_id`**: the task supplies its own rows.
+
+Benchmark runs are executed by [lm-eval-harness](https://github.com/EleutherAI/lm-evaluation-harness), the community-standard evaluation harness, pinned to a fixed version and run in an isolated sandbox against your deployment. Because the harness owns prompting and scoring, your scores are directly comparable with published lm-eval numbers for other models.
 
 ## Catalog
 
-| Task | Tier | Samples | Scoring |
+The curated catalog covers the most common tasks:
+
+| Task | Tier | Samples | Primary metric |
 | --- | --- | --- | --- |
-| `gsm8k` | inference only | 1,319 | Grade-school math word problems. The final numeric answer is extracted from the model output and compared to the reference. |
-| `humaneval` | code exec | 164 | Python function synthesis. Each completion is run against the task's unit tests in an **isolated sandbox**; score is pass@1. |
+| `gsm8k` | inference only | 1,319 | `exact_match,strict-match` |
+| `ifeval` | inference only | 541 | `prompt_level_strict_acc,none` |
+| `humaneval` | code exec | 164 | `pass@1,create_test` |
+| `mbpp` | code exec | 500 | `pass_at_1,none` |
+| `arc_challenge` | inference only | 1,172 | `acc_norm,none` |
+| `hellaswag` | inference only | 10,042 | `acc_norm,none` |
+| `winogrande` | inference only | 1,267 | `acc,none` |
+| `truthfulqa_mc2` | inference only | 817 | `acc,none` |
+| `mmlu` | inference only | 14,042 | `acc,none` |
+| `gpqa_main_zeroshot` | inference only | 448 | `acc_norm,none` |
+| `minerva_math` | inference only | 5,000 | `exact_match,none` |
 
 List the live catalog anytime:
 
@@ -20,10 +33,12 @@ List the live catalog anytime:
 veri evals benchmarks
 ```
 
+Any lm-eval-harness task id works, not just the curated list. An unknown task id fails the run quickly with the harness's own error message.
+
 ## Running a benchmark
 
 ```bash
-veri evals create --benchmark humaneval --model deployment:dep_abc123 --n 50 --follow
+veri evals create --benchmark gsm8k --model deployment:dep_abc123 --n 100 --follow
 ```
 
 Or in the dashboard: **Evaluations → + Create → Run a benchmark**.
@@ -34,39 +49,33 @@ Or via config:
 kind = "eval"
 
 [eval]
-name = "humaneval-checkpoint-7"
+name = "gsm8k-checkpoint-7"
 
 [[scorers]]
 type = "benchmark"
-name = "humaneval"
-task = "humaneval"
-sample_limit = 50
+name = "gsm8k"
+task = "gsm8k"
+sample_limit = 100
 
 [run]
 model = "deployment:dep_abc123"
 ```
 
-A benchmark scorer cannot be combined with other scorers in the same eval — the task owns both the rows and the scoring.
+A benchmark scorer cannot be combined with other scorers in the same eval: the task owns both the rows and the scoring.
+
+## Results
+
+The run's score is the task's primary metric (for example `exact_match,strict-match` for GSM8K). All metrics the harness reports, including alternate filters and stderr, are preserved under `results.harness.metrics`, and the harness version is recorded on the run for reproducibility. Per-sample prompts, responses, and scores are available in the run's items view, exactly like dataset evals.
 
 ## Sample limits
 
-`sample_limit` caps how many rows run (`--n` on the CLI). The subset is sampled deterministically per run, so an interrupted-and-resumed run scores the same rows. Fewer samples = faster and cheaper; the full split gives the most stable score. For quick checkpoint comparisons, 50–100 samples is usually enough to see a meaningful gap.
+`sample_limit` caps how many rows run (`--n` on the CLI). The harness selects the same leading subset every time, so two runs with the same limit and seed score the same rows. Fewer samples = faster and cheaper; the full split gives the most stable score. For quick checkpoint comparisons, 50 to 100 samples is usually enough to see a meaningful gap.
 
-## Speed
+## Sandboxed execution
 
-Samples run concurrently — up to 100 in flight against your deployment's serving replicas. A 100-sample GSM8K run completes in roughly the time of a handful of sequential requests, bounded by your deployment's throughput rather than the eval engine.
-
-## Sandboxed code execution
-
-`humaneval` completions are **never executed on platform infrastructure**. Each sample gets its own ephemeral sandbox:
-
-1. The model's completion is combined with the task's unit tests into a standalone program.
-2. A fresh sandbox is created, the program runs with a hard timeout, and the sandbox is destroyed.
-3. Exit code 0 = pass (1.0), anything else = fail (0.0). Sandbox infrastructure failures count as `error_count`, not as failures.
-
-One sandbox per sample means a malicious or runaway completion can't affect other samples — or anything else.
+The harness itself runs in an ephemeral, isolated sandbox that is created for the run and destroyed afterward. Code tasks (`humaneval`, `mbpp`) execute model completions inside that same sandbox, never on platform infrastructure, so a malicious or runaway completion cannot affect anything outside the run.
 
 ## Scoring notes
 
-- **gsm8k** — the scorer extracts the last number in the model's output (handling `####`-style answer markers and formatting like commas) and compares it to the reference answer. Encourage your model to end with the bare answer for best results; chain-of-thought before it is fine.
-- **humaneval** — pass@1 with a single completion per problem. Markdown code fences in the output are stripped automatically; indentation is preserved.
+- Generation settings come from each task's published configuration (shot count, stop sequences, answer extraction), which is what makes scores comparable across models and with public leaderboards. Per-eval `generation_params` are not applied to benchmark runs.
+- Multiple-choice tasks (`mmlu`, `arc_challenge`, `hellaswag`, and similar) are scored by answer loglikelihood and require the serving engine to expose prompt logprobs. Veri's standard vLLM deployments support this.

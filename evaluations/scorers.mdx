@@ -71,7 +71,7 @@ Judge scores are normalized to `0..1`. Judge token usage is reported separately 
 
 ## benchmark
 
-Runs a curated task from the [benchmark catalog](/evaluations/benchmarks). The task supplies its own rows, prompting, and scoring — so a benchmark eval has **no dataset**, and the benchmark scorer cannot be combined with other scorers.
+Runs a standard task via lm-eval-harness (see the [benchmark catalog](/evaluations/benchmarks)). The task supplies its own rows, prompting, and scoring, so a benchmark eval has **no dataset**, and the benchmark scorer cannot be combined with other scorers.
 
 ```json
 {
@@ -84,7 +84,7 @@ Runs a curated task from the [benchmark catalog](/evaluations/benchmarks). The t
 
 | Field | Default | Meaning |
 | --- | --- | --- |
-| `task` | — | Catalog task id (`gsm8k`, `humaneval`) |
+| `task` | — | lm-eval-harness task id (`gsm8k`, `mmlu`, `ifeval`, ...) |
 | `sample_limit` | all rows | Cap on how many task rows run |
 
 ## Errors vs. failures
