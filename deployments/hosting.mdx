@@ -36,6 +36,12 @@ Each provider sells fixed node shapes. The `gpu_count` you request must match on
 | `azure` | `H100-80GB` | 80 GB | 1 | Coming soon |
 | `digitalocean` | `H100-80GB` | 80 GB | 1 | Coming soon |
 | `digitalocean` | `L40S-48GB` | 48 GB | 1 | Coming soon |
+| `digitalocean` | `MI300X-192GB` | 192 GB | 1 | Coming soon |
+| `hotaisle` | `MI300X-192GB` | 192 GB | 1 | Coming soon |
+
+<Tip>
+  The AMD MI300X carries 192 GB of VRAM on a single GPU — enough to serve a 70B model in bf16 on one card, where NVIDIA equivalents need a multi-GPU node.
+</Tip>
 
 <Note>
   AWS has no single-GPU A100/H100 instance — the smallest SKU is the whole 8-GPU node, and you pay for all of it. For a single A100/H100, pick a provider with a genuine 1-GPU shape.
