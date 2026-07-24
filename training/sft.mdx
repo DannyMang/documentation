@@ -71,6 +71,8 @@ SFT takes no reward function — the labeled completions are the training signal
 | `lora_alpha` | `null` | LoRA scaling factor. Defaults to `lora_rank` when unset. |
 | `load_in_4bit` | `false` | QLoRA: load the base in 4-bit (NF4) and train LoRA adapters on top. Requires `lora_rank`. Single-GPU. |
 | `use_unsloth` | `false` | Opt-in Unsloth memory optimization. Off by default; single-GPU only. |
+| `use_liger` | `false` | Opt-in [liger-kernel](https://github.com/linkedin/Liger-Kernel) fused training kernels. Works on AMD (ROCm) and NVIDIA; requires the package on the worker image (preinstalled on AMD providers). |
+| `tunableop` | `false` | Opt-in PyTorch TunableOp GEMM autotuning (most useful on AMD MI300X). Tunes at runtime, so best for long runs with steady shapes; short or variable-length jobs can lose more to tuning than they gain. |
 
 ## LoRA and QLoRA
 

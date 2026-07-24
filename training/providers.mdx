@@ -112,7 +112,7 @@ Hot Aisle is a neocloud offering single- and multi-GPU AMD MI300X VMs. The MI300
 | `MI300X-192GB` | 192 GB | AMD CDNA3 (ROCm 6.4) | 1, 2, or 4 |
 
 <Info>
-  Hot Aisle VMs run ROCm, not CUDA. The training stack (torch, transformers, TRL) is installed from the ROCm wheel index at boot. Unsloth, bitsandbytes, xformers, and vLLM are CUDA-only and are not available on this provider. Vanilla TRL training (GRPO, SFT, DPO) is fully supported.
+  Hot Aisle VMs run ROCm, not CUDA. The training stack (torch, transformers, TRL) is installed from the ROCm wheel index at boot, with GEMMs routed through hipBLASLt. Unsloth, bitsandbytes, xformers, and vLLM are CUDA-only and are not available on this provider. Vanilla TRL training (GRPO, SFT, DPO) is fully supported, and liger-kernel fused kernels are preinstalled — enable them with `hyperparameters={"use_liger": true}`.
 </Info>
 
 ```python
