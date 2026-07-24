@@ -1988,6 +1988,32 @@
         ]
       }
     },
+    "/v1/gpu/catalog": {
+      "get": {
+        "tags": [
+          "GPU"
+        ],
+        "summary": "GPU offering catalog by provider/workload",
+        "operationId": "catalog",
+        "responses": {
+          "200": {
+            "description": "Offering rows: provider x workload x gpu_type with node shapes, status and price",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GpuCatalogList"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/me": {
       "get": {
         "tags": [
@@ -6333,6 +6359,68 @@
               "null"
             ],
             "description": "Honest fidelity/units note."
+          }
+        }
+      },
+      "GpuCatalogList": {
+        "type": "object",
+        "required": [
+          "object",
+          "catalog"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "catalog": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GpuCatalogRow"
+            }
+          }
+        }
+      },
+      "GpuCatalogRow": {
+        "type": "object",
+        "description": "One catalog row: a (provider, workload, gpu_type) offering.",
+        "required": [
+          "provider",
+          "gpu_type",
+          "workload",
+          "node_counts",
+          "status"
+        ],
+        "properties": {
+          "provider": {
+            "type": "string"
+          },
+          "gpu_type": {
+            "type": "string"
+          },
+          "workload": {
+            "type": "string",
+            "description": "\"training\" or \"serving\"."
+          },
+          "node_counts": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            },
+            "description": "Orderable GPUs-per-node counts for this shape (e.g. [8] for AWS\nA100/H100 — whole nodes only; [1, 8] for DigitalOcean H100 training)."
+          },
+          "status": {
+            "type": "string",
+            "description": "\"available\" (orderable now) or \"coming_soon\" (wired but behind a\nfeature flag — a create 400s until the flag flips)."
+          },
+          "usd_per_gpu_hr": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Customer $/GPU-hr (marked up, matching /v1/cost/rates). Absent until\nthe provider's rate is seeded — never a fabricated 0."
           }
         }
       },
