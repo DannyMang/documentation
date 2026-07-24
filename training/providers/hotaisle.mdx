@@ -1,0 +1,95 @@
+---
+title: "Hot Aisle (AMD MI300X)"
+sidebarTitle: "Hot Aisle (AMD)"
+description: "Train on AMD MI300X (192 GB HBM3, ROCm): GPU types, the ROCm software stack, MI300X performance tuning, and cold-start behavior."
+keywords: ["Hot Aisle", "AMD", "MI300X", "ROCm", "liger", "TunableOp", "hipBLASLt", "provider"]
+---
+
+Hot Aisle is a neocloud offering single- and multi-GPU AMD MI300X VMs. The MI300X has 192 GB of HBM3 memory — more than any NVIDIA single-GPU offering — making it well-suited for large-model finetuning on a single card.
+
+## GPU types
+
+| GPU type | VRAM | Architecture | GPUs available |
+| --- | --- | --- | --- |
+| `MI300X-192GB` | 192 GB | AMD CDNA3 (ROCm 6.4) | 1, 2, or 4 |
+
+<Info>
+  Hot Aisle VMs run ROCm, not CUDA. The training stack (torch, transformers, TRL) is installed from the ROCm wheel index at boot. Unsloth, bitsandbytes, xformers, and vLLM are CUDA-only and are not available on this provider. Vanilla TRL training (GRPO, SFT, DPO) is fully supported.
+</Info>
+
+## Submitting a job
+
+```python
+job = client.training_jobs.create(
+    base_model="Qwen/Qwen2.5-0.5B-Instruct",
+    dataset_id=dataset.id,
+    reward_function_id=reward_fn.id,
+    output_name="qwen-amd-grpo",
+    gpu_type="MI300X-192GB",
+    gpu_count=1,
+    provider="hotaisle",
+    hyperparameters={
+        "learning_rate": 1e-6,
+        "rollouts_per_prompt": 4,
+        "max_steps": 50,
+    },
+)
+```
+
+## Performance tuning on MI300X
+
+Three acceleration knobs are available as opt-in hyperparameters. All default off — each one helps some workloads and measurably hurts others, so adopt them based on your workload shape (or benchmark both ways):
+
+| Hyperparameter | When it helps | When it hurts |
+| --- | --- | --- |
+| `use_liger` | ≥4B models at batch size >1: ~13% faster in our 4B benchmark, and its fused cross-entropy avoids materializing the full-vocab logits tensor — the difference between finishing and OOMing at large batch. | Small models at batch 1 (2.4x slower in our 0.6B benchmark). |
+| `tunableop` | Long runs with steady GEMM shapes (fixed seq length, packing on). | Short or variable-length jobs — tuning happens at runtime, per shape. |
+| `hipblaslt` | Large-GEMM workloads (big models, big batches). | Small GEMMs — 25% slower in our 0.6B batch-1 benchmark. |
+
+```python
+job = client.training_jobs.create(
+    base_model="Qwen/Qwen3-4B",
+    dataset_id=dataset.id,
+    method="sft_text",
+    gpu_type="MI300X-192GB",
+    gpu_count=1,
+    provider="hotaisle",
+    hyperparameters={
+        "max_seq_length": 2048,
+        "batch_size": 8,
+        "use_liger": True,   # the 192 GB play: big batches + fused CE
+    },
+)
+```
+
+The numbers above come from our benchmark runs of Qwen3 SFT on Capybara (0.6B at batch 1, 4B at batch 8). Your workload's shape decides which side of each trade-off you land on — when in doubt, run a short `max_steps` job both ways and compare `veri jobs metrics` throughput before committing to a long run.
+
+## Cold-start behavior
+
+Hot Aisle VMs boot from a stock image and install the ROCm training stack at boot via cloud-init. The first boot includes:
+
+1. ROCm driver verification (`rocm-smi`)
+2. PyTorch ROCm wheel installation (torch 2.9.1 from the ROCm 6.4 index)
+3. Training stack install (transformers, accelerate, peft, TRL)
+4. GPU sanity gate (`SA5_ROCM_OK` — torch must see the AMD GPU)
+
+Cold-start time depends on Hot Aisle's VM provisioning and network throughput. If the cloud-init path is slow, a prebuilt ROCm worker container may be used in the future to reduce boot time.
+
+## Supported training methods
+
+All managed training methods work on Hot Aisle: `grpo`, `sft_text`, `dpo`, and `sft_video_gen`. The `grpo_agentic` method is unavailable on all providers (the agentic engine is being rebuilt). Custom scripts (L3) are NVIDIA-only for now — an AMD submit returns a 400.
+
+<Warning>
+  `use_unsloth` and `load_in_4bit` (QLoRA) are not supported on Hot Aisle — both depend on CUDA-only libraries. Set them to `false` (the default) when using `provider="hotaisle"`.
+</Warning>
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="All providers" icon="server" href="/training/providers">
+    Compare GPUs, billing, and status across providers.
+  </Card>
+  <Card title="SFT hyperparameters" icon="sliders" href="/training/sft">
+    The full hyperparameter reference, including the tuning knobs above.
+  </Card>
+</CardGroup>

@@ -1,0 +1,53 @@
+---
+title: "DigitalOcean"
+sidebarTitle: "DigitalOcean"
+description: "On-demand H100 GPU Droplets in fixed 1x and 8x shapes, with per-second billing and about one minute provisioning."
+keywords: ["DigitalOcean", "H100", "GPU Droplets", "NVIDIA", "provider"]
+---
+
+DigitalOcean GPU Droplets are on-demand single- and 8-GPU VMs with per-second billing and fast (about one minute) provisioning.
+
+## GPU types
+
+| GPU type | VRAM | Architecture | GPUs available |
+| --- | --- | --- | --- |
+| `H100-80GB` | 80 GB | NVIDIA Hopper | 1 or 8 |
+
+DigitalOcean sells fixed 1x and 8x droplet shapes only — a `gpu_count` of 2 or 4 is rejected at submit.
+
+## Submitting a job
+
+```python
+job = client.training_jobs.create(
+    base_model="Qwen/Qwen2.5-0.5B-Instruct",
+    dataset_id=dataset.id,
+    method="sft_text",
+    output_name="qwen-do-sft",
+    gpu_type="H100-80GB",
+    gpu_count=1,
+    provider="digitalocean",
+)
+```
+
+## Notes
+
+<Note>
+  DigitalOcean also lists AMD MI300X droplets, but they are not yet enabled on Veri — a `provider="digitalocean"` submit with `gpu_type="MI300X-192GB"` returns a 400 listing the offered shapes. For AMD MI300X training today, use `provider="hotaisle"`.
+</Note>
+
+<Warning>
+  DigitalOcean GPU capacity fluctuates minute-to-minute. A submit that hits `CAPACITY_UNAVAILABLE` after retrying across regions is not billed — check `veri gpu list --provider digitalocean` and retry.
+</Warning>
+
+`veri gpu list` shows one `AVAILABLE` entry per region with current capacity, or a single `UNAVAILABLE` row when a shape has no capacity anywhere. This signal comes from DigitalOcean's size catalog, which can lag real launch acceptance in both directions.
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="All providers" icon="server" href="/training/providers">
+    Compare GPUs, billing, and status across providers.
+  </Card>
+  <Card title="SFT (text)" icon="book" href="/training/sft">
+    Supervised finetuning — a good fit for fast single-GPU droplets.
+  </Card>
+</CardGroup>

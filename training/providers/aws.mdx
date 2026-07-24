@@ -1,0 +1,49 @@
+---
+title: "AWS"
+sidebarTitle: "AWS (default)"
+description: "The default training provider: NVIDIA L4, A10G, A100, and H100 on EC2 with per-second billing, on-demand or spot."
+keywords: ["AWS", "NVIDIA", "H100", "A100", "L4", "A10G", "EC2", "provider"]
+---
+
+AWS is the default provider and the most reliable for NVIDIA training. Omit the `provider` field entirely to use it.
+
+## GPU types
+
+| GPU type | VRAM | Instance | GPUs per node |
+| --- | --- | --- | --- |
+| `L4-24GB` | 24 GB | g6.xlarge | 1 |
+| `A10G-24GB` | 24 GB | g5.xlarge | 1 |
+| `A100-80GB` | 80 GB | p4de.24xlarge | 8 |
+| `H100-80GB` | 80 GB | p5.48xlarge | 8 |
+
+L4 and A10G are single-GPU instances — you rent one card. A100 and H100 are whole 8-GPU nodes: you get (and pay for) all 8 cards regardless of `gpu_count`, which controls how many are used for training, not how many are rented.
+
+## Submitting a job
+
+```python
+job = client.training_jobs.create(
+    base_model="Qwen/Qwen2.5-0.5B-Instruct",
+    dataset_id=dataset.id,
+    reward_function_id=reward_fn.id,
+    gpu_type="L4-24GB",
+    gpu_count=1,
+    # provider defaults to "aws"
+)
+```
+
+## Notes
+
+- Billing is per-second, on-demand or spot.
+- Regions: AWS is the only provider with manual region selection — pass `region` at submit, or omit it for the default. Unknown regions 400 with the offered list.
+- Multi-node gangs (`num_nodes >= 2`, custom-script only) are AWS-only and require the 8-GPU A100/H100 shapes.
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="All providers" icon="server" href="/training/providers">
+    Compare GPUs, billing, and status across providers.
+  </Card>
+  <Card title="Custom scripts (L3)" icon="code" href="/training/custom-script">
+    Bring your own training loop — runs on AWS NVIDIA GPUs.
+  </Card>
+</CardGroup>

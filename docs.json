@@ -47,7 +47,16 @@
               "training",
               "training/custom-script",
               "training/managed",
-              "training/providers",
+              {
+                "group": "Providers",
+                "pages": [
+                  "training/providers",
+                  "training/providers/aws",
+                  "training/providers/hotaisle",
+                  "training/providers/vast",
+                  "training/providers/digitalocean"
+                ]
+              },
               "training/datasets",
               "training/reward-functions",
               "training/grpo",

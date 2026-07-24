@@ -1,0 +1,45 @@
+---
+title: "Vast.ai"
+sidebarTitle: "Vast.ai"
+description: "NVIDIA marketplace spillover: per-host A100/H100 chunks (1-8 GPUs) when AWS is out of stock, at marketplace pricing."
+keywords: ["Vast.ai", "NVIDIA", "marketplace", "A100", "H100", "provider"]
+---
+
+Vast.ai is a GPU marketplace that rents per-host NVIDIA chunks (1-8 GPUs within a single machine). It serves as a capacity spillover when AWS is out of A100 or H100 stock.
+
+## GPU types
+
+| GPU type | VRAM | Architecture | GPUs available |
+| --- | --- | --- | --- |
+| `A100-80GB` | 80 GB | NVIDIA Ampere | 1-8 (per-host) |
+| `H100-80GB` | 80 GB | NVIDIA Hopper | 1-8 (per-host) |
+
+## Submitting a job
+
+```python
+job = client.training_jobs.create(
+    base_model="Qwen/Qwen2.5-0.5B-Instruct",
+    dataset_id=dataset.id,
+    reward_function_id=reward_fn.id,
+    gpu_type="H100-80GB",
+    gpu_count=1,
+    provider="vast",
+)
+```
+
+## Notes
+
+- Vast.ai rents individual GPU cards on shared hosts, so `gpu_count=1` rents exactly one GPU (unlike AWS where A100/H100 are whole 8-GPU nodes).
+- Availability and pricing vary by host and fluctuate in real time — check `veri gpu list --provider vast` before submitting.
+- A submit that finds no acceptable offer fails with `CAPACITY_UNAVAILABLE` and is not billed.
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="All providers" icon="server" href="/training/providers">
+    Compare GPUs, billing, and status across providers.
+  </Card>
+  <Card title="Managed training" icon="graduation-cap" href="/training/managed">
+    How the training loop works across all providers.
+  </Card>
+</CardGroup>
