@@ -46,6 +46,10 @@ Pick the base that matches your stack. Each prebakes the slow, compiled pieces s
 | `veri/base-vllm` | `veri/base` + vLLM | OpenRLHF-style scripts, any vLLM-rollout RL |
 | `veri/base-sglang` | `veri/base` + SGLang | slime and SGLang-based stacks |
 
+<Note>
+  Custom scripts run on NVIDIA GPUs only for now — the base-image catalog is CUDA-tier. A submit with an AMD `gpu_type` (e.g. `MI300X-192GB`) returns a 400. For AMD MI300X, use managed training (`grpo`, `sft_text`, `dpo`) on `provider="hotaisle"`; AMD custom-script support is planned.
+</Note>
+
 ## Example: a minimal training run
 
 A small project directory:
