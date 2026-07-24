@@ -8,6 +8,10 @@ boost: 3
 
 A deployment is a model running on a GPU you control, exposed at an HTTPS endpoint that speaks the OpenAI Chat Completions API. 
 
+<Warning>
+  Deployments are in early access. GPU capacity for serving is limited, so creates can hit capacity errors and larger shapes may not be orderable — check [`veri gpu list`](/cli/reference#gpu) for what's live before planning around a specific GPU. Training and evals are fully supported and are the platform's primary focus today.
+</Warning>
+
 The smallest viable example is in the [Deploy a HF model quickstart](/demos/deploy-hf-quickstart). This page is the mental model and the surface map.
 
 ## Model sources
