@@ -101,6 +101,7 @@ veri deployments create \
 | `--scale-to-zero-window` | Idle seconds before a `--min-replicas 0` deployment parks. Default `3600`, minimum `300`. |
 | `--idle-delete-after` | Auto-stop a parked deployment after N idle days. Default: keep it wakeable forever. |
 | `--cache` / `--no-cache` | With `--from-hf` only: also save the downloaded model to your [library](/deployments/custom-models) so later deploys of the repo start from Veri storage. |
+| `--vllm-arg` | Extra vLLM CLI token appended verbatim to the engine command; repeat per token (e.g. `--vllm-arg=--kv-cache-dtype --vllm-arg=fp8`). vllm engine only; platform-managed flags (`--model`, `--port`, `--host`, `--api-key`, `--served-model-name`) are rejected. Also available as `deployment.vllm_extra_args` (list of strings) in a deploy config. |
 
 See [Replicas, autoscaling, and scale to zero](#replicas-autoscaling-and-scale-to-zero) for how the bounds behave.
 

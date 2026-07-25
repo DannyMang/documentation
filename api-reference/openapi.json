@@ -4263,6 +4263,16 @@
               "null"
             ],
             "description": "HF cache-through (source=huggingface only): also save the downloaded\nsnapshot to the caller's model library so later deploys of this repo\nstart from S3 instead of the HF hub. Best-effort — a failed upload\nnever affects this deployment. Omitted => no caching."
+          },
+          "vllm_extra_args": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "VS-368: extra vLLM CLI flags appended verbatim to the engine command\n(argv list, e.g. [\"--speculative-config\", \"{...}\", \"--kv-cache-dtype\",\n\"fp8\"]). vllm engine only. Flags the platform owns (--model, --port,\n--host, --api-key, --served-model-name) are rejected at create."
           }
         }
       },
@@ -4999,6 +5009,16 @@
               "string",
               "null"
             ]
+          },
+          "vllm_extra_args": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "VS-368: the extra vLLM CLI flags this deployment was created with\n(argv list). Null unless supplied at create."
           },
           "num_replicas": {
             "type": "integer",
@@ -7317,6 +7337,16 @@
                     "string",
                     "null"
                   ]
+                },
+                "vllm_extra_args": {
+                  "type": [
+                    "array",
+                    "null"
+                  ],
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "VS-368: the extra vLLM CLI flags this deployment was created with\n(argv list). Null unless supplied at create."
                 },
                 "num_replicas": {
                   "type": "integer",
