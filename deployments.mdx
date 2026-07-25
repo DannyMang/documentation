@@ -37,8 +37,8 @@ You set these at create time, whether from the [SDK](/deployments/examples) (`cl
 | `name` | Yes | — | Display name, also the `model` value clients send in requests. |
 | `gpu.gpu_type` | Yes | — | GPU SKU (for example `L4-24GB`, `A100-80GB`). Run `veri gpu list` for offered shapes and [Sizing the GPU](#sizing-the-gpu) for guidance. |
 | `gpu.gpu_count` | No | `1` | GPUs per replica, for multi-GPU model parallelism. |
-| `engine` | No | `vllm` | Inference engine: `vllm` or `max` (Modular MAX). |
-| `provider` | No | `aws` | Cloud to serve on — see [Serving providers](/deployments/providers) for shapes and status, or run `veri gpu list` for the live catalog. `engine: max` is NVIDIA-only. |
+| `engine` | No | `vllm` | Inference engine. `vllm` is the supported engine; `max` (Modular MAX) is currently disabled while under validation, and a `max` create returns a 400. |
+| `provider` | No | `aws` | Cloud to serve on — see [Serving providers](/deployments/providers) for shapes and status, or run `veri gpu list` for the live catalog. |
 | `replicas` | No | `1` | GPU-box replicas behind one endpoint (1-8). Shorthand for equal `min_replicas`/`max_replicas` (a fixed fleet). |
 | `min_replicas` | No | `replicas` | Lower replica bound. Set below `max_replicas` to enable autoscaling; set to `0` to enable scale to zero. |
 | `max_replicas` | No | `replicas` | Upper replica bound (1-8). |
