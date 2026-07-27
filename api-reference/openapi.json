@@ -4272,7 +4272,7 @@
             "items": {
               "type": "string"
             },
-            "description": "VS-368: extra vLLM CLI flags appended verbatim to the engine command\n(argv list, e.g. [\"--speculative-config\", \"{...}\", \"--kv-cache-dtype\",\n\"fp8\"]). vllm engine only. Flags the platform owns (--model, --port,\n--host, --api-key, --served-model-name) are rejected at create."
+            "description": "VS-370: extra vLLM CLI flags appended verbatim to the engine command\n(argv list, e.g. [\"--speculative-config\", \"{...}\", \"--kv-cache-dtype\",\n\"fp8\"]). vllm engine only. Flags the platform owns (--model, --port,\n--host, --api-key, --served-model-name) are rejected at create."
           }
         }
       },
@@ -5018,7 +5018,7 @@
             "items": {
               "type": "string"
             },
-            "description": "VS-368: the extra vLLM CLI flags this deployment was created with\n(argv list). Null unless supplied at create."
+            "description": "VS-370: the extra vLLM CLI flags this deployment was created with\n(argv list). Null unless supplied at create."
           },
           "num_replicas": {
             "type": "integer",
@@ -7346,7 +7346,7 @@
                   "items": {
                     "type": "string"
                   },
-                  "description": "VS-368: the extra vLLM CLI flags this deployment was created with\n(argv list). Null unless supplied at create."
+                  "description": "VS-370: the extra vLLM CLI flags this deployment was created with\n(argv list). Null unless supplied at create."
                 },
                 "num_replicas": {
                   "type": "integer",
