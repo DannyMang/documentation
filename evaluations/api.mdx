@@ -5,55 +5,6 @@ description: "Endpoints for eval definitions, phased runs, rescoring, calibratio
 keywords: ["evaluations", "API reference", "rescoring", "calibration", "runs", "items"]
 ---
 
-The Evaluations API creates reusable eval definitions and executes them against serving deployments. Runs progress through `preparing`, `generating`, `scoring`, and `aggregating` phases.
-
-## Run workflow
-
-- `POST /v1/evals/{eval_id}/runs` creates a run with immutable provenance.
-- `GET /v1/evals/{eval_id}/runs/{run_id}` returns phase, progress, usage, uncertainty, and results.
-- `GET /v1/evals/{eval_id}/runs/{run_id}/items` returns candidate request/response evidence and scores.
-- `POST /v1/evals/{eval_id}/runs/{run_id}/rescore` creates an immutable scoring revision from persisted outputs without repeating candidate inference.
-- `POST /v1/evals/{eval_id}/runs/{run_id}/calibrate` compares an LLM judge revision with boolean item labels.
-
-Calibration labels accept `true`/`false`, `1`/`0`, `pass`/`fail`, or `yes`/`no`. The response includes accuracy, invalid rate, sample count, and a confusion matrix.
-
-## External runners
-
-Set `runner_type` to `lm_eval` or `inspect` and provide `runner_config` when creating a run. Veri launches a one-shot runner with a run-scoped callback token. The runner uses authenticated manifest, heartbeat, and event endpoints; model requests pass through Veri's internal OpenAI-compatible gateway so deployment usage remains authoritative.
-
-```json
-{
-  "model": "deployment:dep_abc123",
-  "runner_type": "lm_eval",
-  "runner_config": {
-    "task": "hellaswag",
-    "limit": 100
-  }
-}
-```
-
-Raw lm-eval JSON/JSONL and Inspect `.eval` logs are uploaded to the run artifact prefix and returned in the run's `artifacts` field. Runner events are idempotent by event ID and sequence.
-
-## Comparisons and gates
-
-Pass `baseline_run_id` and `gates` when creating a run. Comparable runs must share task, dataset hash, scorer hash, sampling policy, epochs, and sample IDs. Veri reports incompatible dimensions rather than silently comparing different evidence.
-
-```json
-{
-  "model": "deployment:dep_candidate",
-  "baseline_run_id": "run_baseline",
-  "gates": [
-    {
-      "metric": "score:quality",
-      "max_regression": 0.02,
-      "confidence": 0.95
-    },
-    {
-      "metric": "p95_latency_ms",
-      "maximum": 2500
-    }
-  ]
-}
-```
-
-`GET /v1/evals/{eval_id}/runs/{run_id}/compare` returns paired per-sample deltas, aggregate quality/latency/token/cost/error metrics, confidence intervals, and gate decisions. Score regressions default to higher-is-better; system metrics default to lower-is-better. Set `higher_is_better` explicitly for custom metric semantics. Confidence-aware gates currently use 95% paired bootstrap intervals and require at least two aligned samples.
+<Note>
+Evaluations are getting an upgrade and are temporarily unavailable while we finish it. This page will return with the new evaluations experience.
+</Note>
