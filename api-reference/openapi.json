@@ -3741,7 +3741,8 @@
           "name",
           "description",
           "tier",
-          "num_samples"
+          "num_samples",
+          "status"
         ],
         "properties": {
           "task": {
@@ -3769,6 +3770,10 @@
               "null"
             ],
             "description": "lm-eval `<metric>,<filter>` key surfaced as the run's score."
+          },
+          "status": {
+            "type": "string",
+            "description": "\"available\" or \"coming_soon\" (benchmark evals are feature-gated)."
           }
         }
       },

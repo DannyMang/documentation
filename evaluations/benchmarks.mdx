@@ -5,6 +5,10 @@ description: "Standard benchmark tasks run by lm-eval-harness in isolated sandbo
 keywords: ["benchmarks", "lm-eval-harness", "gsm8k", "mmlu", "ifeval", "humaneval", "evaluation"]
 ---
 
+<Note>
+Benchmarks are rolling out and may appear as "coming soon" in the catalog. [Dataset evals](/evaluations) with `exact_match` and `contains` scorers are fully available today.
+</Note>
+
 Benchmarks are standard eval tasks that bring their own data, prompting, and scoring. You pick a task and a model; the platform handles the rest. Unlike dataset evals, a benchmark eval takes **no `dataset_id`**: the task supplies its own rows.
 
 Benchmark runs are executed by [lm-eval-harness](https://github.com/EleutherAI/lm-evaluation-harness), the community-standard evaluation harness, pinned to a fixed version and run in an isolated sandbox against your deployment. Because the harness owns prompting and scoring, your scores are directly comparable with published lm-eval numbers for other models.
