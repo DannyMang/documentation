@@ -1246,6 +1246,52 @@
         ]
       }
     },
+    "/v1/eval-proxy/{run_id}/completions": {
+      "post": {
+        "tags": [
+          "Evaluations"
+        ],
+        "summary": "Eval runner completions proxy (used by the managed benchmark sandbox)",
+        "operationId": "proxy_completions",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "description": "Evaluation run ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {}
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "An OpenAI-compatible completion",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid run token, or the run is not active"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/evals": {
       "get": {
         "tags": [
