@@ -205,23 +205,6 @@
             ]
           },
           {
-            "group": "Evaluations",
-            "openapi": "api-reference/openapi.json",
-            "pages": [
-              "POST /v1/evals",
-              "GET /v1/evals",
-              "GET /v1/evals/benchmarks",
-              "GET /v1/evals/{eval_id}",
-              "DELETE /v1/evals/{eval_id}",
-              "POST /v1/evals/{eval_id}/runs",
-              "GET /v1/evals/{eval_id}/runs",
-              "GET /v1/evals/{eval_id}/runs/{run_id}",
-              "DELETE /v1/evals/{eval_id}/runs/{run_id}",
-              "POST /v1/evals/{eval_id}/runs/{run_id}/cancel",
-              "GET /v1/evals/{eval_id}/runs/{run_id}/items"
-            ]
-          },
-          {
             "group": "Volumes",
             "openapi": "api-reference/openapi.json",
             "pages": [

@@ -7122,10 +7122,6 @@
       "description": "Serve trained models and run inference."
     },
     {
-      "name": "Evaluations",
-      "description": "Score models against datasets and benchmarks."
-    },
-    {
       "name": "Volumes",
       "description": "Persistent file storage mounted into jobs."
     },
