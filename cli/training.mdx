@@ -49,13 +49,14 @@ veri rewards upload ./reward.py --skip-validation
 | `--format` | Reward format (`trl` by default). |
 | `--skip-validation` | Don't run the AST check. |
 
-### List, get, delete
+### List, get
 
 ```bash
 veri rewards list
 veri rewards get rf_abc
-veri rewards delete rf_abc
 ```
+
+Reward functions can't be deleted through the API yet (delete is on the roadmap) — uploading a corrected file as a new reward function is the current workflow.
 
 <Note>
   `veri rewards test` (run the reward against a dataset) is not in Phase-1. It depends on dataset row iteration, which is owed by the SDK first.

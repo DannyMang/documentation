@@ -45,20 +45,19 @@ print(response.choices[0].message.content)
 print(response.usage)
 ```
 
-## What's NOT supported (yet)
+## Streaming
 
-<Warning>
-  Today's chat surface is intentionally minimal. If your client passes any of these, they're either silently ignored or rejected:
+Streaming works: set `stream=true` and vLLM's SSE events are forwarded through unchanged, so `for chunk in oai.chat.completions.create(..., stream=True)` behaves exactly as it does against OpenAI. Usage accounting is preserved (`stream_options.include_usage` is injected upstream so the final chunk carries token counts).
 
-  - **Streaming** (`stream=true`) — accepted by the schema but ignored. You always get the full response. Clients that wait for SSE events will hang.
-  - **Tool calling** (`tools`, `tool_choice`) — not supported. Use prompting + structured output parsing instead.
-  - **Sampling parameters** beyond `temperature` and `max_tokens`: `top_p`, `frequency_penalty`, `presence_penalty`, `logit_bias` are not supported.
-  - **Structured outputs** (`response_format` with JSON schema) — not supported.
-  - **Vision** (image inputs) — not supported.
-  - **Audio** — not supported.
+## Everything else is a passthrough
 
-  Streaming and tools are the highest-priority items on the roadmap.
-</Warning>
+The proxy keeps a few typed fields (`model`, `messages`, `temperature`, `max_tokens`, `stream`) and forwards **everything else the client sends** — `top_p`, `stop`, `seed`, `frequency_penalty`, `presence_penalty`, `logit_bias`, `response_format`, `tools`, `tool_choice`, ... — to vLLM untouched. vLLM is the schema authority: it applies its own defaults for omitted fields and rejects what it doesn't support.
+
+Caveats:
+
+- **Tool calling** (`tools`, `tool_choice`) rides through, but the deployment's vLLM must have tool parsing enabled — pass `vllm_extra_args` at create time (for example `--enable-auto-tool-choice --tool-call-parser hermes`). Without those flags vLLM rejects tool requests.
+- **Structured outputs** (`response_format`) are handled by vLLM's guided decoding; support depends on the engine version and model.
+- **Vision / audio inputs** depend on the served model being multimodal; text-only models reject them.
 
 ## Request shape
 
@@ -99,7 +98,7 @@ The `model` field in the request is **echoed back** in the response — it's not
 }
 ```
 
-`finish_reason` values: `stop` (normal end), `length` (hit `max_tokens`).
+`finish_reason` values: `stop` (normal end), `length` (hit `max_tokens`), `tool_calls` (when tool calling is enabled). Extra top-level fields vLLM returns (`system_fingerprint`, ...) are preserved in the response.
 
 ## Scaled-to-zero deployments
 

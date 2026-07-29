@@ -37,7 +37,8 @@
             "icon": "rocket",
             "pages": [
               "index",
-              "quickstart"
+              "quickstart",
+              "skill"
             ]
           },
           {

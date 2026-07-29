@@ -84,7 +84,7 @@ VERI_CONFIG_PATH=/tmp/ci-veri.toml veri login --token vk_ci_key
 
 ## Config file location
 
-Default: `~/.config/veri/config.toml` (XDG-correct on Linux/macOS; `%APPDATA%/veri/` on Windows via `platformdirs`).
+Default: `~/.config/veri/config.toml` on Linux (XDG-correct), `~/Library/Application Support/veri/config.toml` on macOS, `%APPDATA%/veri/` on Windows (via `platformdirs`). `veri whoami` prints the active path.
 
 The CLI auto-migrates the legacy `~/.veri/credentials.json` on first run **only** when no `VERI_CONFIG_PATH` / `XDG_CONFIG_HOME` is set. The legacy file is renamed to `.json.bak`, not deleted.
 

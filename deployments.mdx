@@ -124,9 +124,9 @@ curl https://api.veri.studio/v1/deployments/$DEPLOYMENT_ID/chat/completions \
 
 Anything that already talks OpenAI works without changes — point `base_url` at `https://api.veri.studio/v1/deployments/{id}` (the OpenAI SDK appends `/chat/completions` for you).
 
-<Warning>
-  Today's chat surface supports basic completions only. **Not yet supported:** streaming (`stream=true` is accepted but ignored — you always get the full response), `tool_calls` / `tools`, `top_p`, `frequency_penalty`, `presence_penalty`, structured outputs, and vision. Tools / streaming are on the roadmap.
-</Warning>
+<Note>
+  The chat surface is a passthrough to vLLM: streaming (`stream=true`, real SSE) works, and request parameters beyond `temperature` / `max_tokens` (`top_p`, `stop`, `seed`, `response_format`, `tools`, ...) are forwarded to the engine untouched — vLLM is the schema authority. See [OpenAI compatibility](/deployments/openai-compat) for details and caveats (tool calling needs vLLM tool parsing enabled via `vllm_extra_args`).
+</Note>
 
 ## Sizing the GPU
 

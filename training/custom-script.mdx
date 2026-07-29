@@ -105,6 +105,10 @@ The CLI uploads your code, submits the job, and prints the job id and dashboard 
 
 ## Multi-node
 
+<Note>
+  Multi-node gangs are not enabled yet — a `--num-nodes` of 2 or more currently returns a "coming soon" 400 while the feature finishes hardware validation. Single-node (`--num-nodes 1`, the default) is unaffected.
+</Note>
+
 For runs that do not fit on one box, launch a multi-node gang with `--num-nodes`. Veri provisions all nodes together as a single unit, wires the topology into the `VERI_*` env above, and runs your entrypoint on every node. Your script drives the distributed launch (`torchrun`, with c10d rendezvous on rank 0).
 
 Constraints:
