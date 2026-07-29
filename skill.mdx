@@ -148,11 +148,15 @@ Docs (env contract, images, worked examples): https://docs.veri.studio/training/
 ## Deployments (inference)
 
 ```bash
-veri deploy Qwen/Qwen3-4B                        # one-step HF deploy (default GPU: A100-80GB)
+veri deploy Qwen/Qwen3-4B --gpu-type L4-24GB     # one-step HF deploy
 veri deployments create --from-hf Qwen/Qwen3-4B --name qwen-dev \
   --gpu-type L4-24GB --min-replicas 0 --max-replicas 4
 veri deployments create --model <job_id> ...     # serve a finished training job
 ```
+
+ALWAYS pass `--gpu-type` explicitly and right-size it (`veri gpu list` for prices; L4-24GB
+handles ≤4B models). The default is `A100-80GB`, which on AWS is a whole 8-GPU node — an
+expensive shape for small models.
 
 - Engine: `vllm` only (`max` returns 400). Extra vLLM flags: repeat `--vllm-arg=<token>` or `deployment.vllm_extra_args` list in the config.
 - Serving providers live: `aws` (default), `gcp` (single-GPU A100/H100), `hotaisle` (MI300X, 1x). Gated off (400): `azure`, `digitalocean`.
