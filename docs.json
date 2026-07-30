@@ -48,6 +48,7 @@
               "training",
               "training/custom-script",
               "training/managed",
+              "training/harness",
               {
                 "group": "Providers",
                 "pages": [

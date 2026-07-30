@@ -15,6 +15,35 @@
     }
   ],
   "paths": {
+    "/v1/account": {
+      "delete": {
+        "tags": [
+          "Account"
+        ],
+        "summary": "Delete account data",
+        "operationId": "delete",
+        "responses": {
+          "200": {
+            "description": "Account data deleted; object storage cleanup queued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountDeletionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Active jobs, deployments, volumes, or pending billing block account deletion"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/api_keys": {
       "get": {
         "tags": [
@@ -1815,6 +1844,47 @@
             "bearerAuth": []
           }
         ]
+      },
+      "delete": {
+        "tags": [
+          "Reward functions"
+        ],
+        "summary": "Delete reward function",
+        "operationId": "delete",
+        "parameters": [
+          {
+            "name": "reward_id",
+            "in": "path",
+            "description": "Reward function ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reward function deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found or not owned by the caller"
+          },
+          "409": {
+            "description": "An active job or evaluation still references the reward function"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/v1/settings/integrations/wandb": {
@@ -2405,6 +2475,111 @@
         ]
       }
     },
+    "/v1/training_jobs/{job_id}/trajectories": {
+      "get": {
+        "tags": [
+          "Training jobs"
+        ],
+        "summary": "List trajectory index rows",
+        "operationId": "list_trajectories",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "description": "Training job ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "policy_step",
+            "in": "query",
+            "description": "Filter by training step",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "task_index",
+            "in": "query",
+            "description": "Filter by dataset task",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Max rows (default 200, max 1000)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Trajectory index rows"
+          },
+          "404": {
+            "description": "Not found or not owned by the caller"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/training_jobs/{job_id}/trajectories/{trajectory_id}/download": {
+      "get": {
+        "tags": [
+          "Training jobs"
+        ],
+        "summary": "Get a trajectory download URL",
+        "operationId": "trajectory_download",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "description": "Training job ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "trajectory_id",
+            "in": "path",
+            "description": "Trajectory ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Presigned GET URL for the raw trajectory JSONL"
+          },
+          "404": {
+            "description": "Not found or not owned by the caller"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/volumes": {
       "get": {
         "tags": [
@@ -2819,6 +2994,30 @@
   },
   "components": {
     "schemas": {
+      "AccountDeletionResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "object",
+          "deleted",
+          "queued_artifact_prefixes"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "object": {
+            "type": "string"
+          },
+          "deleted": {
+            "type": "boolean"
+          },
+          "queued_artifact_prefixes": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
       "ActiveDeploymentEntry": {
         "type": "object",
         "required": [
@@ -2931,6 +3130,9 @@
       },
       "AnyHyperparameters": {
         "oneOf": [
+          {
+            "$ref": "#/components/schemas/HarnessGrpoHyperparameters"
+          },
           {
             "$ref": "#/components/schemas/AgenticGrpoHyperparameters"
           },
@@ -4886,6 +5088,58 @@
             "type": "boolean"
           }
         }
+      },
+      "HarnessGrpoHyperparameters": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/GrpoHyperparameters"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "harness_protocol": {
+                "type": "string",
+                "description": "Which protocol the harness speaks: \"openai\" (OpenAI SDK / LangChain /\nOpenAI Agents SDK) or \"anthropic\" (Claude Agent SDK)."
+              },
+              "max_turns": {
+                "type": "integer",
+                "format": "int32",
+                "description": "Turn budget hint passed to the harness (VERI_MAX_TURNS). Higher than\ngrpo_agentic's 5: agent SDKs chain many tool calls per task."
+              },
+              "harness_timeout_s": {
+                "type": "integer",
+                "format": "int32",
+                "description": "Wall-clock budget for ONE harness invocation (one rollout)."
+              },
+              "max_parallel_rollouts": {
+                "type": "integer",
+                "format": "int32",
+                "description": "Concurrent harness invocations per training step."
+              },
+              "vllm_gpu_memory_utilization": {
+                "type": "number",
+                "format": "double",
+                "description": "vLLM memory fraction for the colocated policy server; the rest stays\nfree for training. Lower than a serving deployment's 0.9 by design."
+              },
+              "max_model_len": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32"
+              },
+              "trajectory_retention_days": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32",
+                "description": "Days raw trajectories stay in S3 before the retention sweep removes\nthem (the Postgres index rows are deleted too). None = keep forever."
+              }
+            }
+          }
+        ],
+        "description": "Harness-in-the-loop GRPO (VS-372): the user's own agent harness (Claude\nAgent SDK / LangChain / OpenAI Agents SDK) drives multi-turn rollouts\nagainst the in-training policy. Shares GRPO's core knobs; the\nharness-specific ones tune rollout execution and the colocated vLLM\npolicy server. The harness code itself arrives via the job's `script`\npayload (same shape as custom_script)."
       },
       "JobError": {
         "type": "object",
