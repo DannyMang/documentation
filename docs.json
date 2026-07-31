@@ -339,6 +339,22 @@
     {
       "source": "/quickstart/fine-tune",
       "destination": "/training"
+    },
+    {
+      "source": "/training/quickstart",
+      "destination": "/quickstart"
+    },
+    {
+      "source": "/examples",
+      "destination": "/training/examples"
+    },
+    {
+      "source": "/quickstart/train",
+      "destination": "/quickstart"
+    },
+    {
+      "source": "/quickstart/deploy",
+      "destination": "/deployments"
     }
   ]
 }
