@@ -7,7 +7,7 @@ keywords: ["demo", "harness", "agent", "GRPO", "RL", "tool use", "trajectory", "
 
 {/* doctest-page-gpu-required */}
 
-The end-to-end [harness-in-the-loop](/training/harness) flow on one concrete task: **improve Qwen3.5-4B at finding the GitHub and project-page URLs of a given arXiv paper**, trained inside the same agent harness it will be deployed in (the train/serve skew argument in one task). The dataset is public ([`nielsr/paper-url-extraction-v1`](https://huggingface.co/datasets/nielsr/paper-url-extraction-v1), 4k train rows), the reward is verifiable (URL match vs. ground truth), and the harness is a plain agent loop with nothing Veri-specific in it.
+The end-to-end [harness-in-the-loop](/training/harness) flow on one concrete task: **improve Qwen3.5-4B at finding the GitHub and project-page URLs of a given arXiv paper**, trained inside the same agent harness it will be deployed in (the train/serve skew argument in one task). The dataset is public ([`Mithilss/neurips-2025-paperswithcode-artifacts`](https://huggingface.co/datasets/Mithilss/neurips-2025-paperswithcode-artifacts) — 3.4k NeurIPS 2025 papers, ~1k with official repositories), the reward is verifiable (URL match vs. ground truth), and the harness is a plain agent loop with nothing Veri-specific in it.
 
 <Note>
   Harness training is **experimental** — expect rough edges on the GPU path and please report them. This spends real GPU credit; check your balance with `veri billing balance` first.
@@ -20,25 +20,33 @@ The end-to-end [harness-in-the-loop](/training/harness) flow on one concrete tas
 - Read the concept page once: [Harness-in-the-loop RL](/training/harness) (the env contract below is what makes the "unmodified harness" part work)
 - The complete runnable bundle (all harness variants, prep script, reward, smoke script) lives in the repo at `tests/documentation_tests/Documentation/Demos/Harness URL extraction agent/`
 
-## 1. Dataset: the real one, prepped in one step
+## 1. Dataset prep
 
-The HF dataset has `arxiv_id` / `title` / `abstract` as inputs and ground truth in `reference_github_url` / `reference_project_page_url` — but no `prompt` column, so we synthesize it. This is the whole "port": JSONL in, JSONL out, no environment spec:
+The HF dataset has `arxiv_id` / `title` as inputs and `repositories` / `project_pages` lists as ground truth — but no `prompt` column, so we synthesize it. We keep rows with an **official** repository (cleanest ground truth). This is the whole "port": JSONL in, JSONL out, no environment spec:
 
 ```python prep_dataset.py
 from datasets import load_dataset
 import json
 
-ds = load_dataset("nielsr/paper-url-extraction-v1", split="train")
+ds = load_dataset("Mithilss/neurips-2025-paperswithcode-artifacts", split="train")
+
+def first_official(entries):
+    for e in entries or []:
+        if e.get("is_official") and e.get("url"):
+            return e["url"]
+    return ""
+
 with open("tasks.jsonl", "w") as f:
     written = 0
     for row in ds:
-        if written >= 128 or not row.get("reference_github_url"):
+        github_url = first_official(row.get("repositories"))
+        if written >= 128 or not github_url:
             continue
         f.write(json.dumps({
             "prompt": f"Find the GitHub repository URL for the arXiv paper {row['arxiv_id']}. "
                       "If the paper also has a project page, include it. Answer with just the URL(s).",
-            "answer_github": row["reference_github_url"],
-            "answer_project": row.get("reference_project_page_url") or "",
+            "answer_github": github_url,
+            "answer_project": first_official(row.get("project_pages")),
         }) + "\n")
         written += 1
 ```
