@@ -1,13 +1,13 @@
 ---
 title: "Train a URL-extraction agent in your own harness"
 sidebarTitle: "Harness RL: URL agent"
-description: "End-to-end harness-in-the-loop RL on the real anchor task: replace GLM-5.2 with a fine-tuned Qwen that finds GitHub + project-page URLs for arXiv papers — trained inside the same agent harness it deploys in."
+description: "End-to-end harness-in-the-loop RL: improve Qwen3.5-4B on arXiv paper → GitHub/project-page URL extraction, trained inside the same agent harness it deploys in."
 keywords: ["demo", "harness", "agent", "GRPO", "RL", "tool use", "trajectory", "Claude Agent SDK", "veri run-harness"]
 ---
 
 {/* doctest-page-gpu-required */}
 
-The end-to-end [harness-in-the-loop](/training/harness) flow on the real anchor task: **replace GLM-5.2 with a small fine-tuned Qwen3.5-4B that finds the GitHub and project-page URLs of a given arXiv paper**, trained inside the same agent harness it will be deployed in (the train/serve skew argument in one task). The dataset is public ([`nielsr/paper-url-extraction-v1`](https://huggingface.co/datasets/nielsr/paper-url-extraction-v1), 4k train rows), the reward is verifiable (URL match vs. ground truth), and the harness is a plain agent loop with nothing Veri-specific in it.
+The end-to-end [harness-in-the-loop](/training/harness) flow on one concrete task: **improve Qwen3.5-4B at finding the GitHub and project-page URLs of a given arXiv paper**, trained inside the same agent harness it will be deployed in (the train/serve skew argument in one task). The dataset is public ([`nielsr/paper-url-extraction-v1`](https://huggingface.co/datasets/nielsr/paper-url-extraction-v1), 4k train rows), the reward is verifiable (URL match vs. ground truth), and the harness is a plain agent loop with nothing Veri-specific in it.
 
 <Note>
   Harness training is **experimental** — expect rough edges on the GPU path and please report them. This spends real GPU credit; check your balance with `veri billing balance` first.
@@ -152,7 +152,7 @@ The trained checkpoint is on the job like any managed run — **Save as model**,
 
 ## Claude Agent SDK variant
 
-The customer's production harness runs GLM-5.2 in the **Claude Agent SDK** with built-in tools (Bash / Read / WebFetch). The closest equivalent that runs in Veri's Python rollout images today is the stock `anthropic` SDK driving **native tool_use blocks** — identical `/v1/messages` protocol path, no CLI needed:
+A common production shape for this kind of task is an agent SDK with built-in tools (the Claude Agent SDK's Bash / Read / WebFetch). The closest equivalent that runs in Veri's Python rollout images today is the stock `anthropic` SDK driving **native tool_use blocks** — identical `/v1/messages` protocol path, no CLI needed:
 
 ```python agent_claude.py
 client = anthropic.Anthropic()  # ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN injected per rollout
