@@ -133,6 +133,12 @@
             ]
           },
           {
+            "group": "Harness training",
+            "pages": [
+              "demos/harness-url-extraction-agent"
+            ]
+          },
+          {
             "group": "Custom training scripts",
             "pages": [
               "demos/prime-rl-reverse-text-rft",

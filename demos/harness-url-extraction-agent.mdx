@@ -1,0 +1,153 @@
+---
+title: "Train a URL-extraction agent in your own harness"
+sidebarTitle: "Harness RL: URL agent"
+description: "End-to-end harness-in-the-loop RL: RL-train Qwen inside an unmodified OpenAI-SDK agent that finds GitHub URLs for arXiv papers, with a verifiable reward and a browsable trajectory archive."
+keywords: ["demo", "harness", "agent", "GRPO", "RL", "tool use", "trajectory", "veri run-harness"]
+---
+
+{/* doctest-page-gpu-required */}
+
+The end-to-end [harness-in-the-loop](/training/harness) flow, on the task **"given an arXiv paper, find its GitHub URL"** — a verifiable-reward agent task. Your harness is a plain OpenAI-SDK tool loop with nothing Veri-specific in it; the same shape works for any harness (LangChain, OpenAI Agents SDK, Claude Agent SDK).
+
+<Note>
+  Harness training is **experimental** — expect rough edges on the GPU path and please report them. This spends real GPU credit; check your balance with `veri billing balance` first.
+</Note>
+
+## Prerequisites
+
+- Install the SDK: `pip install veri-sdk`
+- Authenticate: `veri login` (or set `VERI_API_KEY`)
+- Read the concept page once: [Harness-in-the-loop RL](/training/harness) (the env contract below is what makes the "unmodified harness" part work)
+
+## 1. Dataset: one task per row
+
+Each row needs a `prompt` (what the agent sees) plus any columns your reward function uses (here `answer`, the ground-truth URL):
+
+```jsonl tasks.jsonl
+{"prompt": "Find the GitHub repository URL for the arXiv paper 2305.10601 (vLLM). Answer with just the URL.", "answer": "https://github.com/vllm-project/vllm"}
+{"prompt": "Find the GitHub repository URL for the arXiv paper 2210.11416 (TRL). Answer with just the URL.", "answer": "https://github.com/huggingface/trl"}
+```
+
+Upload it: `veri datasets upload tasks.jsonl --name agent-tasks` → note the dataset id.
+
+## 2. Reward function: score the finished trajectory
+
+A TRL-format reward. `completions` is the trajectory's **final assistant message**; extra dataset columns arrive as kwargs:
+
+```python reward.py
+def reward(prompts, completions, answer, **kwargs):
+    rewards = []
+    for completion, expected in zip(completions, answer):
+        text = (completion or "").strip().rstrip(".")
+        rewards.append(1.0 if expected in text else 0.0)
+    return rewards
+```
+
+Upload it: `veri rewards upload reward.py --name url-match` → note the reward id.
+
+## 3. The harness: your agent, unchanged
+
+`agent.py` — a plain tool-use loop against `OPENAI_BASE_URL`. Nothing Veri-specific:
+
+```python agent.py
+import json
+import os
+
+from openai import OpenAI
+
+client = OpenAI()  # reads OPENAI_BASE_URL / OPENAI_API_KEY from the env
+task = json.loads(os.environ["VERI_TASK_INPUT"])
+
+messages = [{"role": "user", "content": task}]
+for turn in range(int(os.environ.get("VERI_MAX_TURNS", "40"))):
+    resp = client.chat.completions.create(model="policy", messages=messages)
+    msg = resp.choices[0].message
+    messages.append(msg)
+    # ... your tool dispatch here (web fetch, shell, etc.) ...
+    if not getattr(msg, "tool_calls", None):
+        break  # final answer
+```
+
+```text requirements.txt
+openai>=1.0
+```
+
+## 4. Submit
+
+```bash
+veri run-harness ./harness \
+  --entrypoint "python agent.py" \
+  --base-model Qwen/Qwen3-4B \
+  --dataset-id <dataset id> \
+  --reward-id <reward id> \
+  --gpu-type L4-24GB --gpu-count 1 \
+  --rollouts-per-prompt 8 --max-steps 50 \
+  --requirements ./harness/requirements.txt
+```
+
+One node colocates the policy server, rollouts, and the trainer — a 4B policy fits comfortably on a single L4.
+
+## 5. Watch it learn
+
+Open the job in the dashboard → **Trajectories** tab. Pick a policy step, pick a task, compare the N trials: full message history of every turn, tool calls, per-turn token counts, and the reward. Flip between step 0 and the latest step to see behavior change. Download any trajectory as raw JSONL — or programmatically:
+
+```python
+rows = client.training_jobs.trajectories(job_id, policy_step=10)
+url = client.training_jobs.trajectory_download_url(job_id, rows[0]["id"])
+```
+
+## 6. Deploy the result
+
+The trained checkpoint is on the job like any managed run — **Save as model**, then `veri deploy`, and point the same harness at the deployment endpoint.
+
+## Claude Agent SDK variant
+
+Point the SDK at the job's endpoint via its standard env config and submit with `--harness-protocol anthropic`:
+
+```python agent.py
+# The Claude Agent SDK reads ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN —
+# both are injected per rollout. No client changes.
+```
+
+```bash
+veri run-harness ./harness --harness-protocol anthropic ...
+```
+
+<Warning>
+  For training-fidelity rollouts, the OpenAI route is the verified path today: token-id capture through the Anthropic route is unconfirmed, and spans without token ids are rejected from training (fail-safe, never silent drift).
+</Warning>
+
+## Config-file form
+
+`veri run` accepts the same job as TOML. Upload the harness directory first (any `veri run-script ...` upload or `client.code_artifacts.upload(dir)` returns an artifact id), then:
+
+```toml configs/harness.toml
+kind = "train"
+
+[model]
+base = "Qwen/Qwen3-4B"
+
+[dataset]
+id = "<dataset id>"
+
+[reward]
+id = "<reward id>"
+
+[resources]
+gpu_type = "L4-24GB"
+gpu_count = 1
+
+[method]
+type = "grpo_harness"
+rollouts_per_prompt = 8
+max_steps = 50
+harness_protocol = "openai"
+max_turns = 40
+
+[harness]
+base_image = "veri/base"
+code_artifact_id = "<artifact id>"
+entrypoint = "python agent.py"
+```
+
+Docs: [Harness-in-the-loop RL (reference)](/training/harness) · [Managed training](/training/managed) · [Reward functions](/training/reward-functions)

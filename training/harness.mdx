@@ -1,17 +1,13 @@
 ---
 title: "Harness-in-the-loop RL"
 sidebarTitle: "Harness Training"
-description: "RL-train a model inside your own agent harness — Claude Agent SDK, LangChain, or OpenAI Agents SDK, unchanged — with trajectory capture and a browsable archive."
+description: "RL-train a model inside your own agent harness (Claude Agent SDK, LangChain, or OpenAI Agents SDK, etc)"
 keywords: ["agent", "harness", "GRPO", "RL", "Claude Agent SDK", "LangChain", "OpenAI Agents SDK", "trajectory", "multi-turn", "tool use"]
 ---
 
 <Note>
   Harness-in-the-loop training is **experimental**. The loop (policy endpoint, trajectory capture, GRPO update) is exercised end-to-end in CI, but the GPU path is new — expect rough edges and please report them.
 </Note>
-
-Managed GRPO trains on single-turn prompts: prompt in, completion out. Agent workloads aren't like that — your model lives inside a **harness** (Claude Agent SDK, LangChain, an OpenAI Agents SDK app) that loops: model call, tool call, observation, model call again. Training single-turn against a model you deploy multi-turn creates train/serve skew, and at small model sizes that skew is expensive.
-
-`grpo_harness` closes the gap: **your harness, unchanged, drives the rollouts**. Veri serves the policy being trained as an API endpoint, your harness talks to it exactly like it talks to any model API, every turn is captured with token-level fidelity, and a GRPO update runs on the trajectories — after every step, the endpoint serves the *new* weights.
 
 ## How it works
 
@@ -45,138 +41,9 @@ You don't add tracing, callbacks, or logging hooks. If your harness already read
   Train with `harness_protocol = "openai"` (the default). The OpenAI route captures token ids + logprobs on every request, which is what GRPO trains on. The Anthropic route works for connecting the Claude Agent SDK, but token-id capture through it is unverified — rollouts whose spans lack token ids are **rejected from training** (fail-safe, never silent drift).
 </Warning>
 
-## Recipe: train a URL-extraction agent
+## Quickstart
 
-The end-to-end flow, using the task "given an arXiv paper, find its GitHub URL" — a verifiable-reward agent task. The same shape works for any harness.
-
-### 1. Dataset: one task per row
-
-Each row needs a `prompt` (what the agent sees) plus any columns your reward function uses (here `answer`, the ground-truth URL):
-
-```jsonl tasks.jsonl
-{"prompt": "Find the GitHub repository URL for the arXiv paper 2305.10601 (vLLM). Answer with just the URL.", "answer": "https://github.com/vllm-project/vllm"}
-{"prompt": "Find the GitHub repository URL for the arXiv paper 2210.11416 (TRL). Answer with just the URL.", "answer": "https://github.com/huggingface/trl"}
-```
-
-Upload it: `veri datasets upload tasks.jsonl --name agent-tasks` → note the dataset id.
-
-### 2. Reward function: score the finished trajectory
-
-A TRL-format reward. `completions` is the trajectory's **final assistant message**; extra dataset columns arrive as kwargs:
-
-```python reward.py
-def reward(prompts, completions, answer, **kwargs):
-    rewards = []
-    for completion, expected in zip(completions, answer):
-        text = (completion or "").strip().rstrip(".")
-        rewards.append(1.0 if expected in text else 0.0)
-    return rewards
-```
-
-Upload it: `veri rewards upload reward.py --name url-match` → note the reward id.
-
-### 3. The harness: your agent, unchanged
-
-`agent.py` — a plain tool-use loop against `OPENAI_BASE_URL`. Nothing Veri-specific:
-
-```python agent.py
-import json
-import os
-
-from openai import OpenAI
-
-client = OpenAI()  # reads OPENAI_BASE_URL / OPENAI_API_KEY from the env
-task = json.loads(os.environ["VERI_TASK_INPUT"])
-
-messages = [{"role": "user", "content": task}]
-for turn in range(int(os.environ.get("VERI_MAX_TURNS", "40"))):
-    resp = client.chat.completions.create(model="policy", messages=messages)
-    msg = resp.choices[0].message
-    messages.append(msg)
-    # ... your tool dispatch here (web fetch, shell, etc.) ...
-    if not getattr(msg, "tool_calls", None):
-        break  # final answer
-```
-
-```text requirements.txt
-openai>=1.0
-```
-
-### 4. Submit
-
-```bash
-veri run-harness ./harness \
-  --entrypoint "python agent.py" \
-  --base-model Qwen/Qwen3-4B \
-  --dataset-id <dataset id> \
-  --reward-id <reward id> \
-  --gpu-type L4-24GB --gpu-count 1 \
-  --rollouts-per-prompt 8 --max-steps 50 \
-  --requirements ./harness/requirements.txt
-```
-
-One node colocates the policy server, rollouts, and the trainer — a 4B policy fits comfortably on a single L4.
-
-### 5. Watch it learn
-
-Open the job in the dashboard → **Trajectories** tab. Pick a policy step, pick a task, compare the N trials: full message history of every turn, tool calls, per-turn token counts, and the reward. Flip between step 0 and the latest step to see behavior change. Download any trajectory as raw JSONL — or programmatically:
-
-```python
-rows = client.training_jobs.trajectories(job_id, policy_step=10)
-url = client.training_jobs.trajectory_download_url(job_id, rows[0]["id"])
-```
-
-### 6. Deploy the result
-
-The trained checkpoint is on the job like any managed run — **Save as model**, then `veri deploy`, and point the same harness at the deployment endpoint.
-
-## Claude Agent SDK variant
-
-Point the SDK at the job's endpoint via its standard env config and submit with `--harness-protocol anthropic`:
-
-```python agent.py
-# The Claude Agent SDK reads ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN —
-# both are injected per rollout. No client changes.
-```
-
-```bash
-veri run-harness ./harness --harness-protocol anthropic ... 
-```
-
-(See the warning above: for training-fidelity rollouts, the OpenAI route is the verified path today.)
-
-## Config-file form
-
-`veri run` accepts the same job as TOML. Upload the harness directory first (any `veri run-script ...` upload or `client.code_artifacts.upload(dir)` returns an artifact id), then:
-
-```toml configs/harness.toml
-kind = "train"
-
-[model]
-base = "Qwen/Qwen3-4B"
-
-[dataset]
-id = "<dataset id>"
-
-[reward]
-id = "<reward id>"
-
-[resources]
-gpu_type = "L4-24GB"
-gpu_count = 1
-
-[method]
-type = "grpo_harness"
-rollouts_per_prompt = 8
-max_steps = 50
-harness_protocol = "openai"
-max_turns = 40
-
-[harness]
-base_image = "veri/base"
-code_artifact_id = "<artifact id>"
-entrypoint = "python agent.py"
-```
+The full end-to-end walkthrough lives in the demos section: [Train a URL-extraction agent in your own harness](/demos/harness-url-extraction-agent) — dataset, reward function, unmodified OpenAI-SDK agent, `veri run-harness`, the trajectory archive, and the Claude Agent SDK variant (plus the TOML config-file form).
 
 ## Hyperparameters
 
@@ -200,4 +67,4 @@ entrypoint = "python agent.py"
 - One policy model per rollout — multi-agent setups with several distinct in-training models are out of scope for now.
 - Harness web egress is live user traffic from Veri IPs: keep fetch targets task-relevant.
 
-Docs: [Managed training](/training/managed) · [Custom scripts](/training/custom-script) · [Reward functions](/training/reward-functions)
+Docs: [Demo: URL-extraction agent](/demos/harness-url-extraction-agent) · [Managed training](/training/managed) · [Custom scripts](/training/custom-script) · [Reward functions](/training/reward-functions)
