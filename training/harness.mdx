@@ -30,6 +30,7 @@ Your harness is a code bundle plus an entrypoint — the same shape as a [custom
 | `VERI_TASK` | The full dataset row as JSON, including extra columns. |
 | `OPENAI_BASE_URL` | The policy endpoint (OpenAI-compatible). Point your OpenAI SDK / LangChain client here. |
 | `VERI_POLICY_BASE_URL` | Same endpoint, SDK-agnostic name. |
+| `VERI_POLICY_MODEL` | The model name the endpoint serves (the base model id). vLLM 404s any other name — send exactly this. |
 | `ANTHROPIC_BASE_URL` | The policy endpoint's root for the Claude Agent SDK / Anthropic SDK. |
 | `ANTHROPIC_AUTH_TOKEN` | Placeholder token (the endpoint doesn't auth; the SDK requires one to boot). |
 | `VERI_MAX_TURNS` | Turn budget hint (default 40). |

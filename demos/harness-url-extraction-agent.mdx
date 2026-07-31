@@ -47,30 +47,55 @@ Upload it: `veri rewards upload reward.py --name url-match` → note the reward 
 
 ## 3. The harness: your agent, unchanged
 
-`agent.py` — a plain tool-use loop against `OPENAI_BASE_URL`. Nothing Veri-specific:
+`agent.py` — a plain ReAct-style tool loop against `OPENAI_BASE_URL`. Nothing Veri-specific (the model replies `FETCH: <arxiv_id>` to read a page, `ANSWER: <url>` when done; no native tool-calling needed, so it works on any vLLM config):
 
 ```python agent.py
 import json
 import os
+import re
+import urllib.request
 
 from openai import OpenAI
 
 client = OpenAI()  # reads OPENAI_BASE_URL / OPENAI_API_KEY from the env
-task = json.loads(os.environ["VERI_TASK_INPUT"])
+MODEL = os.environ.get("VERI_POLICY_MODEL", "Qwen/Qwen3-4B")
+MAX_TURNS = int(os.environ.get("VERI_MAX_TURNS", "8"))
 
-messages = [{"role": "user", "content": task}]
-for turn in range(int(os.environ.get("VERI_MAX_TURNS", "40"))):
-    resp = client.chat.completions.create(model="policy", messages=messages)
-    msg = resp.choices[0].message
-    messages.append(msg)
-    # ... your tool dispatch here (web fetch, shell, etc.) ...
-    if not getattr(msg, "tool_calls", None):
-        break  # final answer
+SYSTEM = (
+    "You find GitHub repository URLs for arXiv papers. On each turn reply with "
+    "EXACTLY ONE of:\n"
+    "  FETCH: <arxiv_id>   to read the paper's abstract page (e.g. FETCH: 2305.10601)\n"
+    "  ANSWER: <url>       when you know the GitHub URL\n"
+    "No other text."
+)
+
+def fetch_arxiv(arxiv_id: str) -> str:
+    url = f"https://arxiv.org/abs/{arxiv_id.strip()}"
+    req = urllib.request.Request(url, headers={"User-Agent": "veri-demo-agent/1.0"})
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        html = resp.read().decode("utf-8", errors="replace")
+    text = re.sub(r"<[^>]+>", " ", html)
+    return re.sub(r"\s+", " ", text)[:3000]
+
+task = json.loads(os.environ["VERI_TASK_INPUT"])
+messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": task}]
+for turn in range(MAX_TURNS):
+    resp = client.chat.completions.create(model=MODEL, messages=messages, temperature=0.7, max_tokens=512)
+    content = (resp.choices[0].message.content or "").strip()
+    messages.append({"role": "assistant", "content": content})
+    if content.upper().startswith("ANSWER:"):
+        break
+    match = re.match(r"(?i)^FETCH:\s*(\S+)", content)
+    observation = fetch_arxiv(match.group(1)) if match else "Reply with FETCH: <arxiv_id> or ANSWER: <url>."
+    messages.append({"role": "user", "content": f"OBSERVATION:\n{observation}"})
 ```
 
 ```text requirements.txt
 openai>=1.0
+anthropic>=0.40
 ```
+
+The complete, runnable bundle (both SDK variants, tasks, reward, and a local smoke script that runs the loop against any endpoint) lives in the repo at `tests/documentation_tests/Documentation/Demos/Harness URL extraction agent/`.
 
 ## 4. Submit
 
@@ -102,19 +127,25 @@ The trained checkpoint is on the job like any managed run — **Save as model**,
 
 ## Claude Agent SDK variant
 
-Point the SDK at the job's endpoint via its standard env config and submit with `--harness-protocol anthropic`:
+The same loop through the Anthropic messages API — the SDK reads `ANTHROPIC_BASE_URL` / `ANTHROPIC_AUTH_TOKEN`, both injected per rollout. Submit with `--harness-protocol anthropic`:
 
-```python agent.py
-# The Claude Agent SDK reads ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN —
-# both are injected per rollout. No client changes.
+```python agent_anthropic.py
+import anthropic
+
+client = anthropic.Anthropic()  # ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN from the env
+MODEL = os.environ.get("VERI_POLICY_MODEL", "Qwen/Qwen3-4B")
+
+# ... same ReAct loop; completions come from:
+resp = client.messages.create(model=MODEL, max_tokens=512, system=SYSTEM, messages=messages)
+content = "".join(b.text for b in resp.content if b.type == "text").strip()
 ```
 
 ```bash
-veri run-harness ./harness --harness-protocol anthropic ...
+veri run-harness ./harness --entrypoint "python agent_anthropic.py" --harness-protocol anthropic ...
 ```
 
 <Warning>
-  For training-fidelity rollouts, the OpenAI route is the verified path today: token-id capture through the Anthropic route is unconfirmed, and spans without token ids are rejected from training (fail-safe, never silent drift).
+  For training-fidelity rollouts, the OpenAI route is the verified path today: token-id capture through the Anthropic route is unconfirmed, and spans without token ids are rejected from training (fail-safe, never silent drift). Running this variant is exactly how that gets verified — watch for `template_drift` errors in the job log (the S2 answer).
 </Warning>
 
 ## Config-file form
