@@ -1,13 +1,13 @@
 ---
 title: "Train a URL-extraction agent in your own harness"
 sidebarTitle: "Harness RL: URL agent"
-description: "End-to-end harness-in-the-loop RL: RL-train Qwen inside an unmodified OpenAI-SDK agent that finds GitHub URLs for arXiv papers, with a verifiable reward and a browsable trajectory archive."
-keywords: ["demo", "harness", "agent", "GRPO", "RL", "tool use", "trajectory", "veri run-harness"]
+description: "End-to-end harness-in-the-loop RL on the real anchor task: replace GLM-5.2 with a fine-tuned Qwen that finds GitHub + project-page URLs for arXiv papers — trained inside the same agent harness it deploys in."
+keywords: ["demo", "harness", "agent", "GRPO", "RL", "tool use", "trajectory", "Claude Agent SDK", "veri run-harness"]
 ---
 
 {/* doctest-page-gpu-required */}
 
-The end-to-end [harness-in-the-loop](/training/harness) flow, on the task **"given an arXiv paper, find its GitHub URL"** — a verifiable-reward agent task. Your harness is a plain OpenAI-SDK tool loop with nothing Veri-specific in it; the same shape works for any harness (LangChain, OpenAI Agents SDK, Claude Agent SDK).
+The end-to-end [harness-in-the-loop](/training/harness) flow on the real anchor task: **replace GLM-5.2 with a small fine-tuned Qwen3.5-4B that finds the GitHub and project-page URLs of a given arXiv paper**, trained inside the same agent harness it will be deployed in (the train/serve skew argument in one task). The dataset is public ([`nielsr/paper-url-extraction-v1`](https://huggingface.co/datasets/nielsr/paper-url-extraction-v1), 4k train rows), the reward is verifiable (URL match vs. ground truth), and the harness is a plain agent loop with nothing Veri-specific in it.
 
 <Note>
   Harness training is **experimental** — expect rough edges on the GPU path and please report them. This spends real GPU credit; check your balance with `veri billing balance` first.
@@ -18,28 +18,53 @@ The end-to-end [harness-in-the-loop](/training/harness) flow, on the task **"giv
 - Install the SDK: `pip install veri-sdk`
 - Authenticate: `veri login` (or set `VERI_API_KEY`)
 - Read the concept page once: [Harness-in-the-loop RL](/training/harness) (the env contract below is what makes the "unmodified harness" part work)
+- The complete runnable bundle (all harness variants, prep script, reward, smoke script) lives in the repo at `tests/documentation_tests/Documentation/Demos/Harness URL extraction agent/`
 
-## 1. Dataset: one task per row
+## 1. Dataset: the real one, prepped in one step
 
-Each row needs a `prompt` (what the agent sees) plus any columns your reward function uses (here `answer`, the ground-truth URL):
+The HF dataset has `arxiv_id` / `title` / `abstract` as inputs and ground truth in `reference_github_url` / `reference_project_page_url` — but no `prompt` column, so we synthesize it. This is the whole "port": JSONL in, JSONL out, no environment spec:
 
-```jsonl tasks.jsonl
-{"prompt": "Find the GitHub repository URL for the arXiv paper 2305.10601 (vLLM). Answer with just the URL.", "answer": "https://github.com/vllm-project/vllm"}
-{"prompt": "Find the GitHub repository URL for the arXiv paper 2210.11416 (TRL). Answer with just the URL.", "answer": "https://github.com/huggingface/trl"}
+```python prep_dataset.py
+from datasets import load_dataset
+import json
+
+ds = load_dataset("nielsr/paper-url-extraction-v1", split="train")
+with open("tasks.jsonl", "w") as f:
+    written = 0
+    for row in ds:
+        if written >= 128 or not row.get("reference_github_url"):
+            continue
+        f.write(json.dumps({
+            "prompt": f"Find the GitHub repository URL for the arXiv paper {row['arxiv_id']}. "
+                      "If the paper also has a project page, include it. Answer with just the URL(s).",
+            "answer_github": row["reference_github_url"],
+            "answer_project": row.get("reference_project_page_url") or "",
+        }) + "\n")
+        written += 1
 ```
 
-Upload it: `veri datasets upload tasks.jsonl --name agent-tasks` → note the dataset id.
+Upload it: `veri datasets upload tasks.jsonl --name paper-url-extraction` → note the dataset id.
 
 ## 2. Reward function: score the finished trajectory
 
-A TRL-format reward. `completions` is the trajectory's **final assistant message**; extra dataset columns arrive as kwargs:
+A TRL-format reward with partial credit — 0.7 for the GitHub URL, +0.3 for the project page when one is labeled. `completions` is the trajectory's **final assistant message**; extra dataset columns arrive as lists:
 
 ```python reward.py
-def reward(prompts, completions, answer, **kwargs):
+def _norm(url):
+    return (url or "").strip().rstrip("./").lower()
+
+def reward(prompts, completions, answer_github, answer_project=None, **kwargs):
     rewards = []
-    for completion, expected in zip(completions, answer):
-        text = (completion or "").strip().rstrip(".")
-        rewards.append(1.0 if expected in text else 0.0)
+    for i, completion in enumerate(completions):
+        text = _norm(completion)
+        score = 0.0
+        if answer_github[i] and _norm(answer_github[i]) in text:
+            score += 0.7
+        if answer_project and answer_project[i] and _norm(answer_project[i]) in text:
+            score += 0.3
+        elif answer_github[i] and _norm(answer_github[i]) in text:
+            score += 0.3  # no project page labeled: GitHub alone is full credit
+        rewards.append(score)
     return rewards
 ```
 
@@ -95,7 +120,7 @@ openai>=1.0
 anthropic>=0.40
 ```
 
-The complete, runnable bundle (both SDK variants, tasks, reward, and a local smoke script that runs the loop against any endpoint) lives in the repo at `tests/documentation_tests/Documentation/Demos/Harness URL extraction agent/`.
+The complete, runnable bundle (all three harness variants, the dataset prep script, 6 curated smoke tasks, reward, and a local smoke script that runs any variant against any endpoint) lives in the repo at `tests/documentation_tests/Documentation/Demos/Harness URL extraction agent/`.
 
 ## 4. Submit
 
@@ -127,25 +152,43 @@ The trained checkpoint is on the job like any managed run — **Save as model**,
 
 ## Claude Agent SDK variant
 
-The same loop through the Anthropic messages API — the SDK reads `ANTHROPIC_BASE_URL` / `ANTHROPIC_AUTH_TOKEN`, both injected per rollout. Submit with `--harness-protocol anthropic`:
+The customer's production harness runs GLM-5.2 in the **Claude Agent SDK** with built-in tools (Bash / Read / WebFetch). The closest equivalent that runs in Veri's Python rollout images today is the stock `anthropic` SDK driving **native tool_use blocks** — identical `/v1/messages` protocol path, no CLI needed:
 
-```python agent_anthropic.py
-import anthropic
+```python agent_claude.py
+client = anthropic.Anthropic()  # ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN injected per rollout
+TOOLS = [{
+    "name": "web_fetch",
+    "description": "Fetch a web page and return its visible text (truncated).",
+    "input_schema": {
+        "type": "object",
+        "properties": {"url": {"type": "string"}},
+        "required": ["url"],
+    },
+}]
 
-client = anthropic.Anthropic()  # ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN from the env
-MODEL = os.environ.get("VERI_POLICY_MODEL", "Qwen/Qwen3-4B")
-
-# ... same ReAct loop; completions come from:
-resp = client.messages.create(model=MODEL, max_tokens=512, system=SYSTEM, messages=messages)
-content = "".join(b.text for b in resp.content if b.type == "text").strip()
+messages = [{"role": "user", "content": task}]
+for turn in range(MAX_TURNS):
+    resp = client.messages.create(model=MODEL, max_tokens=1024, system=SYSTEM, tools=TOOLS, messages=messages)
+    messages.append({"role": "assistant", "content": resp.content})
+    tool_results = [
+        {"type": "tool_result", "tool_use_id": b.id, "content": web_fetch(b.input["url"])}
+        for b in resp.content if b.type == "tool_use" and b.name == "web_fetch"
+    ]
+    if not tool_results:
+        break  # final answer
+    messages.append({"role": "user", "content": tool_results})
 ```
 
 ```bash
-veri run-harness ./harness --entrypoint "python agent_anthropic.py" --harness-protocol anthropic ...
+veri run-harness ./harness --entrypoint "python agent_claude.py" --harness-protocol anthropic ...
 ```
 
+<Note>
+  The **Claude Agent SDK proper** wraps the `claude-code` CLI (Node.js), which the Python rollout images don't ship today — an image with the Agent SDK runtime is a follow-up. The variant above exercises the same protocol with the same harness shape.
+</Note>
+
 <Warning>
-  For training-fidelity rollouts, the OpenAI route is the verified path today: token-id capture through the Anthropic route is unconfirmed, and spans without token ids are rejected from training (fail-safe, never silent drift). Running this variant is exactly how that gets verified — watch for `template_drift` errors in the job log (the S2 answer).
+  For training-fidelity rollouts, the OpenAI route is the verified path today: token-id capture through the Anthropic route is unconfirmed, and spans without token ids are rejected from training (fail-safe, never silent drift). Running this variant is exactly how that gets verified — watch for `template_drift` errors in the job log. Native tool_use additionally needs tool-calling flags on the vLLM side; if the model can't emit tool_use blocks it falls back to plain-text answers, which tells you the flags are missing.
 </Warning>
 
 ## Config-file form
