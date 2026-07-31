@@ -175,46 +175,12 @@ url = client.training_jobs.trajectory_download_url(job_id, rows[0]["id"])
 
 The trained checkpoint is on the job like any managed run — **Save as model**, then `veri deploy`, and point the same harness at the deployment endpoint.
 
-## Claude Agent SDK variant
+## Harness variants: LangChain and Claude Agent SDK
 
-A common production shape for this kind of task is an agent SDK with built-in tools (the Claude Agent SDK's Bash / Read / WebFetch). The closest equivalent that runs in Veri's Python rollout images today is the stock `anthropic` SDK driving **native tool_use blocks** — identical `/v1/messages` protocol path, no CLI needed:
+The OpenAI SDK loop above is the default harness (and the verified training path). The same task runs on the other major agent stacks — each has its own subpage with the full harness and submit command:
 
-```python agent_claude.py
-client = anthropic.Anthropic()  # ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN injected per rollout
-TOOLS = [{
-    "name": "web_fetch",
-    "description": "Fetch a web page and return its visible text (truncated).",
-    "input_schema": {
-        "type": "object",
-        "properties": {"url": {"type": "string"}},
-        "required": ["url"],
-    },
-}]
-
-messages = [{"role": "user", "content": task}]
-for turn in range(MAX_TURNS):
-    resp = client.messages.create(model=MODEL, max_tokens=1024, system=SYSTEM, tools=TOOLS, messages=messages)
-    messages.append({"role": "assistant", "content": resp.content})
-    tool_results = [
-        {"type": "tool_result", "tool_use_id": b.id, "content": web_fetch(b.input["url"])}
-        for b in resp.content if b.type == "tool_use" and b.name == "web_fetch"
-    ]
-    if not tool_results:
-        break  # final answer
-    messages.append({"role": "user", "content": tool_results})
-```
-
-```bash
-veri run-harness ./harness --entrypoint "python agent_claude.py" --harness-protocol anthropic ...
-```
-
-<Note>
-  The **Claude Agent SDK proper** wraps the `claude-code` CLI (Node.js), which the Python rollout images don't ship today — an image with the Agent SDK runtime is a follow-up. The variant above exercises the same protocol with the same harness shape.
-</Note>
-
-<Warning>
-  For training-fidelity rollouts, the OpenAI route is the verified path today: token-id capture through the Anthropic route is unconfirmed, and spans without token ids are rejected from training (fail-safe, never silent drift). Running this variant is exactly how that gets verified — watch for `template_drift` errors in the job log. Native tool_use additionally needs tool-calling flags on the vLLM side; if the model can't emit tool_use blocks it falls back to plain-text answers, which tells you the flags are missing.
-</Warning>
+- [LangChain](/demos/harness-url-extraction-agent/langchain) — `ChatOpenAI` + message types, trains over the same verified OpenAI route.
+- [Claude Agent SDK / Anthropic](/demos/harness-url-extraction-agent/anthropic) — native `tool_use` blocks over `/v1/messages`; connectivity is verified, token capture is the open spike (train on the OpenAI route today).
 
 ## Config-file form
 

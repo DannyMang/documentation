@@ -135,7 +135,9 @@
           {
             "group": "Harness training",
             "pages": [
-              "demos/harness-url-extraction-agent"
+              "demos/harness-url-extraction-agent",
+              "demos/harness-url-extraction-agent/langchain",
+              "demos/harness-url-extraction-agent/anthropic"
             ]
           },
           {
