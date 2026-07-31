@@ -22,13 +22,26 @@ The end-to-end [harness-in-the-loop](/training/harness) flow on one concrete tas
 
 ## 1. Dataset prep
 
-The HF dataset has `arxiv_id` / `title` as inputs and `repositories` / `project_pages` lists as ground truth — but no `prompt` column, so we synthesize it. We keep rows with an **official** repository (cleanest ground truth). This is the whole "port": JSONL in, JSONL out, no environment spec:
+The HF dataset has `arxiv_id` / `title` as inputs and `repositories` / `project_pages` lists as ground truth — but no `prompt` column, so we synthesize it. We keep rows with an **official** repository (cleanest ground truth), and each row gets one of five **phrasing variants** so the policy doesn't overfit a single template. This is the whole "port": JSONL in, JSONL out, no environment spec:
 
 ```python prep_dataset.py
 from datasets import load_dataset
 import json
 
-ds = load_dataset("Mithilss/neurips-2025-paperswithcode-artifacts", split="train")
+DATASET = "Mithilss/neurips-2025-paperswithcode-artifacts"
+
+PROMPT_VARIANTS = [
+    "Find the GitHub repository URL for the arXiv paper {arxiv_id}{title_part}. "
+    "If the paper also has a project page, include it. Answer with just the URL(s).",
+    "What's the official GitHub repo of arXiv:{arxiv_id}{title_part}? "
+    "Include the project page if there is one. URLs only.",
+    "I need the code repository for the paper {arxiv_id}{title_part}. "
+    "Track down the GitHub URL (and the project page, if any) and reply with just the links.",
+    "Look up arXiv paper {arxiv_id}{title_part} and give me its GitHub URL. "
+    "Project page too if it exists. Just the URLs, nothing else.",
+    "Locate the source code for {arxiv_id}{title_part}. "
+    "Return the repository URL, plus the project page URL if the paper has one.",
+]
 
 def first_official(entries):
     for e in entries or []:
@@ -36,15 +49,19 @@ def first_official(entries):
             return e["url"]
     return ""
 
+ds = load_dataset(DATASET, split="train")
 with open("tasks.jsonl", "w") as f:
     written = 0
     for row in ds:
         github_url = first_official(row.get("repositories"))
         if written >= 128 or not github_url:
             continue
+        title = (row.get("title") or "").strip()
         f.write(json.dumps({
-            "prompt": f"Find the GitHub repository URL for the arXiv paper {row['arxiv_id']}. "
-                      "If the paper also has a project page, include it. Answer with just the URL(s).",
+            "prompt": PROMPT_VARIANTS[written % len(PROMPT_VARIANTS)].format(
+                arxiv_id=row["arxiv_id"],
+                title_part=f' ("{title}")' if title else "",
+            ),
             "answer_github": github_url,
             "answer_project": first_official(row.get("project_pages")),
         }) + "\n")
