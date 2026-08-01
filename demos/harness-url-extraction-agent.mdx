@@ -97,61 +97,137 @@ Upload it: `veri rewards upload reward.py --name url-match` → note the reward 
 
 ## 3. The harness: your agent, unchanged
 
-`agent.py` — a plain ReAct-style tool loop against `OPENAI_BASE_URL`. Nothing Veri-specific (the model replies `FETCH: <arxiv_id>` to read a page, `ANSWER: <url>` when done; no native tool-calling needed, so it works on any vLLM config):
+Nothing Veri-specific in any of these — the rollout redirects the SDK with env vars alone (`ANTHROPIC_BASE_URL` / `OPENAI_BASE_URL`, plus the task in `VERI_TASK_INPUT` and the served model name in `VERI_POLICY_MODEL`). Pick the stack your production harness already uses:
 
-```python agent.py
-import json
-import os
-import re
-import urllib.request
+<Tabs>
+  <Tab title="Anthropic (Claude-style tools)">
+    `agent.py` (the bundle's default) — native `tool_use` blocks over the Anthropic messages API. The model calls `web_fetch`, the harness executes it and returns `tool_result`:
 
-from openai import OpenAI
+    ```python agent.py
+    import anthropic
 
-client = OpenAI()  # reads OPENAI_BASE_URL / OPENAI_API_KEY from the env
-MODEL = os.environ.get("VERI_POLICY_MODEL", "Qwen/Qwen3-4B")
-MAX_TURNS = int(os.environ.get("VERI_MAX_TURNS", "8"))
+    client = anthropic.Anthropic()  # ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN injected per rollout
+    MODEL = os.environ.get("VERI_POLICY_MODEL", "Qwen/Qwen3-4B")
 
-SYSTEM = (
-    "You find GitHub repository URLs for arXiv papers. On each turn reply with "
-    "EXACTLY ONE of:\n"
-    "  FETCH: <arxiv_id>   to read the paper's abstract page (e.g. FETCH: 2305.10601)\n"
-    "  ANSWER: <url>       when you know the GitHub URL\n"
-    "No other text."
-)
+    TOOLS = [{
+        "name": "web_fetch",
+        "description": "Fetch a web page and return its visible text (truncated).",
+        "input_schema": {
+            "type": "object",
+            "properties": {"url": {"type": "string"}},
+            "required": ["url"],
+        },
+    }]
 
-def fetch_arxiv(arxiv_id: str) -> str:
-    url = f"https://arxiv.org/abs/{arxiv_id.strip()}"
-    req = urllib.request.Request(url, headers={"User-Agent": "veri-demo-agent/1.0"})
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        html = resp.read().decode("utf-8", errors="replace")
-    text = re.sub(r"<[^>]+>", " ", html)
-    return re.sub(r"\s+", " ", text)[:3000]
+    messages = [{"role": "user", "content": task}]
+    for turn in range(MAX_TURNS):
+        resp = client.messages.create(model=MODEL, max_tokens=1024, system=SYSTEM, tools=TOOLS, messages=messages)
+        messages.append({"role": "assistant", "content": resp.content})
+        tool_results = [
+            {"type": "tool_result", "tool_use_id": b.id, "content": web_fetch(b.input["url"])}
+            for b in resp.content if b.type == "tool_use" and b.name == "web_fetch"
+        ]
+        if not tool_results:
+            break  # final answer
+        messages.append({"role": "user", "content": tool_results})
+    ```
 
-task = json.loads(os.environ["VERI_TASK_INPUT"])
-messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": task}]
-for turn in range(MAX_TURNS):
-    resp = client.chat.completions.create(model=MODEL, messages=messages, temperature=0.7, max_tokens=512)
-    content = (resp.choices[0].message.content or "").strip()
-    messages.append({"role": "assistant", "content": content})
-    if content.upper().startswith("ANSWER:"):
-        break
-    match = re.match(r"(?i)^FETCH:\s*(\S+)", content)
-    observation = fetch_arxiv(match.group(1)) if match else "Reply with FETCH: <arxiv_id> or ANSWER: <url>."
-    messages.append({"role": "user", "content": f"OBSERVATION:\n{observation}"})
-```
+    Submit with `--harness-protocol anthropic`. This is the same harness shape as the Claude Agent SDK (its Bash / Read / WebFetch loop) over the identical `/v1/messages` protocol — see the caveats below.
+  </Tab>
+  <Tab title="OpenAI SDK">
+    `agent_openai.py` — a plain ReAct-style loop against `OPENAI_BASE_URL` (the model replies `FETCH: <arxiv_id>` to read a page, `ANSWER: <url>` when done; no native tool-calling needed, so it works on any vLLM config):
+
+    ```python agent_openai.py
+    import json
+    import os
+    import re
+    import urllib.request
+
+    from openai import OpenAI
+
+    client = OpenAI()  # reads OPENAI_BASE_URL / OPENAI_API_KEY from the env
+    MODEL = os.environ.get("VERI_POLICY_MODEL", "Qwen/Qwen3-4B")
+    MAX_TURNS = int(os.environ.get("VERI_MAX_TURNS", "8"))
+
+    SYSTEM = (
+        "You find GitHub repository URLs for arXiv papers. On each turn reply with "
+        "EXACTLY ONE of:\n"
+        "  FETCH: <arxiv_id>   to read the paper's abstract page (e.g. FETCH: 2305.10601)\n"
+        "  ANSWER: <url>       when you know the GitHub URL\n"
+        "No other text."
+    )
+
+    def fetch_arxiv(arxiv_id: str) -> str:
+        url = f"https://arxiv.org/abs/{arxiv_id.strip()}"
+        req = urllib.request.Request(url, headers={"User-Agent": "veri-demo-agent/1.0"})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            html = resp.read().decode("utf-8", errors="replace")
+        text = re.sub(r"<[^>]+>", " ", html)
+        return re.sub(r"\s+", " ", text)[:3000]
+
+    task = json.loads(os.environ["VERI_TASK_INPUT"])
+    messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": task}]
+    for turn in range(MAX_TURNS):
+        resp = client.chat.completions.create(model=MODEL, messages=messages, temperature=0.7, max_tokens=512)
+        content = (resp.choices[0].message.content or "").strip()
+        messages.append({"role": "assistant", "content": content})
+        if content.upper().startswith("ANSWER:"):
+            break
+        match = re.match(r"(?i)^FETCH:\s*(\S+)", content)
+        observation = fetch_arxiv(match.group(1)) if match else "Reply with FETCH: <arxiv_id> or ANSWER: <url>."
+        messages.append({"role": "user", "content": f"OBSERVATION:\n{observation}"})
+    ```
+
+    The **verified training path** today — token-id capture is confirmed on the OpenAI route.
+  </Tab>
+  <Tab title="LangChain">
+    `agent_langchain.py` — the same loop with `ChatOpenAI` + message types (`langchain-openai` reads `OPENAI_BASE_URL` from the env):
+
+    ```python agent_langchain.py
+    from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+    from langchain_openai import ChatOpenAI
+
+    llm = ChatOpenAI(
+        model=os.environ.get("VERI_POLICY_MODEL", "Qwen/Qwen3-4B"),
+        temperature=0.7,
+        max_tokens=512,
+    )  # reads OPENAI_BASE_URL / OPENAI_API_KEY from the env
+
+    messages = [SystemMessage(content=SYSTEM), HumanMessage(content=task)]
+    for turn in range(MAX_TURNS):
+        content = (llm.invoke(messages).content or "").strip()
+        messages.append(AIMessage(content=content))
+        if content.upper().startswith("ANSWER:"):
+            break
+        match = re.match(r"(?i)^FETCH:\s*(\S+)", content)
+        observation = fetch_arxiv(match.group(1)) if match else "Reply with FETCH: <arxiv_id> or ANSWER: <url>."
+        messages.append(HumanMessage(content=f"OBSERVATION:\n{observation}"))
+    ```
+
+    Trains over the same verified OpenAI route — `ChatOpenAI` speaks the OpenAI protocol under the hood.
+  </Tab>
+</Tabs>
 
 ```text requirements.txt
 openai>=1.0
 anthropic>=0.40
+langchain-openai>=0.2
 ```
 
-The complete, runnable bundle (all three harness variants, the dataset prep script, 6 curated smoke tasks, reward, and a local smoke script that runs any variant against any endpoint) lives in the repo at `tests/documentation_tests/Documentation/Demos/Harness URL extraction agent/`.
+<Warning>
+  **For training-fidelity rollouts, the OpenAI route is the verified path today.** Token-id capture through the Anthropic route is unconfirmed: spans without token ids are rejected from training (fail-safe, never silent drift). Native tool_use also needs tool-calling flags on the vLLM side; if the model can't emit tool_use blocks it falls back to plain-text answers, which tells you the flags are missing. The Claude Agent SDK proper wraps the `claude-code` CLI (Node.js), which the Python rollout images don't ship yet.
+</Warning>
+
+The complete, runnable bundle (all harness variants, the dataset prep script, 6 curated smoke tasks, reward, and a local smoke script that runs any variant against any endpoint) lives in the repo at `tests/documentation_tests/Documentation/Demos/Harness URL extraction agent/`.
 
 ## 4. Submit
+
+The bundle's default `agent.py` is the Anthropic tool_use harness — submit it with the matching protocol:
 
 ```bash
 veri run-harness ./harness \
   --entrypoint "python agent.py" \
+  --harness-protocol anthropic \
   --base-model Qwen/Qwen3-4B \
   --dataset-id <dataset id> \
   --reward-id <reward id> \
@@ -159,6 +235,8 @@ veri run-harness ./harness \
   --rollouts-per-prompt 8 --max-steps 50 \
   --requirements ./harness/requirements.txt
 ```
+
+For the verified training path (OpenAI route), swap the entrypoint: `--entrypoint "python agent_openai.py"` and drop `--harness-protocol` (openai is the default). LangChain: `--entrypoint "python agent_langchain.py"`.
 
 One node colocates the policy server, rollouts, and the trainer — a 4B policy fits comfortably on a single L4.
 
@@ -174,13 +252,6 @@ url = client.training_jobs.trajectory_download_url(job_id, rows[0]["id"])
 ## 6. Deploy the result
 
 The trained checkpoint is on the job like any managed run — **Save as model**, then `veri deploy`, and point the same harness at the deployment endpoint.
-
-## Harness variants: LangChain and Claude Agent SDK
-
-The OpenAI SDK loop above is the default harness (and the verified training path). The same task runs on the other major agent stacks — each has its own subpage with the full harness and submit command:
-
-- [LangChain](/demos/harness-url-extraction-agent/langchain) — `ChatOpenAI` + message types, trains over the same verified OpenAI route.
-- [Claude Agent SDK / Anthropic](/demos/harness-url-extraction-agent/anthropic) — native `tool_use` blocks over `/v1/messages`; connectivity is verified, token capture is the open spike (train on the OpenAI route today).
 
 ## Config-file form
 
