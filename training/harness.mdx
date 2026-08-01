@@ -56,13 +56,24 @@ The full end-to-end walkthrough lives in the demos section: [Train a URL-extract
 | `max_turns` | 40 | Turn budget hint (`VERI_MAX_TURNS`). |
 | `harness_timeout_s` | 900 | Wall-clock budget for one rollout. |
 | `max_parallel_rollouts` | 4 | Concurrent harness invocations per step. |
-| `vllm_gpu_memory_utilization` | 0.3 | Policy-server memory fraction (the rest is for training). |
+| `vllm_gpu_memory_utilization` | 0.85 | Policy-server memory fraction on its dedicated GPUs (see GPU layout below). |
 | `max_model_len` | unset | Cap the policy server's context length. |
 | `trajectory_retention_days` | keep forever | Auto-delete raw trajectories after N days. |
 
+## GPU layout
+
+One node, split devices: the trainer takes GPU 0 and the vLLM policy server takes the remaining GPUs (tensor parallel across them). TRL's weight-sync communicator requires the trainer and the server to sit on **different** CUDA devices, so **at least 2 GPUs** are required — 1-GPU submits are rejected with a 400.
+
+Recommended shapes:
+
+| Shape | Node | Fits |
+| --- | --- | --- |
+| `L4-24GB` x4 on `aws` | g6.12xlarge (192 GiB RAM) | ~4B policies (1 trainer GPU + 3-way TP server) |
+| `H100-80GB` x2/x4 on `vast` | marketplace chunk | 7B-70B policies |
+
 ## Current constraints
 
-- **NVIDIA, single node** (1–8 GPUs). AMD and multi-node are rejected at submit.
+- **NVIDIA, single node** (2–8 GPUs — see GPU layout above). AMD, 1-GPU, and multi-node are rejected at submit.
 - **Streaming is forced off** on policy requests during training (spans must be capturable); responses arrive buffered.
 - Requires a worker TRL build with `rollout_func` support; jobs on older images fail fast with a clear message.
 - One policy model per rollout — multi-agent setups with several distinct in-training models are out of scope for now.
