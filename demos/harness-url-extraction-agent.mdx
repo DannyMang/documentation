@@ -68,6 +68,12 @@ with open("tasks.jsonl", "w") as f:
         written += 1
 ```
 
+A task is only trainable if the harness's fetch can actually surface the ground-truth URL — an unwinnable task scores 0 on every rollout, so its whole GRPO group contributes zero advantage. Filter before uploading (the bundle's `prep_dataset.py --verify` runs the same lookup the harness performs and keeps the winnable rows — about 5 in 6 papers pass):
+
+```bash
+python prep_dataset.py --verify
+```
+
 Upload it: `veri datasets upload tasks.jsonl --name paper-url-extraction` → note the dataset id.
 
 ## 2. Reward function: score the finished trajectory
@@ -141,6 +147,8 @@ Nothing Veri-specific in any of these — the rollout redirects the SDK with env
     import json
     import os
     import re
+    import time
+    import urllib.error
     import urllib.request
 
     from openai import OpenAI
@@ -152,18 +160,38 @@ Nothing Veri-specific in any of these — the rollout redirects the SDK with env
     SYSTEM = (
         "You find GitHub repository URLs for arXiv papers. On each turn reply with "
         "EXACTLY ONE of:\n"
-        "  FETCH: <arxiv_id>   to read the paper's abstract page (e.g. FETCH: 2305.10601)\n"
+        "  FETCH: <arxiv_id>   to look up the paper's page (e.g. FETCH: 2305.10601)\n"
         "  ANSWER: <url>       when you know the GitHub URL\n"
         "No other text."
     )
 
     def fetch_arxiv(arxiv_id: str) -> str:
-        url = f"https://arxiv.org/abs/{arxiv_id.strip()}"
-        req = urllib.request.Request(url, headers={"User-Agent": "veri-demo-agent/1.0"})
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            html = resp.read().decode("utf-8", errors="replace")
-        text = re.sub(r"<[^>]+>", " ", html)
-        return re.sub(r"\s+", " ", text)[:3000]
+        # The HF paper page carries the paper's linked code repositories (the
+        # arXiv abstract page usually does not); links come from the raw HTML
+        # hrefs so they survive the text truncation.
+        arxiv_id = arxiv_id.strip().rstrip(".")
+        for url in (f"https://huggingface.co/papers/{arxiv_id}", f"https://arxiv.org/abs/{arxiv_id}"):
+            html = None
+            for delay in (0, 5, 15):  # parallel rollouts can trip HF's 429 rate limit
+                time.sleep(delay)
+                try:
+                    req = urllib.request.Request(url, headers={"User-Agent": "veri-demo-agent/1.0"})
+                    with urllib.request.urlopen(req, timeout=30) as resp:
+                        html = resp.read().decode("utf-8", errors="replace")
+                    break
+                except urllib.error.HTTPError as e:
+                    if e.code != 429:
+                        break  # hard miss (e.g. 404): fall through to the next source
+                except Exception:
+                    break
+            if html is None:
+                continue
+            links = sorted(set(re.findall(r"https?://(?:www\.)?github\.com/[\w.\-]+/[\w.\-]+", html)))
+            text = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", html))[:2500]
+            if links:
+                text += "\nLINKS ON PAGE: " + " ".join(links[:10])
+            return text
+        return f"fetch failed: no page found for {arxiv_id}"
 
     task = json.loads(os.environ["VERI_TASK_INPUT"])
     messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": task}]
