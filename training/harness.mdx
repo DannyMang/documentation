@@ -18,7 +18,7 @@ For each training step, on one GPU box:
 3. **Capture.** A proxy between your harness and the policy records every request's token ids and logprobs. Tool results and user turns are masked out of the loss — only model-generated tokens are trained.
 4. **Reward.** Your uploaded reward function scores each finished trajectory (e.g. "did the agent extract the right URL?"). Then the GRPO update runs and the loop repeats.
 
-Every rollout is archived: browse **Trajectories** on the job page, faceted by policy step, so you can watch behavior evolve as training progresses.
+Every rollout is archived: the **Trajectories** archive sits below the logs on the job page, faceted by policy step, so you can watch behavior evolve as training progresses.
 
 ## The harness contract
 
