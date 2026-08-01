@@ -146,6 +146,10 @@ Datasets are content-addressed. Uploading the same bytes twice (same file, or tw
 
 This means you can re-run a script that uploads the same dataset without worrying about stale duplicates.
 
+## Preview rows
+
+Click a dataset on the dashboard's Datasets page to open a row viewer that lazily pages through the stored JSONL, so large datasets load incrementally as you scroll. Uploaded datasets are previewable immediately. Connected datasets (Hugging Face or volume) become previewable after their first training run creates the [snapshot](#snapshot-caching).
+
 ## Lifecycle
 
 Datasets persist until you delete them from the dashboard. There is no API delete endpoint today — programmatic delete is on the roadmap.
