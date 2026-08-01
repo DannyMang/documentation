@@ -59,6 +59,7 @@ The full end-to-end walkthrough lives in the demos section: [Train a URL-extract
 | `vllm_gpu_memory_utilization` | 0.85 | Policy-server memory fraction on its dedicated GPUs (see GPU layout below). |
 | `max_model_len` | unset | Cap the policy server's context length. |
 | `trajectory_retention_days` | keep forever | Auto-delete raw trajectories after N days. |
+| `chat_template_kwargs` | `{"enable_thinking": false}` | Forwarded to the policy server's chat template. Thinking stays off by default: reasoning models (Qwen3) strip `<think>` blocks from prior turns on re-render, which breaks multi-turn token capture. |
 
 ## GPU layout
 
