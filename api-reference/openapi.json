@@ -590,6 +590,69 @@
         ]
       }
     },
+    "/v1/datasets/{dataset_id}/rows": {
+      "get": {
+        "tags": [
+          "Datasets"
+        ],
+        "summary": "Preview dataset rows",
+        "operationId": "rows",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "description": "Dataset ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Byte-offset cursor from the previous page's `next_cursor`. Omit for the\nfirst page.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of raw dataset rows",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetRowsResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found or not owned by the caller"
+          },
+          "409": {
+            "description": "Connected dataset has no stored snapshot yet (available after its first training run)"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/deployments": {
       "get": {
         "tags": [
@@ -1878,6 +1941,46 @@
           },
           "409": {
             "description": "An active job or evaluation still references the reward function"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/reward_functions/{reward_id}/source": {
+      "get": {
+        "tags": [
+          "Reward functions"
+        ],
+        "summary": "Get reward function source",
+        "operationId": "source",
+        "parameters": [
+          {
+            "name": "reward_id",
+            "in": "path",
+            "description": "Reward function ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The stored Python source of the reward function",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RewardFunctionSourceResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found or not owned by the caller"
           }
         },
         "security": [
@@ -3503,6 +3606,38 @@
           "created_at": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "DatasetRowsResponse": {
+        "type": "object",
+        "description": "One page of raw dataset rows for the dashboard preview. `next_cursor` is an\nopaque byte offset into the stored JSONL — pass it back verbatim to fetch\nthe next page; null means the last row has been returned.",
+        "required": [
+          "object",
+          "rows"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "rows": {
+            "type": "array",
+            "items": {}
+          },
+          "next_cursor": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "minimum": 0
+          },
+          "total_rows": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
           }
         }
       },
@@ -6564,6 +6699,21 @@
           "created_at": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "RewardFunctionSourceResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "source"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
           }
         }
       },
