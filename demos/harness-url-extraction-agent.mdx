@@ -91,9 +91,10 @@ def reward(prompts, completions, answer_github, answer_project=None, **kwargs):
         score = 0.0
         if answer_github[i] and _norm(answer_github[i]) in text:
             score += 0.7
-        if answer_project and answer_project[i] and _norm(answer_project[i]) in text:
+        labeled_project = answer_project[i] if answer_project else ""
+        if labeled_project and _norm(labeled_project) in text:
             score += 0.3
-        elif answer_github[i] and _norm(answer_github[i]) in text:
+        elif not labeled_project and answer_github[i] and _norm(answer_github[i]) in text:
             score += 0.3  # no project page labeled: GitHub alone is full credit
         rewards.append(score)
     return rewards
