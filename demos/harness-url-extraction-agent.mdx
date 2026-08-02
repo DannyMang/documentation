@@ -275,7 +275,13 @@ One node hosts everything: the trainer on GPU 0, the policy server tensor-parall
 
 ## 5. Watch it learn
 
-Open the job in the dashboard — the **Trajectories** archive sits right below the logs on harness jobs. Pick a policy step, pick a task, compare the N trials: full message history of every turn, tool calls, per-turn token counts, and the reward. Flip between step 0 and the latest step to see behavior change. Download any trajectory as raw JSONL — or programmatically:
+Open the job in the dashboard — the **Trajectories** archive sits right below the logs on harness jobs. Pick a policy step, pick a task, compare the N trials: full message history of every turn, tool calls, per-turn token counts, and the reward. Flip between step 0 and the latest step to see behavior change.
+
+<Frame caption="A per-trial trajectory page: task, outcome (reward, turns, tokens), and the full message-by-message conversation.">
+  <img src="/images/harness-trajectory-viewer.png" alt="Trajectory archive trial view showing a task card, outcome card with reward 0.70 and token counts, run card with model and job cost, and the numbered system, user, and assistant messages of the rollout" />
+</Frame>
+
+Download any trajectory as raw JSONL — or programmatically:
 
 ```python
 rows = client.training_jobs.trajectories(job_id, policy_step=10)
