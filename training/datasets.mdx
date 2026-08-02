@@ -148,11 +148,13 @@ This means you can re-run a script that uploads the same dataset without worryin
 
 ## Preview rows
 
-Click a dataset on the dashboard's Datasets page to open a row viewer that lazily pages through the stored JSONL, so large datasets load incrementally as you scroll. Uploaded datasets are previewable immediately. Connected datasets (Hugging Face or volume) become previewable after their first training run creates the [snapshot](#snapshot-caching).
+Click a dataset on the dashboard's Datasets page to open a row viewer that pages through the stored JSONL 50 rows at a time, so large datasets never download in full. The row number in the footer is editable — type a row number and press Enter to jump straight there (the first jump into a large dataset builds a small row index, so it can take a moment; later jumps are instant). Uploaded datasets are previewable immediately. Connected datasets (Hugging Face or volume) become previewable after their first training run creates the [snapshot](#snapshot-caching).
+
+The same paging is available programmatically via `GET /v1/datasets/{dataset_id}/rows`, with `cursor` for sequential pages or `start_row` to jump to an absolute row.
 
 ## Lifecycle
 
-Datasets persist until you delete them from the dashboard. There is no API delete endpoint today — programmatic delete is on the roadmap.
+Datasets persist until you delete them, either from the dashboard or via `DELETE /v1/datasets/{dataset_id}`. Deletion is blocked while an active training job or an evaluation still references the dataset.
 
 ## Name conflicts
 

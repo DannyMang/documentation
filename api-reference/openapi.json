@@ -626,6 +626,17 @@
               "type": "integer",
               "format": "int32"
             }
+          },
+          {
+            "name": "start_row",
+            "in": "query",
+            "description": "0-based row number to start the page at (jump-to-row). Takes precedence\nover `cursor`. The first jump into a dataset builds a sparse row index\n(one full streaming read); every later jump is two small S3 reads.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
           }
         ],
         "responses": {
