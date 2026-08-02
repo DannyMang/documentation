@@ -13,12 +13,12 @@ Give your coding agent working knowledge of Veri. Copy the SKILL.md below into y
 | Devin CLI | `.devin/skills/veri/SKILL.md` |
 | Cursor / others ([agentskills spec](https://agentskills.io)) | `.agents/skills/veri/SKILL.md` |
 
-Every command and constraint below is verified against the live API and `veri-sdk` 0.2.31 (the latest release). When docs and this file disagree, trust `veri <cmd> --help` and [the docs](https://docs.veri.studio).
+Every command and constraint below is verified against the live API and `veri-sdk` 0.2.32 (the latest release). When docs and this file disagree, trust `veri <cmd> --help` and [the docs](https://docs.veri.studio).
 
 ````markdown SKILL.md
 ---
 name: veri
-description: Train, deploy, and manage language models on Veri, the AI compute platform (api.veri.studio). Covers the veri CLI and REST API for fine-tuning (SFT, DPO, GRPO), custom training scripts, GPU inference deployments with OpenAI-compatible endpoints, datasets, reward functions, volumes, and billing. Use when the user mentions Veri, veri.toml, the veri CLI, api.veri.studio, or wants to fine-tune / RL-train / serve a model on rented GPUs.
+description: Train, deploy, and manage language models on Veri, the AI compute platform (api.veri.studio). Covers the veri CLI and REST API for fine-tuning (SFT, DPO, GRPO), harness-in-the-loop RL (train the model inside your own agent), custom training scripts, GPU inference deployments with OpenAI-compatible endpoints, datasets, reward functions, volumes, and billing. Use when the user mentions Veri, veri.toml, the veri CLI, api.veri.studio, or wants to fine-tune / RL-train / serve a model on rented GPUs — including RL-training the model that powers an existing agent or harness.
 ---
 
 # Veri
@@ -27,13 +27,13 @@ description: Train, deploy, and manage language models on Veri, the AI compute p
 
 ```bash
 uv tool install veri-sdk        # or: pipx install veri-sdk / pip install veri-sdk
-veri version                    # need sdk_version >= 0.2.31 (this skill's baseline); Python >= 3.10
+veri version                    # need sdk_version >= 0.2.32 (this skill's baseline); Python >= 3.10
 veri login                      # browser flow; or: veri login --token vk_... (headless/CI)
 veri whoami                     # verify: status must NOT be invalid_or_expired_token
 veri doctor                     # diagnose install/network if anything fails
 ```
 
-If `sdk_version` is older than 0.2.31, upgrade before continuing — older CLIs are missing
+If `sdk_version` is older than 0.2.32, upgrade before continuing — older CLIs are missing
 commands this skill uses: `uv tool upgrade veri-sdk` (or `pipx upgrade veri-sdk` /
 `pip install -U veri-sdk`).
 
@@ -93,7 +93,7 @@ Docs (contract, sandbox limits, debugging): https://docs.veri.studio/training/re
 
 ## Training
 
-Methods: `grpo` (needs `reward_function_id`), `sft_text`, `dpo`, `sft_video_gen` (these three require reward to be null). `grpo_agentic` is NOT runnable (400, being rebuilt).
+Methods: `grpo` (needs `reward_function_id`), `sft_text`, `dpo`, `sft_video_gen` (these three require reward to be null), `grpo_harness` (submit via `veri run-harness`, see the harness section below). `grpo_agentic` is NOT runnable (400, being rebuilt).
 
 ```toml
 # configs/train.toml
@@ -144,6 +144,54 @@ veri run-script ./my-run \
 Base images: `veri/base`, `veri/base-vllm`, `veri/base-sglang`. Env injected: `VERI_DATA_DIR`, `VERI_OUTPUT_DIR` (write checkpoints here), `VERI_METRICS_FILE`, `VERI_NUM_GPUS`. NVIDIA only (AMD gpu_type → 400). Multi-node (`--num-nodes` ≥ 2) is currently gated off ("coming soon" 400). Exit 0 = completed.
 
 Docs (env contract, images, worked examples): https://docs.veri.studio/training/custom-script
+
+### Harness-in-the-loop RL (train the model inside the user's own agent)
+
+GRPO-trains a policy while the user's EXISTING agent code drives the multi-turn
+tool-use rollouts, unmodified. Works with any agent that reads the standard env
+vars — OpenAI SDK, LangChain, Anthropic SDK. No Veri code inside the agent; each
+rollout the platform injects:
+
+- `OPENAI_BASE_URL` / `ANTHROPIC_BASE_URL` → the in-training policy's endpoint
+- `VERI_TASK_INPUT` → one dataset row's `prompt` (JSON string); the agent solves it
+- `VERI_POLICY_MODEL` → model name to send in requests (other names 404)
+
+The agent runs its normal loop and exits; the uploaded reward function scores the
+trajectory's FINAL assistant message (extra dataset columns arrive as lists).
+
+```bash
+veri run-harness ./harness \
+  --entrypoint "python agent.py" \
+  --base-model Qwen/Qwen3-4B \
+  --dataset-id ds_... --reward-id rf_... \
+  --gpu-type H100-80GB --gpu-count 2 --provider vast \
+  --rollouts-per-prompt 4 --max-steps 20 \
+  --requirements ./harness/requirements.txt
+```
+
+Constraints that WILL bite:
+
+1. `--gpu-count` must be >= 2 on one node (trainer and policy server need disjoint
+   GPUs). The policy server runs tensor-parallel at gpu_count-1, and vLLM needs the
+   model's attention heads divisible by that — for 32-head models (Qwen3-4B) valid
+   counts are 2, 3, or 5. `H100-80GB x2 --provider vast` is the proven shape.
+2. Protocols: OpenAI (default) and Anthropic plain-text (`--harness-protocol
+   anthropic`) both train with exact token fidelity. Anthropic native tool_use
+   blocks are rejected with a 400 — use a text-protocol tool loop instead.
+3. Policy ceiling today: ~7-8B full fine-tune (the trainer runs on one GPU).
+4. Every dataset task must be WINNABLE through the agent's own tools: if the tools
+   can never surface the ground-truth answer, every rollout scores 0 and that task
+   contributes zero learning signal at full GPU price. Before spending, verify a
+   sample — run the agent's fetch/tool path offline and check the answer appears.
+5. Rollouts run sandboxed with network egress; per-rollout deps come from
+   `--requirements`.
+
+Inspect results: the job page shows a per-step/task/trial trajectory archive (full
+message history, tool calls, tokens, reward); programmatic:
+`client.training_jobs.trajectories(job_id)` + `trajectory_download_url(job_id, tid)`.
+
+Docs (env contract + full worked demo incl. dataset prep and reward):
+https://docs.veri.studio/training/harness · https://docs.veri.studio/demos/harness-url-extraction-agent
 
 ## Deployments (inference)
 

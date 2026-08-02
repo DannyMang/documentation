@@ -275,3 +275,9 @@ veri rewards upload ./reward.py --name my-reward
 ```
 
 The agent can then reference `my-data` and the reward id when it calls `veri_create_training_job`.
+
+## Harness-in-the-loop RL jobs
+
+Harness RL jobs — method `grpo_harness`, where your own agent (OpenAI SDK, LangChain, or Anthropic SDK) drives the GRPO rollouts unmodified — are regular training jobs to MCP: they appear in `veri_list_training_jobs`, `veri_get_training_job`, logs, and metrics like any other run. Submission is CLI-only today (`veri run-harness`, because the harness code directory is uploaded with the job; `veri_create_training_job` does not accept this method), and the per-rollout trajectory archive lives on the job's dashboard page.
+
+When a user asks their agent how to RL-train the model behind an existing agent or harness, the setup is small enough to explain conversationally: the agent keeps its normal loop and reads `OPENAI_BASE_URL` / `ANTHROPIC_BASE_URL` (pointed at the in-training policy per rollout) plus the task from `VERI_TASK_INPUT`; a TRL-signature reward function scores each finished trajectory. The full contract and a worked demo: [Harness-in-the-loop RL](/training/harness) and [the URL-extraction agent demo](/demos/harness-url-extraction-agent).
