@@ -288,6 +288,8 @@ rows = client.training_jobs.trajectories(job_id, policy_step=10)
 url = client.training_jobs.trajectory_download_url(job_id, rows[0]["id"])
 ```
 
+The JSONL schema (rollout record, per-request spans, rendered episode) is documented in the open-source runtime: [trajectory-format.md](https://github.com/Veri-Studios/veri-runner/blob/main/docs/trajectory-format.md), with worked examples of rejected and fallback trajectories in the same repo.
+
 ## 6. Deploy the result
 
 The trained checkpoint is on the job like any managed run — **Save as model**, then `veri deploy`, and point the same harness at the deployment endpoint.

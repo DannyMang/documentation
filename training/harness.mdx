@@ -42,6 +42,10 @@ You don't add tracing, callbacks, or logging hooks. If your harness already read
   Both protocols train with full token fidelity: the OpenAI route (`harness_protocol = "openai"`, the default) and the Anthropic route (`"anthropic"`, plain-text messages) capture token ids + logprobs on every request, which is what GRPO trains on. One Anthropic caveat: native `tool_use` blocks are not translated yet — requests carrying `tools` get a clear 400, so use a text-protocol loop (or the OpenAI route) for tool-calling agents. Rollouts whose spans lack token ids are **rejected from training** (fail-safe, never silent drift).
 </Warning>
 
+<Note>
+  The runtime that implements this loop — the capture proxy, the protocol adapters, episode rendering, and the rejection rules — is open source at [Veri-Studios/veri-runner](https://github.com/Veri-Studios/veri-runner). If a rollout is rejected, the repo's [debugging guide](https://github.com/Veri-Studios/veri-runner#debugging-token-fidelity-rejections) walks the exact rules against your downloaded trajectory; handing the repo and the trajectory to a coding agent works well too.
+</Note>
+
 ## Quickstart
 
 The full end-to-end walkthrough lives in the demos section: [Train a URL-extraction agent in your own harness](/demos/harness-url-extraction-agent) — dataset, reward function, unmodified OpenAI-SDK agent, `veri run-harness`, the trajectory archive, and the Claude Agent SDK variant (plus the TOML config-file form).

@@ -19,6 +19,8 @@ Veri runs reward functions in the `trl` shape — the format the production GRPO
 
 The validator checks the function signature on upload — wrong shape rejects with HTTP 422.
 
+Loading and invocation happen in the open-source runtime: see `load_reward_function` in [training_runtime.py](https://github.com/Veri-Studios/veri-runner/blob/main/veri_runner/training_runtime.py) (and `score_episode` in [harness_rollout.py](https://github.com/Veri-Studios/veri-runner/blob/main/veri_runner/harness_rollout.py) for how harness trajectories are scored) if you need to check exactly how your function is called.
+
 ## TRL format
 
 Receives a batch of completions, returns one score per completion.

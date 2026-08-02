@@ -81,7 +81,7 @@ Veri detects the dataset's format from its columns and converts it to the shape 
 | Prompt-completion | `prompt`, `completion` | Used as is. |
 | Preference | `prompt`, `chosen`, `rejected` | Used as is (DPO). |
 
-Datasets that don't match any of these formats, or use tool-calling roles (`observation`, `function_call`), are rejected with a `dataset_format_incompatible` error at the start of the job rather than trained on incorrectly. Use `column_mapping` to rename columns into one of the shapes above.
+Datasets that don't match any of these formats, or use tool-calling roles (`observation`, `function_call`), are rejected with a `dataset_format_incompatible` error at the start of the job rather than trained on incorrectly. Use `column_mapping` to rename columns into one of the shapes above. Detection and conversion run in the open-source runtime — see `detect_dataset_format` and `normalize_rows` in [training_runtime.py](https://github.com/Veri-Studios/veri-runner/blob/main/veri_runner/training_runtime.py) to check exactly what your dataset passed through.
 
 Each method still needs the right shape: SFT trains on `text`, `messages`, or prompt-completion rows; GRPO needs a `prompt` column; DPO needs `chosen` and `rejected`.
 
