@@ -39,7 +39,7 @@ Your harness is a code bundle plus an entrypoint — the same shape as a [custom
 You don't add tracing, callbacks, or logging hooks. If your harness already reads `OPENAI_BASE_URL` or `ANTHROPIC_BASE_URL` — the standard way to point those SDKs at a custom endpoint — it works unchanged.
 
 <Warning>
-  Both protocols train with full token fidelity: the OpenAI route (`harness_protocol = "openai"`, the default) and the Anthropic route (`"anthropic"`, plain-text messages) capture token ids + logprobs on every request, which is what GRPO trains on. One Anthropic caveat: native `tool_use` blocks are not translated yet — requests carrying `tools` get a clear 400, so use a text-protocol loop (or the OpenAI route) for tool-calling agents. Rollouts whose spans lack token ids are **rejected from training** (fail-safe, never silent drift).
+  Both protocols train with full token fidelity: the OpenAI route (`harness_protocol = "openai"`, the default) and the Anthropic route (`"anthropic"`) capture token ids + logprobs on every request, which is what GRPO trains on. The Anthropic route supports native `tool_use` end to end — the `tools` array rides the policy's chat template, tool calls come back as `tool_use` blocks, streaming and `count_tokens` are served — so Anthropic-SDK tool loops train unmodified. Rollouts whose spans lack token ids are **rejected from training** (fail-safe, never silent drift). Image and document content blocks are rejected with a 400 (no token-native path). The stock Claude Agent SDK runtime (`claude -p ...`) runs on the `veri/base-claude-agent` base image, currently rolling out.
 </Warning>
 
 <Note>
