@@ -158,9 +158,33 @@ client.reward_functions.list()
 client.reward_functions.get(reward_id)
 ```
 
-Reward functions are deduped by content hash — uploading the same file twice returns the same id. There is no DELETE endpoint today; programmatic delete is on the roadmap.
+Reward functions are deduped by content hash — uploading the same file twice returns the same id. Deletion is supported (`client.reward_functions.delete(reward_id)` / `DELETE /v1/reward_functions/{id}`) — and it is permanent: completed jobs that referenced the reward keep working, but their stored reward source is gone and the id cannot be resubmitted. Don't delete rewards whose ids appear in job configs you may rerun.
 
 Click a reward function on the dashboard's Datasets page to view its stored Python source.
+
+## Shaped rewards for harness jobs
+
+Harness-in-the-loop jobs score the trajectory's **final assistant message** by default — the deploy-aligned choice, since at inference time the final answer is all that matters. When you need more signal (partial credit for fetching the right page, penalties for invalid tool calls), declare a `trajectory` parameter and the platform passes the full message history of the rollout's final turn — protocol-shaped dicts, including `tool_use` / `tool_result` content — one history per completion:
+
+```python
+def reward(prompts, completions, answer_github, trajectory=None, **kwargs):
+    rewards = []
+    for i, completion in enumerate(completions):
+        score = 1.0 if answer_github[i].lower() in completion.lower() else 0.0
+        for message in (trajectory[i] if trajectory else []):
+            content = message.get("content")
+            if not isinstance(content, list):
+                continue
+            for block in content:
+                if block.get("type") == "tool_use" and "huggingface.co/papers" in str(block.get("input", {})):
+                    score += 0.1  # fetched the right page: partial credit
+        rewards.append(min(score, 1.0))
+    return rewards
+```
+
+Rewards that don't declare `trajectory` are called exactly as before — the parameter is opt-in.
+
+One sharp edge with chatty agent runtimes (the Claude Agent SDK especially): because the default scores only the final message, instruct your harness to put the answer there ("finish with a last line of exactly `ANSWER: <url>`") or a correct mid-trajectory answer can score zero.
 
 ## Where to go next
 
