@@ -2001,6 +2001,89 @@
         ]
       }
     },
+    "/v1/settings/integrations/huggingface": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Get Hugging Face integration status",
+        "operationId": "get_huggingface",
+        "responses": {
+          "200": {
+            "description": "Whether an HF token is configured (the token itself is never returned)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HuggingFaceIntegrationResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Connect Hugging Face account",
+        "operationId": "set_huggingface",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HuggingFaceIntegrationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Token validated against HF whoami and stored (encrypted). Jobs may now request hf_push.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HuggingFaceIntegrationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Empty or HF-rejected token"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Remove Hugging Face integration",
+        "operationId": "delete_huggingface",
+        "responses": {
+          "200": {
+            "description": "Integration removed; new jobs can no longer request hf_push"
+          },
+          "404": {
+            "description": "No Hugging Face integration configured"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/settings/integrations/wandb": {
       "get": {
         "tags": [
@@ -5287,6 +5370,58 @@
         ],
         "description": "Harness-in-the-loop GRPO (VS-372): the user's own agent harness (Claude\nAgent SDK / LangChain / OpenAI Agents SDK) drives multi-turn rollouts\nagainst the in-training policy. Shares GRPO's core knobs; the\nharness-specific ones tune rollout execution and the colocated vLLM\npolicy server. The harness code itself arrives via the job's `script`\npayload (same shape as custom_script)."
       },
+      "HfPushConfig": {
+        "type": "object",
+        "description": "Opt-in end-of-training push of the trained artifact to the user's Hugging\nFace account. Requires a connected HF integration\n(PUT /v1/settings/integrations/huggingface); the token itself never rides\nin the job config — the worker exchanges its callback_token for it at\nruntime, exactly like W&B.",
+        "required": [
+          "repo",
+          "artifact"
+        ],
+        "properties": {
+          "repo": {
+            "type": "string",
+            "description": "Target repo as \"namespace/name\" (e.g. \"acme/qwen3-4b-support-bot\")."
+          },
+          "artifact": {
+            "type": "string",
+            "description": "Which artifact to push: \"merged\" (full standalone weights) or\n\"adapter\" (LoRA adapter only; requires lora_rank on the job)."
+          },
+          "private": {
+            "type": "boolean",
+            "description": "Repo visibility. Defaults to private — a public push is an explicit\nchoice, never an accident."
+          }
+        }
+      },
+      "HuggingFaceIntegrationRequest": {
+        "type": "object",
+        "required": [
+          "token"
+        ],
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "Hugging Face access token (huggingface.co/settings/tokens) with write\nscope. Stored encrypted at rest; never returned by the API."
+          }
+        }
+      },
+      "HuggingFaceIntegrationResponse": {
+        "type": "object",
+        "required": [
+          "configured"
+        ],
+        "properties": {
+          "configured": {
+            "type": "boolean"
+          },
+          "username": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The HF account the token belongs to (from whoami at connect time)."
+          }
+        }
+      },
       "JobError": {
         "type": "object",
         "properties": {
@@ -6450,6 +6585,22 @@
                     "null"
                   ]
                 },
+                "hf_push": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$ref": "#/components/schemas/HfPushConfig"
+                    }
+                  ]
+                },
+                "hf_repo_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
                 "current_step": {
                   "type": [
                     "integer",
@@ -6973,6 +7124,16 @@
               }
             ]
           },
+          "hf_push": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/HfPushConfig"
+              }
+            ]
+          },
           "environments": {
             "type": [
               "object",
@@ -7132,6 +7293,22 @@
             ]
           },
           "wandb_run_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "hf_push": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/HfPushConfig"
+              }
+            ]
+          },
+          "hf_repo_url": {
             "type": [
               "string",
               "null"

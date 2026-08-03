@@ -63,7 +63,8 @@
               "training/reward-functions",
               "training/grpo",
               "training/dpo",
-              "training/wandb"
+              "training/wandb",
+              "training/huggingface"
             ]
           },
           {

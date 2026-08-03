@@ -1,0 +1,112 @@
+---
+title: "Hugging Face"
+sidebarTitle: "Hugging Face"
+description: "Connect your Hugging Face account and push trained weights or LoRA adapters to your own repos the moment a training job finishes."
+keywords: ["Hugging Face", "push to hub", "model weights", "LoRA adapter", "integrations", "hf_push"]
+---
+
+Veri can push the artifact a training job produces straight to your [Hugging Face](https://huggingface.co) account. Connect your account once, then opt in per job: when training completes and the checkpoint is saved, Veri creates (or updates) the repo you named and uploads either the full merged weights or just the LoRA adapter.
+
+The pushed repo link is surfaced everywhere the job appears:
+
+- **Dashboard**: a "View on Hugging Face" button on the job page.
+- **API / SDK**: the `hf_repo_url` field on the training job object.
+
+## Connect your account
+
+Create a token with **write** scope at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens), then connect it one of three ways. Veri validates the token against Hugging Face when you save it, so a bad token fails here instead of at the end of a training run.
+
+<Tabs>
+  <Tab title="CLI">
+    ```bash
+    veri hf set
+    # Hugging Face token (input hidden): ...
+    ```
+
+    Check or remove the connection any time:
+
+    ```bash
+    veri hf status
+    veri hf remove
+    ```
+  </Tab>
+  <Tab title="Dashboard">
+    Open **Settings → Integrations**, paste your Hugging Face token in the Hugging Face card, and save. The card shows the account the token belongs to.
+  </Tab>
+  <Tab title="SDK">
+    ```python
+    from veri_sdk import Client
+
+    client = Client()
+    client.integrations.set_huggingface(token="hf_...")
+
+    client.integrations.get_huggingface()     # {"configured": true, "username": "you"}
+    client.integrations.delete_huggingface()  # disconnect
+    ```
+  </Tab>
+</Tabs>
+
+## Push a job's artifact
+
+Opt in on the job itself with a target repo and the artifact you want. `artifact` is required and picks what lands in the repo:
+
+- `merged`: standalone weights, loadable with `from_pretrained` alone. For LoRA runs, Veri merges the adapter into the base model before uploading.
+- `adapter`: the LoRA adapter only (requires a LoRA job, i.e. `lora_rank` set). Small upload; load it with PEFT on top of the base model.
+
+Repos default to **private**; set `private = false` to publish.
+
+<Tabs>
+  <Tab title="Config file">
+    ```toml
+    [method]
+    type = "grpo"
+    lora_rank = 16
+
+    [huggingface]
+    repo = "your-namespace/my-tuned-model"
+    artifact = "adapter"        # or "merged"
+    private = true
+    ```
+
+    Submit as usual with `veri run`.
+  </Tab>
+  <Tab title="SDK">
+    ```python
+    job = client.training_jobs.create(
+        base_model="Qwen/Qwen3-4B",
+        dataset_id="ds_...",
+        reward_function_id="rf_...",
+        gpu_type="A100-80GB",
+        gpu_count=1,
+        hf_push={
+            "repo": "your-namespace/my-tuned-model",
+            "artifact": "merged",
+            "private": True,
+        },
+    )
+    job.wait()
+    print(job.hf_repo_url)  # https://huggingface.co/your-namespace/my-tuned-model
+    ```
+  </Tab>
+</Tabs>
+
+Requests that can't succeed are rejected at submit, not after a paid run: an unconnected account, a malformed repo id, or `artifact = "adapter"` on a job without `lora_rank` all fail immediately with a clear message.
+
+<Note>
+  The push is supported for managed `grpo`, `grpo_harness`, `sft_text`, and `dpo` jobs. Custom-script jobs own their training loop and can push from the script itself; `sft_video_gen` is not supported yet.
+</Note>
+
+## What happens at the end of the run
+
+1. The trained checkpoint is saved and uploaded to Veri storage as usual — the push is additive, and your checkpoint stays downloadable from Veri either way.
+2. For `merged` on a LoRA run, the adapter is merged into the base model on the training machine.
+3. Veri creates the repo if it doesn't exist (honoring `private`) and uploads the artifact.
+4. The job records `hf_repo_url` on success.
+
+A failed push never fails the job: training results are kept and the skip reason appears in the job logs.
+
+## How your token is handled
+
+- Stored encrypted at rest, scoped to your account. The API never returns it.
+- Delivered to the training machine at runtime over a job-scoped authenticated channel, only for jobs that opted into the push; it is never written into job config files or logs.
+- `veri hf remove` disconnects immediately: jobs submitted afterwards can no longer push.
