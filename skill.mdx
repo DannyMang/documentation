@@ -69,7 +69,7 @@ veri datasets upload ./train.jsonl --name my-train   # -> ds_...
 veri datasets connect-hf openai/gsm8k --config main --split train --map question=prompt
 ```
 
-Private/gated HF datasets are not supported. Delete works for datasets, not reward functions.
+Private/gated HF datasets are not supported. Datasets AND reward functions are deletable (API + dashboard). CAUTION: deleting a reward function that completed jobs reference succeeds silently today — those jobs keep working but their reward source is gone and the id cannot be resubmitted. Treat reward deletion as irreversible; don't bulk-clean rewards whose ids appear in job configs.
 
 Docs (formats, column mapping, volumes as sources): https://docs.veri.studio/training/datasets · https://docs.veri.studio/cli/datasets
 
@@ -248,7 +248,7 @@ Docs: https://docs.veri.studio/volumes · https://docs.veri.studio/deployments/c
 
 ## REST API essentials
 
-Base `https://api.veri.studio`, header `Authorization: Bearer vk_...`. Public spec: `GET /openapi.json`. Main resources: `/v1/training_jobs` (+ `/logs`, `/metrics`, `/cancel`, `/model`), `/v1/deployments` (+ `/chat/completions`, `/stop`, `/wake`), `/v1/datasets`, `/v1/reward_functions` (no DELETE), `/v1/volumes`, `/v1/models`, `/v1/billing/*`, `/v1/gpu/catalog`, `/v1/regions`. Errors: 400 invalid/gated, 401 bad key, 402 insufficient credit, 404 not found/not owned, 422 schema. Pagination: `limit` + `after` cursor, `has_more` in response.
+Base `https://api.veri.studio`, header `Authorization: Bearer vk_...`. Public spec: `GET /openapi.json`. Main resources: `/v1/training_jobs` (+ `/logs`, `/metrics`, `/cancel`, `/model`), `/v1/deployments` (+ `/chat/completions`, `/stop`, `/wake`), `/v1/datasets`, `/v1/reward_functions`, `/v1/volumes`, `/v1/models`, `/v1/billing/*`, `/v1/gpu/catalog`, `/v1/regions`. Errors: 400 invalid/gated, 401 bad key, 402 insufficient credit, 404 not found/not owned, 422 schema. Pagination: `limit` + `after` cursor, `has_more` in response.
 
 MCP alternative: hosted server at `https://api.veri.studio/mcp` (read-only: `/readonly/mcp`), or local `veri mcp serve` (needs `veri-sdk[mcp]`). Docs: https://docs.veri.studio/api-reference/introduction · https://docs.veri.studio/cli/mcp
 
