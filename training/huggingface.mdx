@@ -88,6 +88,31 @@ Repos default to **private**; set `private = false` to publish.
     print(job.hf_repo_url)  # https://huggingface.co/your-namespace/my-tuned-model
     ```
   </Tab>
+  <Tab title="API">
+    `hf_push` is a field on [Create training job](/api-reference/training-jobs/create-training-job); the pushed repo comes back as `hf_repo_url` on the job object.
+
+    ```bash
+    curl -X POST https://api.veri.studio/v1/training_jobs \
+      -H "Authorization: Bearer $VERI_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "base_model": "Qwen/Qwen3-4B",
+        "dataset_id": "ds_...",
+        "reward_function_id": "rf_...",
+        "output_name": "my-tuned-model",
+        "gpu": {"gpu_type": "A100-80GB", "gpu_count": 1},
+        "hf_push": {
+          "repo": "your-namespace/my-tuned-model",
+          "artifact": "merged",
+          "private": true
+        }
+      }'
+
+    # after completion:
+    curl -s https://api.veri.studio/v1/training_jobs/{job_id} \
+      -H "Authorization: Bearer $VERI_API_KEY" | jq -r .hf_repo_url
+    ```
+  </Tab>
 </Tabs>
 
 Requests that can't succeed are rejected at submit, not after a paid run: an unconnected account, a malformed repo id, or `artifact = "adapter"` on a job without `lora_rank` all fail immediately with a clear message.
