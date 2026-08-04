@@ -263,6 +263,18 @@
             ]
           },
           {
+            "group": "Integrations",
+            "openapi": "api-reference/openapi.json",
+            "pages": [
+              "GET /v1/settings/integrations/wandb",
+              "PUT /v1/settings/integrations/wandb",
+              "DELETE /v1/settings/integrations/wandb",
+              "GET /v1/settings/integrations/huggingface",
+              "PUT /v1/settings/integrations/huggingface",
+              "DELETE /v1/settings/integrations/huggingface"
+            ]
+          },
+          {
             "group": "API keys",
             "openapi": "api-reference/openapi.json",
             "pages": [
