@@ -13,7 +13,7 @@ Give your coding agent working knowledge of Veri. Copy the SKILL.md below into y
 | Devin CLI | `.devin/skills/veri/SKILL.md` |
 | Cursor / others ([agentskills spec](https://agentskills.io)) | `.agents/skills/veri/SKILL.md` |
 
-Every command and constraint below is verified against the live API and `veri-sdk` 0.2.32 (the latest release). When docs and this file disagree, trust `veri <cmd> --help` and [the docs](https://docs.veri.studio).
+Every command and constraint below is verified against the live API and `veri-sdk` 0.2.33 (the latest release). When docs and this file disagree, trust `veri <cmd> --help` and [the docs](https://docs.veri.studio).
 
 ````markdown SKILL.md
 ---
@@ -27,13 +27,13 @@ description: Train, deploy, and manage language models on Veri, the AI compute p
 
 ```bash
 uv tool install veri-sdk        # or: pipx install veri-sdk / pip install veri-sdk
-veri version                    # need sdk_version >= 0.2.32 (this skill's baseline); Python >= 3.10
+veri version                    # need sdk_version >= 0.2.33 (this skill's baseline); Python >= 3.10
 veri login                      # browser flow; or: veri login --token vk_... (headless/CI)
 veri whoami                     # verify: status must NOT be invalid_or_expired_token
 veri doctor                     # diagnose install/network if anything fails
 ```
 
-If `sdk_version` is older than 0.2.32, upgrade before continuing — older CLIs are missing
+If `sdk_version` is older than 0.2.33, upgrade before continuing — older CLIs are missing
 commands this skill uses: `uv tool upgrade veri-sdk` (or `pipx upgrade veri-sdk` /
 `pip install -U veri-sdk`).
 
@@ -115,6 +115,17 @@ veri jobs cancel <id>
 ```
 
 Key hyperparameter defaults — grpo: lr 1e-6, rollouts_per_prompt 8, kl_coef 0.001, max_response_length 2048; sft_text: lr 2e-5, num_epochs 1; dpo: lr 5e-6, beta 0.1. LoRA via `lora_rank`/`lora_alpha`; QLoRA via `load_in_4bit` (NVIDIA only).
+
+Optional: push the trained artifact to the user's Hugging Face account when the job finishes — requires `veri hf set` once (see the Hugging Face section), then add to the train config:
+
+```toml
+[huggingface]
+repo = "namespace/name"
+artifact = "merged"        # or "adapter" (needs method.lora_rank); required
+private = true             # default
+```
+
+The finished job carries `hf_repo_url`. Submit fails fast (400) if the account isn't connected or `artifact = "adapter"` lacks `lora_rank` — fix, don't retry.
 
 Docs (per-method guides + full hyperparameter tables): https://docs.veri.studio/training · https://docs.veri.studio/training/grpo · https://docs.veri.studio/training/sft · https://docs.veri.studio/training/dpo · https://docs.veri.studio/cli/training
 
@@ -234,7 +245,7 @@ Docs: https://docs.veri.studio/deployments (params + sizing) · https://docs.ver
 
 Currently unavailable: `/v1/evals*` routes are not registered (404) while evals are rebuilt. `veri evals ...` commands exist but will fail against the API. Don't propose eval runs.
 
-## Volumes, models, billing, W&B
+## Volumes, models, billing, W&B, Hugging Face
 
 ```bash
 veri volumes create my-corpus && veri volumes upload my-corpus ./big.jsonl   # >5GiB auto-multipart
@@ -242,13 +253,17 @@ veri volumes ls my-corpus                        # then: veri datasets ... sourc
 veri models save <job_id> --name my-model        # reusable model library; deploy with --from-model
 veri billing balance | veri billing burn-rate | veri cost summary
 veri wandb set --api-key <key> --project <p>     # training jobs auto-log to W&B
+veri hf set                                      # connect a write-scope HF token (prompted, hidden)
+veri models push-hf <model_id> --repo ns/name    # push a ready library model to HF (--public, --no-wait)
 ```
 
-Docs: https://docs.veri.studio/volumes · https://docs.veri.studio/deployments/custom-models · https://docs.veri.studio/training/wandb
+Hugging Face pushes run server-side (nothing downloads locally): connect once with `veri hf set`, then either push at end of training (`[huggingface]` in the train config, see Training) or push any ready library model with `veri models push-hf`. Repos default private. One export per model/repo at a time, two concurrent per account (409 = wait, don't retry-loop).
+
+Docs: https://docs.veri.studio/volumes · https://docs.veri.studio/deployments/custom-models · https://docs.veri.studio/training/wandb · https://docs.veri.studio/training/huggingface
 
 ## REST API essentials
 
-Base `https://api.veri.studio`, header `Authorization: Bearer vk_...`. Public spec: `GET /openapi.json`. Main resources: `/v1/training_jobs` (+ `/logs`, `/metrics`, `/cancel`, `/model`), `/v1/deployments` (+ `/chat/completions`, `/stop`, `/wake`), `/v1/datasets`, `/v1/reward_functions`, `/v1/volumes`, `/v1/models`, `/v1/billing/*`, `/v1/gpu/catalog`, `/v1/regions`. Errors: 400 invalid/gated, 401 bad key, 402 insufficient credit, 404 not found/not owned, 422 schema. Pagination: `limit` + `after` cursor, `has_more` in response.
+Base `https://api.veri.studio`, header `Authorization: Bearer vk_...`. Public spec: `GET /openapi.json`. Main resources: `/v1/training_jobs` (+ `/logs`, `/metrics`, `/cancel`, `/model`), `/v1/deployments` (+ `/chat/completions`, `/stop`, `/wake`), `/v1/datasets`, `/v1/reward_functions`, `/v1/volumes`, `/v1/models` (+ `/{id}/push-to-hf`, poll `/v1/hf_exports/{id}`), `/v1/settings/integrations/{wandb,huggingface}`, `/v1/billing/*`, `/v1/gpu/catalog`, `/v1/regions`. Errors: 400 invalid/gated, 401 bad key, 402 insufficient credit, 404 not found/not owned, 422 schema. Pagination: `limit` + `after` cursor, `has_more` in response.
 
 MCP alternative: hosted server at `https://api.veri.studio/mcp` (read-only: `/readonly/mcp`), or local `veri mcp serve` (needs `veri-sdk[mcp]`). Docs: https://docs.veri.studio/api-reference/introduction · https://docs.veri.studio/cli/mcp
 
