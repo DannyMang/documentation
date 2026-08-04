@@ -6445,7 +6445,8 @@
                       "type": "null"
                     },
                     {
-                      "$ref": "#/components/schemas/HfPushConfig"
+                      "$ref": "#/components/schemas/HfPushConfig",
+                      "description": "The hf_push request echoed back (null when the job didn't opt in)."
                     }
                   ]
                 },
@@ -6453,7 +6454,8 @@
                   "type": [
                     "string",
                     "null"
-                  ]
+                  ],
+                  "description": "Set after a successful end-of-training push to Hugging Face; the\npushed repo's URL (mirrors wandb_run_url)."
                 },
                 "current_step": {
                   "type": [
@@ -6969,7 +6971,8 @@
                 "type": "null"
               },
               {
-                "$ref": "#/components/schemas/HfPushConfig"
+                "$ref": "#/components/schemas/HfPushConfig",
+                "description": "Push the trained artifact to your Hugging Face account when the job\ncompletes. Requires a connected HF integration\n(PUT /v1/settings/integrations/huggingface). Validated at submit:\nmanaged grpo/grpo_harness/sft_text/dpo jobs only, and\nartifact=\"adapter\" needs hyperparameters.lora_rank. On success the job\ncarries hf_repo_url."
               }
             ]
           },
@@ -7143,7 +7146,8 @@
                 "type": "null"
               },
               {
-                "$ref": "#/components/schemas/HfPushConfig"
+                "$ref": "#/components/schemas/HfPushConfig",
+                "description": "The hf_push request echoed back (null when the job didn't opt in)."
               }
             ]
           },
@@ -7151,7 +7155,8 @@
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "description": "Set after a successful end-of-training push to Hugging Face; the\npushed repo's URL (mirrors wandb_run_url)."
           },
           "current_step": {
             "type": [
