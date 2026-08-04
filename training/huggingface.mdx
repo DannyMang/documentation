@@ -130,6 +130,40 @@ Requests that can't succeed are rejected at submit, not after a paid run: an unc
 
 A failed push never fails the job: training results are kept and the skip reason appears in the job logs.
 
+## Push an existing model
+
+Models already in your [model library](/models) (finished training jobs you saved, or cached Hugging Face imports) can be pushed after the fact — no training run required. The upload happens server-side; nothing downloads to your machine.
+
+<Tabs>
+  <Tab title="Dashboard">
+    On the **Models** page, click **Push to HF** on any ready model, enter the target repo, and choose visibility. A progress banner tracks the upload and links the repo when it completes.
+  </Tab>
+  <Tab title="CLI">
+    ```bash
+    veri models push-hf model_abc123 --repo your-namespace/my-model
+    # Export exp_... started: model_abc123 -> your-namespace/my-model
+    #   uploading: 40% ...
+    # Pushed: https://huggingface.co/your-namespace/my-model
+    ```
+
+    Add `--public` to create a public repo, `--no-wait` to return immediately.
+  </Tab>
+  <Tab title="API">
+    ```bash
+    curl -X POST https://api.veri.studio/v1/models/{model_id}/push-to-hf \
+      -H "Authorization: Bearer $VERI_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{"repo": "your-namespace/my-model", "private": true}'
+
+    # poll until status is terminal; hf_repo_url carries the repo link
+    curl -s https://api.veri.studio/v1/hf_exports/{export_id} \
+      -H "Authorization: Bearer $VERI_API_KEY"
+    ```
+  </Tab>
+</Tabs>
+
+One export per model/repo pair runs at a time, and up to two exports can run concurrently per account. A failed or cancelled export leaves your model untouched; retrying re-uploads only what changed.
+
 ## How your token is handled
 
 - Stored encrypted at rest, scoped to your account. The API never returns it.
