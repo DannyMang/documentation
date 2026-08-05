@@ -73,7 +73,7 @@ After the two requests finish, expect:
 - A zero or near-zero error rate.
 - Cost-efficiency values once the window contains successful requests with output tokens.
 
-Engine charts populate from replica heartbeats rather than request rows. Queue depth, KV-cache usage, prefix-cache hit rate, generation throughput, and replica count can therefore appear on a different cadence.
+Engine charts populate from replica heartbeats rather than request rows. Queue depth, KV-cache usage, prefix-cache hit rate, generation throughput, GPU utilization, GPU memory, and replica count can therefore appear on a different cadence.
 
 ### 4. Verify with the Python SDK
 
@@ -233,8 +233,26 @@ Replica heartbeats provide:
 - Prefix-cache hit rate.
 - Generation token throughput.
 - Active replica count.
+- GPU hardware telemetry: utilization, memory used and total, power draw, and temperature.
 
 Request telemetry and engine telemetry are intentionally separate. Request rows describe completed client operations; engine history describes sampled replica state.
+
+### GPU hardware telemetry
+
+Each replica reports NVML readings with its heartbeat. `GET /v1/deployments/$DEPLOYMENT_ID/replicas` returns the latest snapshot per replica:
+
+| Field | Meaning |
+| --- | --- |
+| `gpu_utilization` | Mean utilization percent (0-100) across the replica's GPUs |
+| `gpu_memory_used_bytes` | GPU memory in use, summed across the replica's GPUs |
+| `gpu_memory_total_bytes` | GPU memory capacity, summed across the replica's GPUs |
+| `gpu_power_w` | Power draw in watts, summed across the replica's GPUs |
+| `gpu_temperature_c` | Hottest GPU on the replica, degrees Celsius |
+| `gpu_devices` | Per-GPU array behind the aggregates (`index`, `utilization`, `memory_used_bytes`, `memory_total_bytes`, `power_w`, `temperature_c`) |
+
+The `metrics/engine-timeseries` endpoint adds `gpu_utilization` (mean across reporting replicas) and `gpu_memory_used_bytes` (summed) to each bucket and to each per-replica series. All GPU fields are absent or null when a replica does not report telemetry, for example on hardware without NVML.
+
+GPU utilization is a debugging metric, not a scaling signal: it measures the share of time any kernel was resident on the chip, not how much load the engine is under. Scale on queue depth (waiting requests) and KV-cache utilization instead.
 
 ## Troubleshooting
 

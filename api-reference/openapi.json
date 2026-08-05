@@ -4096,6 +4096,22 @@
               "null"
             ],
             "format": "double"
+          },
+          "gpu_utilization": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "VS-380: mean GPU utilization percent (0-100) across replicas reporting\nin the bucket; null when no replica reported GPU telemetry. Debugging\nmetric — scale on requests_waiting + kv_cache_usage."
+          },
+          "gpu_memory_used_bytes": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "VS-380: summed GPU memory in use (bytes) across reporting replicas."
           }
         }
       },
@@ -4427,6 +4443,22 @@
               "null"
             ],
             "format": "double"
+          },
+          "gpu_utilization": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "VS-380: this replica's latest GPU utilization percent in the bucket."
+          },
+          "gpu_memory_used_bytes": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "VS-380: this replica's latest GPU memory in use (bytes) in the bucket."
           }
         }
       },
@@ -4542,6 +4574,56 @@
               "null"
             ],
             "format": "double"
+          },
+          "gpu_utilization": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "VS-380 GPU hardware snapshot (NVML, from the last heartbeat). All\nfields absent when the worker did not report telemetry. Debugging\nmetric only: scale on requests_waiting + kv_cache_usage, not this\n(nvidia-smi-style utilization measures kernel residency, not pressure).\nMean utilization percent (0-100) across the replica's GPUs."
+          },
+          "gpu_memory_used_bytes": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Summed GPU memory in use across the replica's GPUs, bytes."
+          },
+          "gpu_memory_total_bytes": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Summed GPU memory capacity across the replica's GPUs, bytes."
+          },
+          "gpu_power_w": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Summed power draw across the replica's GPUs, watts."
+          },
+          "gpu_temperature_c": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Hottest GPU on the replica, degrees C."
+          },
+          "gpu_devices": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/GpuDeviceMetrics"
+            },
+            "description": "Per-GPU readings behind the aggregates above."
           }
         }
       },
@@ -5322,6 +5404,55 @@
           }
         }
       },
+      "GpuDeviceMetrics": {
+        "type": "object",
+        "description": "One GPU's NVML reading from the replica's last heartbeat (VS-380). Every\nfield except `index` is individually best-effort (some GPUs/VMs withhold\npower or temperature).",
+        "required": [
+          "index"
+        ],
+        "properties": {
+          "index": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "utilization": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Utilization percent (0-100) as NVML reports it: the share of time a\nkernel was resident, not how much of the chip it used."
+          },
+          "memory_used_bytes": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "memory_total_bytes": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "power_w": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "temperature_c": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          }
+        }
+      },
       "GpuInfo": {
         "type": "object",
         "description": "Pydantic `GPUInfo` (with `type` field). Rust uses `gpu_type` internally\nbut serializes as \"type\" for JSON parity.",
@@ -6062,6 +6193,56 @@
                     "null"
                   ],
                   "format": "double"
+                },
+                "gpu_utilization": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "format": "double",
+                  "description": "VS-380 GPU hardware snapshot (NVML, from the last heartbeat). All\nfields absent when the worker did not report telemetry. Debugging\nmetric only: scale on requests_waiting + kv_cache_usage, not this\n(nvidia-smi-style utilization measures kernel residency, not pressure).\nMean utilization percent (0-100) across the replica's GPUs."
+                },
+                "gpu_memory_used_bytes": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "format": "double",
+                  "description": "Summed GPU memory in use across the replica's GPUs, bytes."
+                },
+                "gpu_memory_total_bytes": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "format": "double",
+                  "description": "Summed GPU memory capacity across the replica's GPUs, bytes."
+                },
+                "gpu_power_w": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "format": "double",
+                  "description": "Summed power draw across the replica's GPUs, watts."
+                },
+                "gpu_temperature_c": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "format": "double",
+                  "description": "Hottest GPU on the replica, degrees C."
+                },
+                "gpu_devices": {
+                  "type": [
+                    "array",
+                    "null"
+                  ],
+                  "items": {
+                    "$ref": "#/components/schemas/GpuDeviceMetrics"
+                  },
+                  "description": "Per-GPU readings behind the aggregates above."
                 }
               }
             }
