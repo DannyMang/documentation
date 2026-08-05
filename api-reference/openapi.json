@@ -1527,6 +1527,35 @@
         ]
       }
     },
+    "/v1/metrics/export": {
+      "get": {
+        "tags": [
+          "Metrics"
+        ],
+        "summary": "Export account metrics (Prometheus)",
+        "operationId": "export",
+        "responses": {
+          "200": {
+            "description": "The account's deployment and replica metrics in Prometheus text exposition format (version 0.0.4). Point a Prometheus scrape job, Grafana Cloud, or the Datadog Agent's OpenMetrics check at this endpoint with the API key as a Bearer credential.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/models": {
       "get": {
         "tags": [
@@ -8095,6 +8124,10 @@
     {
       "name": "Settings",
       "description": "Account-level integrations (Weights & Biases)."
+    },
+    {
+      "name": "Metrics",
+      "description": "Prometheus metrics export for your own observability stack."
     }
   ]
 }
