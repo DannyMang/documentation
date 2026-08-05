@@ -1,0 +1,213 @@
+---
+title: "Webhooks"
+description: "Signed HTTP notifications for deployment and training job lifecycle events"
+keywords: ["webhooks", "events", "notifications", "standard webhooks", "signature verification"]
+---
+
+## Overview
+
+Webhooks push lifecycle events to your server as they happen, so you can react to a finished training job or a deployment coming online without polling. Veri signs every delivery using the [Standard Webhooks](https://www.standardwebhooks.com/) scheme, the same signing convention used by OpenAI and Replicate, so existing verification libraries work out of the box.
+
+Register an endpoint once, then receive a `POST` for each event you subscribe to.
+
+```bash
+curl -X POST https://api.veri.studio/v1/webhooks \
+  -H "Authorization: Bearer $VERI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://example.com/veri/hooks",
+    "description": "CI notifications",
+    "event_types": ["job.completed", "job.failed"]
+  }'
+```
+
+The response includes the endpoint's signing `secret` (a `whsec_...` string). **This is the only time the full secret is returned by a create or list call.** Store it; you need it to verify deliveries. You can retrieve it again with `GET /v1/webhooks/{id}/secret`, and it stays masked everywhere else.
+
+Omit `event_types` (or pass `[]`) to subscribe to all event types. Endpoint URLs must be `https` and publicly routable: requests to private, loopback, or cloud-internal addresses are rejected at registration and again at delivery time.
+
+## Events
+
+| Event | Fires when |
+| --- | --- |
+| `deployment.serving` | A deployment becomes ready to serve requests. Fires on the initial boot **and again after every wake from scale-to-zero** (and after a recovery that passed through a non-serving state). It does not fire on steady-state heartbeats: an already-serving deployment re-reporting healthy emits nothing. |
+| `deployment.failed` | A deployment fails terminally (boot failure, capacity exhaustion, watchdog reap, all replicas dead). A failed wake attempt is not terminal and does not fire this event; the deployment stays wakeable. |
+| `deployment.scaled_to_zero` | An idle deployment with `min_replicas: 0` is parked. The deployment wakes on the next request. |
+| `job.completed` | A training job finishes successfully. |
+| `job.failed` | A training job fails (worker error, provisioning failure, timeout watchdogs, cancellation is not included). |
+| `webhook.test` | You called `POST /v1/webhooks/{id}/test`. Delivered only to that endpoint, regardless of its subscription filter. |
+
+Each event fires exactly once per real state transition. Deliveries, however, are at-least-once (see [Idempotency](#idempotency-and-ordering)).
+
+## Payload
+
+Deliveries are `POST` requests with `Content-Type: application/json` and a deliberately thin body: enough to know what happened and which object to fetch. Payloads never contain secrets, tokens, or endpoint URLs.
+
+```json
+{
+  "id": "evt_2f6f1e6c5f7a4d3b9a1c0e8b7d6f5a4c",
+  "type": "deployment.serving",
+  "created_at": "2026-08-03T00:00:00Z",
+  "data": {
+    "object": "deployment",
+    "id": "dep1a2b3c4d5e",
+    "status": "serving",
+    "name": "my-endpoint"
+  }
+}
+```
+
+Job events use `"object": "job"` and carry `"model"` (the base model for managed jobs, `null` for custom-script jobs) instead of `"name"`.
+
+Fetch the full resource (`GET /v1/deployments/{id}`, `GET /v1/training_jobs/{id}`) when you need more than the transition itself.
+
+## Verifying deliveries
+
+Every delivery carries three headers:
+
+| Header | Contents |
+| --- | --- |
+| `webhook-id` | The event id (`evt_...`). Identical across every retry of the same event. |
+| `webhook-timestamp` | Unix timestamp (seconds) of this delivery attempt. |
+| `webhook-signature` | `v1,<base64 signature>` |
+
+The signature is computed as:
+
+```
+signed_content = "{webhook-id}.{webhook-timestamp}.{raw request body}"
+secret_bytes   = base64_decode(secret with the "whsec_" prefix removed)
+signature      = base64_encode(HMAC_SHA256(secret_bytes, signed_content))
+```
+
+Verify with a timing-safe comparison, and reject deliveries whose timestamp is more than 5 minutes old (replay protection). Always verify against the **raw** request body bytes, before any JSON parsing or re-serialization.
+
+<CodeGroup>
+
+```python Python
+import base64
+import hashlib
+import hmac
+import time
+
+
+def verify_webhook(secret: str, headers: dict, body: bytes) -> bool:
+    msg_id = headers["webhook-id"]
+    timestamp = headers["webhook-timestamp"]
+
+    # Replay guard: 5 minute tolerance.
+    if abs(time.time() - int(timestamp)) > 300:
+        return False
+
+    key = base64.b64decode(secret.removeprefix("whsec_"))
+    signed_content = f"{msg_id}.{timestamp}.".encode() + body
+    expected = base64.b64encode(
+        hmac.new(key, signed_content, hashlib.sha256).digest()
+    ).decode()
+
+    # The header may list several space-delimited signatures during a
+    # secret rotation; accept if any v1 signature matches.
+    for versioned in headers["webhook-signature"].split():
+        version, _, signature = versioned.partition(",")
+        if version == "v1" and hmac.compare_digest(signature, expected):
+            return True
+    return False
+```
+
+```javascript Node.js
+const crypto = require("crypto");
+
+function verifyWebhook(secret, headers, rawBody) {
+  const msgId = headers["webhook-id"];
+  const timestamp = headers["webhook-timestamp"];
+
+  // Replay guard: 5 minute tolerance.
+  if (Math.abs(Date.now() / 1000 - Number(timestamp)) > 300) {
+    return false;
+  }
+
+  const key = Buffer.from(secret.slice("whsec_".length), "base64");
+  const signedContent = `${msgId}.${timestamp}.${rawBody}`;
+  const expected = crypto
+    .createHmac("sha256", key)
+    .update(signedContent)
+    .digest("base64");
+
+  return (headers["webhook-signature"] || "").split(" ").some((versioned) => {
+    const comma = versioned.indexOf(",");
+    if (comma === -1 || versioned.slice(0, comma) !== "v1") return false;
+    const signature = Buffer.from(versioned.slice(comma + 1));
+    const expectedBuf = Buffer.from(expected);
+    return (
+      signature.length === expectedBuf.length &&
+      crypto.timingSafeEqual(signature, expectedBuf)
+    );
+  });
+}
+```
+
+</CodeGroup>
+
+Respond with any `2xx` status to acknowledge the delivery. The response body is ignored. Redirects are not followed.
+
+## Retries
+
+A delivery that fails (non-2xx response, timeout after 10 seconds, or connection error) is retried on a fixed backoff schedule:
+
+| Attempt | Delay after previous failure |
+| --- | --- |
+| 1 | within ~5 seconds of the event |
+| 2 | 5 seconds |
+| 3 | 1 minute |
+| 4 | 10 minutes |
+| 5 | 1 hour |
+| 6 | 6 hours |
+| 7+ | every 12 hours |
+
+Retries stop 72 hours after the event was created; the delivery is then marked `exhausted`. Inspect recent attempts, response codes, and errors with:
+
+```bash
+curl https://api.veri.studio/v1/webhooks/$WEBHOOK_ID/deliveries \
+  -H "Authorization: Bearer $VERI_API_KEY"
+```
+
+### Automatic disabling
+
+After **50 consecutive failed deliveries** (across events), the endpoint is disabled: `disabled_at` is set and it stops receiving events. Any successful delivery resets the counter. Re-enable a disabled endpoint with:
+
+```bash
+curl -X PATCH https://api.veri.studio/v1/webhooks/$WEBHOOK_ID \
+  -H "Authorization: Bearer $VERI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"enabled": true}'
+```
+
+## Idempotency and ordering
+
+- **Dedupe on `webhook-id`.** Deliveries are at-least-once: a retry after a timeout can arrive even though your server processed the original. The `webhook-id` header (equal to the payload `id`) is identical across every retry of the same event; keep a short-lived record of processed ids and skip duplicates.
+- **No ordering guarantees.** Retries mean a `deployment.serving` event can arrive after a later `deployment.scaled_to_zero` for the same deployment. Do not reconstruct state from event order.
+- **The API is the source of truth.** Treat an event as a hint that something changed, then `GET` the resource for its current state before acting on it.
+
+## Testing an endpoint
+
+Send a synthetic `webhook.test` event through the real delivery pipeline (signed, retried on failure, visible in `/deliveries`):
+
+```bash
+curl -X POST https://api.veri.studio/v1/webhooks/$WEBHOOK_ID/test \
+  -H "Authorization: Bearer $VERI_API_KEY"
+```
+
+The event targets only this endpoint and bypasses its `event_types` filter, so it works even for endpoints subscribed to a narrow set of events.
+
+## Endpoint management
+
+| Operation | Route |
+| --- | --- |
+| Create endpoint | `POST /v1/webhooks` |
+| List endpoints | `GET /v1/webhooks` |
+| Get endpoint | `GET /v1/webhooks/{id}` |
+| Reveal signing secret | `GET /v1/webhooks/{id}/secret` |
+| Update url / description / event_types / enabled | `PATCH /v1/webhooks/{id}` |
+| Delete endpoint | `DELETE /v1/webhooks/{id}` |
+| Send test event | `POST /v1/webhooks/{id}/test` |
+| List recent deliveries (last 50) | `GET /v1/webhooks/{id}/deliveries` |
+
+See the [API reference](/api-reference/introduction) for request and response schemas.

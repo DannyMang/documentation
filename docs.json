@@ -120,6 +120,13 @@
             "pages": [
               "volumes"
             ]
+          },
+          {
+            "group": "Webhooks",
+            "icon": "webhook",
+            "pages": [
+              "webhooks"
+            ]
           }
         ]
       },
@@ -294,6 +301,20 @@
               "POST /v1/ssh_keys",
               "GET /v1/ssh_keys",
               "DELETE /v1/ssh_keys/{key_id}"
+            ]
+          },
+          {
+            "group": "Webhooks",
+            "openapi": "api-reference/openapi.json",
+            "pages": [
+              "POST /v1/webhooks",
+              "GET /v1/webhooks",
+              "GET /v1/webhooks/{webhook_id}",
+              "GET /v1/webhooks/{webhook_id}/secret",
+              "PATCH /v1/webhooks/{webhook_id}",
+              "DELETE /v1/webhooks/{webhook_id}",
+              "POST /v1/webhooks/{webhook_id}/test",
+              "GET /v1/webhooks/{webhook_id}/deliveries"
             ]
           }
         ]
