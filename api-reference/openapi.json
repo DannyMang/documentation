@@ -1100,6 +1100,68 @@
         ]
       }
     },
+    "/v1/deployments/{deployment_id}/replicas/{replica_id}/drain": {
+      "post": {
+        "tags": [
+          "Deployments"
+        ],
+        "summary": "Drain a replica",
+        "description": "Retire one replica of a serving deployment. Default mode shrinks the fleet by one (the drained box is not replaced); pass replace=true to recycle the box in place — the reconciler launches a replacement so capacity is unchanged. A replica already taking traffic finishes its in-flight requests before the box is terminated (bounded by the drain timeout); a replica still booting is cancelled outright.",
+        "operationId": "drain_replica",
+        "parameters": [
+          {
+            "name": "deployment_id",
+            "in": "path",
+            "description": "Deployment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "replica_id",
+            "in": "path",
+            "description": "Replica ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "replace",
+            "in": "query",
+            "description": "Recycle mode: retire this replica WITHOUT shrinking the fleet. The\ndesired count is untouched, so the reconciler launches a replacement\nbox (a draining replica no longer counts as live).",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Drain accepted; the replica is draining (or stopped, when it was still booting and was cancelled outright)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeploymentReplicaResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Deployment or replica not found, or not owned by the caller"
+          },
+          "409": {
+            "description": "Deployment is not serving, the replica is already draining/stopped/failed, or the drain would shrink the fleet below its floor / drop the last serving replica (use replace=true)"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/deployments/{deployment_id}/requests": {
       "get": {
         "tags": [

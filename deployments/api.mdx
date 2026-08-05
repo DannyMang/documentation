@@ -15,6 +15,8 @@ Reference for `/v1/deployments/*`. All endpoints require Bearer token auth (`Aut
 | `GET` | `/v1/deployments` | List (paginated, filter by `status`) |
 | `GET` | `/v1/deployments/{id}` | Get one |
 | `PATCH` | `/v1/deployments/{id}` | Update scaling settings (replica bounds, concurrency target, idle windows) |
+| `GET` | `/v1/deployments/{id}/replicas` | List the deployment's replicas |
+| `POST` | `/v1/deployments/{id}/replicas/{replica_id}/drain` | Retire one replica (scale in, or recycle with `replace=true`) |
 | `POST` | `/v1/deployments/{id}/wake` | Pre-warm a `scaled_to_zero` deployment (202, idempotent) |
 | `POST` | `/v1/deployments/{id}/stop` | Transition to `stopped` |
 | `POST` | `/v1/deployments/{id}/chat/completions` | OpenAI-compatible chat |
@@ -95,6 +97,35 @@ Returns the updated deployment immediately with the new *desired* state; the con
 ```python
 dep = client.deployments.update(deployment_id, min_replicas=1, max_replicas=4)
 ```
+
+## GET /v1/deployments/{id}/replicas
+
+List the replicas (GPU boxes) behind a deployment: per-replica status, placement, and the latest engine snapshot (in-flight requests, KV-cache usage). Use it to pick a `replica_id` for the drain endpoint below.
+
+```bash
+curl "https://api.veri.studio/v1/deployments/dep_abc/replicas" \
+  -H "Authorization: Bearer vk_..."
+```
+
+## POST /v1/deployments/{id}/replicas/{replica_id}/drain
+
+Retire one specific replica of a `serving` deployment. Returns `202` with the replica, now `draining` (or `stopped` when it was still booting and was cancelled outright). A replica already taking traffic finishes its in-flight requests before the box is terminated, bounded by the drain timeout.
+
+Two modes:
+
+| Mode | Effect |
+| --- | --- |
+| Default (scale in) | You pick the victim; the fleet's desired count shrinks by one and the drained box is not replaced. |
+| `?replace=true` (recycle) | The desired count is unchanged; the control plane launches a replacement box, so capacity is preserved. Use this to rotate out a misbehaving replica. |
+
+```bash
+curl -X POST "https://api.veri.studio/v1/deployments/dep_abc/replicas/rep_123/drain?replace=true" \
+  -H "Authorization: Bearer vk_..."
+```
+
+**Guards** (`409`): the deployment must be `serving`; the replica must not already be draining, stopped, or failed; and in default mode the drain may not shrink the fleet below `max(min_replicas, 1)` or retire the last replica actually serving traffic (use `replace=true` for those).
+
+While autoscaling is armed (`min_replicas < max_replicas`) the autoscaler may scale back up after a default-mode drain if load warrants it; that is expected. Lower `max_replicas` to hold a smaller fleet.
 
 ## POST /v1/deployments/{id}/wake
 
