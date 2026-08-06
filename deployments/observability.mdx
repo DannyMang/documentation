@@ -22,6 +22,19 @@ This guide is also a smoke test: follow [Verify observability end to end](#verif
 
 MCP is optional. It is useful for agent-driven investigation, but the dashboard, SDK, and REST API expose deployment observability without it.
 
+## What you can see, by provider
+
+Request, latency, token, cost, and engine telemetry (queue depth, KV-cache usage) work identically everywhere — they come from the request path and the engine, not the hardware. The **GPU hardware snapshot** (per-GPU utilization, memory used/total, power draw, temperature, plus aggregates) rides the replica heartbeat and depends on what the serving agent can reach on each provider's boxes:
+
+| Provider | Serving GPUs | Request + engine telemetry | GPU hardware snapshot | Backend |
+| --- | --- | --- | --- | --- |
+| `aws` | A100-80GB, H100-80GB, L4-24GB | Yes | Yes | NVML (vLLM's vendored binding on the host) |
+| `hotaisle` | MI300X-192GB (ROCm) | Yes | Yes | `amdsmi` bindings, `rocm-smi --json` fallback |
+| `gcp` | A100, H100 | Yes | Not yet | Engine runs in docker; the agent cannot reach NVML from outside the container |
+| `digitalocean` | H100-80GB, L40S-48GB | Yes | Not yet | Same docker visibility gap |
+
+Two design contracts worth knowing: the snapshot is **fail-soft** (a box where no GPU library works simply omits the readings — GPU telemetry can never break the heartbeat that liveness monitoring depends on), and it is **vendor-neutral in shape** — NVIDIA and AMD boxes emit the identical schema, so dashboards and Prometheus queries never branch on vendor.
+
 ## Verify observability end to end
 
 ### 1. Select a serving deployment
@@ -197,7 +210,7 @@ Per-replica metrics add `replica_id`, `gpu_type`, and `region` labels. Only live
 | `veri_deployment_replica_prompt_tokens_total` | counter | Prompt tokens processed over the replica engine's lifetime. |
 | `veri_deployment_replica_generation_tokens_total` | counter | Generation tokens produced over the replica engine's lifetime. |
 
-Metrics only appear when the underlying data exists: a replica that has not reported a heartbeat yet exports no series, and GPU series are absent on hardware without NVML telemetry.
+Metrics only appear when the underlying data exists: a replica that has not reported a heartbeat yet exports no series, and GPU series are absent where the agent has no hardware telemetry backend (see [What you can see, by provider](#what-you-can-see-by-provider) — NVIDIA boxes use NVML, ROCm boxes use amdsmi/rocm-smi, and docker-isolated providers omit them for now).
 
 ### Prometheus scrape configuration
 
