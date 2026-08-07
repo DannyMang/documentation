@@ -5,7 +5,7 @@ description: "Dispatch a config to the right create command, scaffold projects, 
 keywords: ["veri run", "veri init", "kind dispatch", "TOML override", "--set"]
 ---
 
-`veri run <config.toml>` is a thin shortcut over the explicit `veri jobs create` / `veri deployments create` / `veri evals create`. It reads the required `kind` field from the config and dispatches.
+`veri run <config.toml>` is a thin shortcut over the explicit `veri jobs create` / `veri deployments create`. It reads the required `kind` field from the config and dispatches.
 
 The contract is plural-noun-verb (`veri jobs create configs/train.toml`); `veri run` exists to save typing on the common path.
 
@@ -54,7 +54,7 @@ kind = "train"    # or "deploy" or "eval"
 | --- | --- |
 | `"train"` | `veri jobs create` |
 | `"deploy"` | `veri deployments create` |
-| `"eval"` | `veri evals create` (coming soon) |
+| `"eval"` | Reserved. Evaluations are not available yet; submitting errors against the API. |
 
 Missing `kind` or an unknown value errors with a "did you mean" hint:
 
@@ -184,24 +184,6 @@ gpu_count = 1
 [autoscaling]
 min_replicas = 1
 max_replicas = 1
-```
-
-### `configs/eval.toml`
-
-```toml
-kind = "eval"
-
-[eval]
-name = "first-eval"
-dataset_id = "ds_test"
-
-[[scorers]]
-type = "exact-match"
-weight = 1.0
-
-[run]
-model = "dep_abc"           # deployment id, training job id, or HF repo
-num_samples = 100
 ```
 
 ## `--dry-run` before submitting

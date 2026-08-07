@@ -2,7 +2,7 @@
   "$schema": "https://mintlify.com/docs.json",
   "theme": "sequoia",
   "name": "Veri Documentation",
-  "description": "Veri is a platform for post-training, deploying, and evaluating language models.",
+  "description": "Veri is a platform for post-training and deploying language models.",
   "colors": {
     "primary": "#468F7D",
     "light": "#BDE689",
@@ -91,15 +91,6 @@
             ]
           },
           {
-            "group": "Evaluations",
-            "icon": "chart-line",
-            "pages": [
-              "evaluations",
-              "evaluations/benchmarks",
-              "evaluations/scorers"
-            ]
-          },
-          {
             "group": "CLI",
             "icon": "terminal",
             "pages": [
@@ -108,7 +99,6 @@
               "cli/datasets",
               "cli/training",
               "cli/deployments",
-              "cli/evals",
               "cli/volumes",
               "cli/mcp",
               "cli/reference"
@@ -393,6 +383,30 @@
     {
       "source": "/quickstart/deploy",
       "destination": "/deployments"
+    },
+    {
+      "source": "/evaluations",
+      "destination": "/"
+    },
+    {
+      "source": "/evaluations/benchmarks",
+      "destination": "/"
+    },
+    {
+      "source": "/evaluations/scorers",
+      "destination": "/"
+    },
+    {
+      "source": "/evaluations/examples",
+      "destination": "/"
+    },
+    {
+      "source": "/evaluations/api",
+      "destination": "/"
+    },
+    {
+      "source": "/cli/evals",
+      "destination": "/cli"
     }
   ]
 }

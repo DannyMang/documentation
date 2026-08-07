@@ -71,10 +71,6 @@ dep = client.deployments.create(
 dep.wait()
 ```
 
-<Note>
-  Scoring the trained model against a held-out test set will be covered by [Evaluations](/evaluations), which are planned for a later release.
-</Note>
-
 ## Custom multi-signal reward
 
 A reward that combines correctness, format, and a length penalty. Useful when the model gets the answer right but produces verbose, off-topic preambles.
@@ -184,7 +180,7 @@ The output is a LoRA adapter (small file), not a full checkpoint — load it on 
   <Card title="Deploy your trained model" icon="cloud" href="/deployments">
     Serve the result with an OpenAI-compatible endpoint.
   </Card>
-  <Card title="Run an eval (coming soon)" icon="chart-line" href="/evaluations">
-    Score the result on a held-out dataset.
+  <Card title="Guided demos" icon="route" href="/demos/managed-grpo-quickstart">
+    Full walkthroughs of these recipes, end to end.
   </Card>
 </CardGroup>
