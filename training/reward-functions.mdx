@@ -1,23 +1,23 @@
 ---
 title: "Reward functions"
 sidebarTitle: "Reward functions"
-description: "Score model completions for GRPO training. TRL-format functions, with sandbox limits and validation rules."
-keywords: ["reward functions", "TRL", "GRPO", "scoring"]
+description: "Score model completions for GRPO training. TRL-format functions attached inline to each training job."
+keywords: ["reward functions", "TRL", "GRPO", "scoring", "reward_source"]
 ---
 
-A reward function turns a model completion into a number. GRPO uses these scores to compute advantages — completions above the group mean get reinforced, completions below get penalized.
+A reward function turns a model completion into a number. GRPO uses these scores to compute advantages: completions above the group mean get reinforced, completions below get penalized.
 
-You upload a `.py` file once and reference its `id` from any number of training jobs.
+Rewards are not a separate resource on Veri. You attach the function's Python source directly to the training job at submit time; the platform stores it with the job and it lives and dies with the job. There is nothing to upload, name, or clean up.
 
 ## Format
 
-Veri runs reward functions in the `trl` shape — the format the production GRPO runner uses.
+Veri runs reward functions in the `trl` shape, the format the production GRPO runner uses.
 
 | Format | Signature | When to use |
 | --- | --- | --- |
 | `trl` | `def reward(completions, answer, **kwargs) -> list[float]` | Used by TRL GRPOTrainer (today's runner on NVIDIA). |
 
-The validator checks the function signature on upload — wrong shape rejects with HTTP 422.
+At submit, the platform checks that each source parses as Python and defines a function; a violation rejects the job with HTTP 400 before anything is billed.
 
 Loading and invocation happen in the open-source runtime: see `load_reward_function` in [training_runtime.py](https://github.com/Veri-Studios/veri-runner/blob/main/veri_runner/training_runtime.py) (and `score_episode` in [harness_rollout.py](https://github.com/Veri-Studios/veri-runner/blob/main/veri_runner/harness_rollout.py) for how harness trajectories are scored) if you need to check exactly how your function is called.
 
@@ -47,25 +47,53 @@ def reward(completions, answer, **kwargs):
 - `answer` — list of ground-truth strings (from the dataset's `answer` column)
 - Return — list of floats, **same length as `completions`**
 
-## Upload
+## Attach it to a job
+
+The reward rides the job submission itself. Pick your surface:
 
 <CodeGroup>
-```python SDK
-reward_fn = client.reward_functions.upload(
-    "math_reward.py",
-    format="trl",
-    name="math-reward",
-)
+```toml TOML config
+# configs/train.toml
+kind = "train"
 
-print(reward_fn.id)
+[reward]
+file = "./reward.py"   # path resolves against this config file's directory
 ```
 
-```bash CLI
-veri rewards upload math_reward.py --format trl --name math-reward
+```python SDK
+job = client.training_jobs.create(
+    base_model="Qwen/Qwen3-4B",
+    dataset_id=dataset.id,
+    method="grpo",
+    reward_source=open("math_reward.py").read(),
+    output_name="qwen-math",
+    gpu_type="L4-24GB",
+    gpu_count=1,
+)
+```
+
+```bash REST
+curl -X POST https://api.veri.studio/v1/training_jobs \
+  -H "Authorization: Bearer $VERI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d "$(jq -n --rawfile src math_reward.py '{
+    base_model: "Qwen/Qwen3-4B",
+    dataset_id: "ds_abc123",
+    method: "grpo",
+    reward_source: $src,
+    output_name: "qwen-math",
+    gpu: {gpu_type: "L4-24GB", gpu_count: 1}
+  }')"
 ```
 </CodeGroup>
 
-The CLI runs an AST check (file parses + at least one function defined). Use `--skip-validation` to bypass, but the upload will still fail at job submission if the signature is wrong.
+From the CLI, `veri jobs create configs/train.toml` reads `[reward].file`, or override it inline with `--reward ./reward.py`. The CLI runs an AST lint before submitting (the file parses as Python and defines at least one function), so a broken file fails locally instead of at the API.
+
+A `method=grpo` or `method=grpo_harness` job requires a reward (or `environments`, which is mutually exclusive with reward sources). `sft_text`, `dpo`, `sft_video_gen`, and `custom_script` jobs must omit it: the dataset is their training signal.
+
+The job response carries `reward_count` (the number of attached sources; `null` for reward-free methods).
+
+**Limits:** up to 8 sources per job, 256 KiB each, and every source must define a function. Violations are HTTP 400 at submit.
 
 ## Sandbox + limits
 
@@ -95,13 +123,13 @@ def reward(completions, answer, **kwargs):
     return scores
 ```
 
-Keep each component bounded so the total stays in a stable range — `[0, 1]` is conventional. GRPO normalizes scores within a group, so the absolute scale matters less than the spread.
+Keep each component bounded so the total stays in a stable range (`[0, 1]` is conventional). GRPO normalizes scores within a group, so the absolute scale matters less than the spread.
 
 ## Multiple weighted reward functions
 
-Instead of summing signals inside one function, you can upload several reward functions and let GRPO combine them with weights. TRL's GRPOTrainer scores each completion with every function and sums the results, scaled by `reward_weights`. This keeps each signal in its own file (reusable and independently testable) and lets you retune the mix without editing code.
+Instead of summing signals inside one function, you can attach several reward sources and let GRPO combine them with weights. TRL's GRPOTrainer scores each completion with every function and sums the results, scaled by `reward_weights`. This keeps each signal in its own file (independently testable) and lets you retune the mix without editing code.
 
-Each function has the standard `trl` signature and returns one score per completion. Upload each file, then pass the ids and matching weights:
+Each function has the standard `trl` signature and returns one score per completion. Pass the sources and matching weights:
 
 ```python
 # correctness.py
@@ -115,56 +143,41 @@ def reward(completions, **kwargs):
             for c in completions]
 ```
 
-```python
-correctness = client.reward_functions.upload("correctness.py")
-format_fn = client.reward_functions.upload("format.py")
-
+<CodeGroup>
+```python SDK
 job = client.training_jobs.create(
-    base_model="Qwen/Qwen2.5-0.5B-Instruct",
+    base_model="Qwen/Qwen3-4B",
     dataset_id=ds.id,
     method="grpo",
-    reward_function_ids=[correctness.id, format_fn.id],
+    reward_sources=[open("correctness.py").read(), open("format.py").read()],
     reward_weights=[1.0, 0.5],
     gpu_type="L4-24GB",
     gpu_count=1,
 )
 ```
 
-`reward_weights` is optional; omit it to weight every function equally. When provided, its length must match `reward_function_ids` (the SDK and API reject a mismatch). A single `reward_function_id` still works for the one-reward case.
+```toml TOML config
+[reward]
+files = ["./correctness.py", "./format.py"]
+weights = [1.0, 0.5]
+```
+</CodeGroup>
 
-## Reuse across jobs
+`reward_weights` is optional; omit it to weight every function equally. When provided, its length must match `reward_sources` (the SDK and API reject a mismatch). A single `reward_source` still works for the one-reward case.
 
-Once uploaded, a reward function is reusable. The same `id` can drive any number of training jobs.
+## Viewing a job's reward
+
+Every job keeps the exact source it was submitted with. Click a training job on the dashboard to view the reward source it was submitted with, or fetch it programmatically:
 
 ```python
-job1 = client.training_jobs.create(
-    base_model="Qwen/Qwen2.5-0.5B-Instruct",
-    dataset_id=ds.id,
-    reward_function_id=reward_fn.id,
-    # ...
-)
-job2 = client.training_jobs.create(
-    base_model="Qwen/Qwen2.5-7B-Instruct",
-    dataset_id=ds.id,
-    reward_function_id=reward_fn.id,  # same reward
-    # ...
-)
+src = client.training_jobs.reward_source(job_id, index=0)  # index picks the source for multi-reward jobs
 ```
 
-## Lifecycle
-
-```python
-client.reward_functions.list()
-client.reward_functions.get(reward_id)
-```
-
-Reward functions are deduped by content hash — uploading the same file twice returns the same id. Deletion is supported (`client.reward_functions.delete(reward_id)` / `DELETE /v1/reward_functions/{id}`) — and it is permanent: completed jobs that referenced the reward keep working, but their stored reward source is gone and the id cannot be resubmitted. Don't delete rewards whose ids appear in job configs you may rerun.
-
-Click a reward function on the dashboard's Datasets page to view its stored Python source.
+Because the source is stored per job, rerunning an old experiment is copy-paste: read the source back, tweak it, submit a new job.
 
 ## Shaped rewards for harness jobs
 
-Harness-in-the-loop jobs score the trajectory's **final assistant message** by default — the deploy-aligned choice, since at inference time the final answer is all that matters. When you need more signal (partial credit for fetching the right page, penalties for invalid tool calls), declare a `trajectory` parameter and the platform passes the full message history of the rollout's final turn — protocol-shaped dicts, including `tool_use` / `tool_result` content — one history per completion:
+Harness-in-the-loop jobs score the trajectory's **final assistant message** by default, the deploy-aligned choice, since at inference time the final answer is all that matters. When you need more signal (partial credit for fetching the right page, penalties for invalid tool calls), declare a `trajectory` parameter and the platform passes the full message history of the rollout's final turn (protocol-shaped dicts, including `tool_use` / `tool_result` content), one history per completion:
 
 ```python
 def reward(prompts, completions, answer_github, trajectory=None, **kwargs):
@@ -182,7 +195,7 @@ def reward(prompts, completions, answer_github, trajectory=None, **kwargs):
     return rewards
 ```
 
-Rewards that don't declare `trajectory` are called exactly as before — the parameter is opt-in.
+Rewards that don't declare `trajectory` are called exactly as before; the parameter is opt-in.
 
 One sharp edge with chatty agent runtimes (the Claude Agent SDK especially): because the default scores only the final message, instruct your harness to put the answer there ("finish with a last line of exactly `ANSWER: <url>`") or a correct mid-trajectory answer can score zero.
 
@@ -192,8 +205,8 @@ One sharp edge with chatty agent runtimes (the Claude Agent SDK especially): bec
   <Card title="GRPO algorithm" icon="brain" href="/training/grpo">
     What the score actually does inside the training loop.
   </Card>
-  <Card title="Submit a job" icon="play" href="/api-reference/introduction">
-    Wire the reward into `training_jobs.create`.
+  <Card title="Submit a job" icon="play" href="/training/api">
+    Wire `reward_source` into `training_jobs.create`.
   </Card>
   <Card title="Quickstart" icon="rocket" href="/training">
     End-to-end with the example math reward.

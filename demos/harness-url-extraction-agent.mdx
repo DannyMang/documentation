@@ -100,7 +100,7 @@ def reward(prompts, completions, answer_github, answer_project=None, **kwargs):
     return rewards
 ```
 
-Upload it: `veri rewards upload reward.py --name url-match` → note the reward id.
+Nothing to upload here: the file rides the submit itself (`--reward reward.py` in step 4).
 
 ## 3. The harness: your agent, unchanged
 
@@ -259,7 +259,7 @@ veri run-harness ./harness \
   --harness-protocol anthropic \
   --base-model Qwen/Qwen3-4B \
   --dataset-id <dataset id> \
-  --reward-id <reward id> \
+  --reward reward.py \
   --gpu-type L4-24GB --gpu-count 4 \
   --rollouts-per-prompt 8 --max-steps 50 \
   --requirements ./harness/requirements.txt
@@ -308,7 +308,7 @@ base = "Qwen/Qwen3-4B"
 id = "<dataset id>"
 
 [reward]
-id = "<reward id>"
+file = "./reward.py"
 
 [resources]
 gpu_type = "L4-24GB"

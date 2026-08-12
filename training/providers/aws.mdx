@@ -24,7 +24,7 @@ L4 and A10G are single-GPU instances — you rent one card. A100 and H100 are wh
 job = client.training_jobs.create(
     base_model="Qwen/Qwen2.5-0.5B-Instruct",
     dataset_id=dataset.id,
-    reward_function_id=reward_fn.id,
+    reward_source=open("reward.py").read(),
     gpu_type="L4-24GB",
     gpu_count=1,
     # provider defaults to "aws"

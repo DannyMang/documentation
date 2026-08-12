@@ -1988,165 +1988,6 @@
         ]
       }
     },
-    "/v1/reward_functions": {
-      "get": {
-        "tags": [
-          "Reward functions"
-        ],
-        "summary": "List reward functions",
-        "operationId": "list",
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          {
-            "name": "after",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "A paginated list of reward functions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PaginatedList_RewardFunctionResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      },
-      "post": {
-        "tags": [
-          "Reward functions"
-        ],
-        "summary": "Upload reward function",
-        "operationId": "create",
-        "requestBody": {
-          "description": "Reward function file upload",
-          "content": {
-            "multipart/form-data": {}
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "The created (or existing, on content-hash match) reward function",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RewardFunctionResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "File is missing the expected reward function signature, or an unknown format"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/v1/reward_functions/{reward_id}": {
-      "get": {
-        "tags": [
-          "Reward functions"
-        ],
-        "summary": "Get reward function",
-        "operationId": "get",
-        "parameters": [
-          {
-            "name": "reward_id",
-            "in": "path",
-            "description": "Reward function ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "The reward function",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RewardFunctionResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found or not owned by the caller"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      },
-      "delete": {
-        "tags": [
-          "Reward functions"
-        ],
-        "summary": "Delete reward function",
-        "operationId": "delete",
-        "parameters": [
-          {
-            "name": "reward_id",
-            "in": "path",
-            "description": "Reward function ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Reward function deleted",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DeleteResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found or not owned by the caller"
-          },
-          "409": {
-            "description": "An active job or evaluation still references the reward function"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
     "/v1/settings/integrations/huggingface": {
       "get": {
         "tags": [
@@ -3974,6 +3815,13 @@
               "null"
             ],
             "description": "Server-injected display email for the authenticated user. Set by the web\nproxy from the signed-in Clerk session (never trusted from a browser\nbody). Absent for keys minted outside the proxy (SDK, CI). When present,\nit upserts `users.email` so `/v1/me` and the CLI can show the account."
+          },
+          "workspace_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Workspace the key is scoped to (workspaces design). Stamped by the web\nproxy from the active Clerk org, or passed explicitly by SDK callers.\nAbsent / equal to the caller's own id => a personal key. Validated\nserver-side at mint: a workspace the caller is not a member of is\nrejected, so the stamp is a convenience, never an authority."
           }
         }
       },
@@ -6158,7 +6006,7 @@
               "string",
               "null"
             ],
-            "description": "Reserved for future org membership surfacing."
+            "description": "The active workspace when the caller is scoped to a team workspace\n(workspaces design); null for personal scope. The field predates\nworkspaces (reserved as \"org_id\"), so the name stays for SDK\ncompatibility."
           }
         }
       },
@@ -7065,52 +6913,6 @@
           }
         }
       },
-      "PaginatedList_RewardFunctionResponse": {
-        "type": "object",
-        "required": [
-          "object",
-          "data",
-          "has_more"
-        ],
-        "properties": {
-          "object": {
-            "type": "string"
-          },
-          "data": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "required": [
-                "object",
-                "id",
-                "name",
-                "created_at"
-              ],
-              "properties": {
-                "object": {
-                  "type": "string"
-                },
-                "id": {
-                  "type": "string"
-                },
-                "name": {
-                  "type": "string"
-                },
-                "format": {
-                  "$ref": "#/components/schemas/RewardFunctionFormat"
-                },
-                "created_at": {
-                  "type": "string",
-                  "format": "date-time"
-                }
-              }
-            }
-          },
-          "has_more": {
-            "type": "boolean"
-          }
-        }
-      },
       "PaginatedList_SSHKeyResponse": {
         "type": "object",
         "required": [
@@ -7212,11 +7014,13 @@
                     "null"
                   ]
                 },
-                "reward_function_id": {
+                "reward_count": {
                   "type": [
-                    "string",
+                    "integer",
                     "null"
-                  ]
+                  ],
+                  "format": "int32",
+                  "description": "How many inline reward sources the job was submitted with (null for\nreward-free methods). Sources are viewable per job via the dashboard."
                 },
                 "method": {
                   "type": "string"
@@ -7718,40 +7522,6 @@
           }
         }
       },
-      "RewardFunctionFormat": {
-        "type": "string",
-        "enum": [
-          "trl",
-          "miles"
-        ]
-      },
-      "RewardFunctionResponse": {
-        "type": "object",
-        "required": [
-          "object",
-          "id",
-          "name",
-          "created_at"
-        ],
-        "properties": {
-          "object": {
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "format": {
-            "$ref": "#/components/schemas/RewardFunctionFormat"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time"
-          }
-        }
-      },
       "SSHKeyResponse": {
         "type": "object",
         "required": [
@@ -7946,13 +7716,14 @@
               }
             ]
           },
-          "reward_function_id": {
+          "reward_source": {
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "description": "Inline reward source (Python text, TRL signature). Attached to the job\nat submit and stored job-scoped; there is no stored reward resource."
           },
-          "reward_function_ids": {
+          "reward_sources": {
             "type": [
               "array",
               "null"
@@ -8074,11 +7845,13 @@
               "null"
             ]
           },
-          "reward_function_id": {
+          "reward_count": {
             "type": [
-              "string",
+              "integer",
               "null"
-            ]
+            ],
+            "format": "int32",
+            "description": "How many inline reward sources the job was submitted with (null for\nreward-free methods). Sources are viewable per job via the dashboard."
           },
           "method": {
             "type": "string"
@@ -8775,10 +8548,6 @@
     {
       "name": "Datasets",
       "description": "Upload and connect training datasets."
-    },
-    {
-      "name": "Reward functions",
-      "description": "Upload and manage reward functions."
     },
     {
       "name": "Deployments",

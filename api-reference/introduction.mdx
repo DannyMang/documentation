@@ -33,14 +33,6 @@ API keys use the `vk_` prefix and are hashed server-side. Manage keys from the [
 | `GET` | `/v1/datasets` | List datasets |
 | `GET` | `/v1/datasets/{id}` | Get dataset info |
 
-### Reward Functions
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `POST` | `/v1/reward_functions` | Upload a reward function |
-| `GET` | `/v1/reward_functions` | List reward functions |
-| `GET` | `/v1/reward_functions/{id}` | Get reward function info |
-
 ### Training Jobs
 
 | Method | Endpoint | Description |
@@ -109,13 +101,13 @@ See the [Volumes guide](/volumes) for usage.
 
 ## Request Format
 
-- **JSON endpoints** (`POST /v1/training_jobs`): Use `Content-Type: application/json` with a JSON body.
-- **Upload endpoints** (`POST /v1/datasets`, `POST /v1/reward_functions`): Use `multipart/form-data`.
+- **JSON endpoints** (`POST /v1/training_jobs`): Use `Content-Type: application/json` with a JSON body. Reward functions for GRPO jobs ride this body as source text (`reward_source`), not as a file upload.
+- **Upload endpoints** (`POST /v1/datasets`, code artifacts): Use `multipart/form-data`.
 - **Connector endpoints** (`POST /v1/datasets/connect`, `POST /v1/datasets/connect/validate`): Send JSON bodies.
 
 ## Response Format
 
-Responses are standard JSON. Every response object includes an `object` field that identifies the resource type (e.g., `"training_job"`, `"deployment"`, `"dataset"`, `"reward_function"`, `"api_key"`, `"ssh_key"`).
+Responses are standard JSON. Every response object includes an `object` field that identifies the resource type (e.g., `"training_job"`, `"deployment"`, `"dataset"`, `"api_key"`, `"ssh_key"`).
 
 Single-resource endpoints return one object. List endpoints return cursor-paginated responses:
 

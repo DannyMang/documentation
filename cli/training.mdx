@@ -1,66 +1,47 @@
 ---
-title: "veri rewards + veri jobs"
+title: "veri jobs"
 sidebarTitle: "Training"
-description: "Upload reward functions, submit training jobs from configs or inline flags, and manage them through completion."
-keywords: ["veri jobs", "veri rewards", "training", "GRPO", "checkpoint download"]
+description: "Submit training jobs from configs or inline flags, attach a reward file, and manage jobs through completion."
+keywords: ["veri jobs", "training", "GRPO", "reward file", "checkpoint download"]
 ---
 
-Training a model on Veri is a two-step CLI flow: register a reward function with `veri rewards upload`, then submit a job with `veri jobs create` (or `veri run`). Once submitted, manage the job through completion with `list / get / cancel / download`.
+Training a model on Veri is a single CLI step: submit a job with `veri jobs create` (or `veri run`). GRPO jobs carry their reward function as a local Python file, attached to the job at submit. Once submitted, manage the job through completion with `list / get / cancel / download`.
 
 <Tip>
-  For a script-driven flow, you can also use `veri train <file.py>` — it reads a `@training_job(...)`-decorated function from the file, bundles the reward, resolves the dataset, and submits the job in one call. See [`veri run`](/cli/run) for the full decorator + TOML reference.
+  For a script-driven flow, you can also use `veri train <file.py>`: it reads a `@training_job(...)`-decorated function from the file, attaches the decorated function's source as the job's reward, resolves the dataset, and submits the job in one call. See [`veri run`](/cli/run) for the full decorator + TOML reference.
 </Tip>
 
-<Note>
-  `veri rewards` does not have a server-side DELETE today. The CLI's `delete` subcommand removes the reward from your local config, not from the control plane. Reward functions are content-addressed, so re-uploading the same file returns the same id.
-</Note>
+## Reward files
 
-## Reward functions
+A `method=grpo` job needs a reward function (see [Reward functions](/training/reward-functions) for the contract). Point the config at a local file:
 
-| Command | Purpose |
-| --- | --- |
-| `upload <path.py>` | Register a reward function. Auto-runs AST validation. |
-| `list` | List registered reward functions. |
-| `get <id>` | Show one reward function. |
-| `delete <id>` | Delete a reward function. |
-
-### Upload
-
-```bash
-veri rewards upload ./reward.py --name math-reward
+```toml
+[reward]
+file = "./reward.py"    # resolves against the config file's directory
 ```
 
-`upload` runs an AST-only structural check before uploading:
+Or pass it from the command line (this overrides `reward.file` in the config):
+
+```bash
+veri jobs create configs/train.toml --reward ./reward.py
+```
+
+Before submitting, the CLI runs an AST-only structural check on each reward file:
 
 - File parses as valid Python.
 - The file defines at least one function.
 
-The check deliberately stops there — verifying specific signatures (TRL vs DPO vs custom) requires actually importing user code, which the CLI refuses to do in its own process. If your reward function imports modules missing from the training runtime, the failure surfaces in the training logs once the job starts.
+The check deliberately stops there: verifying the exact signature would require importing user code, which the CLI refuses to do in its own process. If your reward function imports modules missing from the training runtime, the failure surfaces in the training logs once the job starts.
 
-Skip validation explicitly when needed:
+Multiple weighted rewards:
 
-```bash
-veri rewards upload ./reward.py --skip-validation
+```toml
+[reward]
+files = ["./correctness.py", "./format.py"]
+weights = [1.0, 0.5]
 ```
 
-| Flag | Purpose |
-| --- | --- |
-| `--name` | Display name (default: filename stem). |
-| `--format` | Reward format (`trl` by default). |
-| `--skip-validation` | Don't run the AST check. |
-
-### List, get
-
-```bash
-veri rewards list
-veri rewards get rf_abc
-```
-
-Reward functions can't be deleted through the API yet (delete is on the roadmap) — uploading a corrected file as a new reward function is the current workflow.
-
-<Note>
-  `veri rewards test` (run the reward against a dataset) is not in Phase-1. It depends on dataset row iteration, which is owed by the SDK first.
-</Note>
+Limits: up to 8 files, 256 KiB each. The server re-validates at submit and rejects violations with HTTP 400. The submitted source is stored with the job and viewable on the job's dashboard page.
 
 ## Training jobs
 
@@ -95,7 +76,7 @@ JOB_ID=$(veri jobs create configs/train.toml --quiet)
 veri jobs create \
   --base-model "Qwen/Qwen3-4B" \
   --dataset ds_abc \
-  --reward rf_abc \
+  --reward ./reward.py \
   --gpu-type A100-80GB \
   --gpu-count 1
 ```
@@ -159,7 +140,7 @@ The download URL is only populated after the job reaches `completed`. Trying to 
 | Code | Meaning |
 | --- | --- |
 | `0` | Success. |
-| `1` | User error (missing flag, bad config, job not downloadable). |
+| `1` | User error (missing flag, bad config, failed reward lint, job not downloadable). |
 | `2` | API error. |
 | `4` | Auth error. |
 | `130` | Interrupted: Ctrl+C detached from a followed log stream (the job keeps running). |

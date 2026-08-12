@@ -112,7 +112,7 @@ These flags are sugar over `--set` on `veri jobs create`:
 | `--gpu-type X` | `--set resources.gpu_type=X` |
 | `--gpu-count N` | `--set resources.gpu_count=N` |
 | `--dataset X` | `--set dataset.id=X` |
-| `--reward X` | `--set reward.id=X` |
+| `--reward X` | `--set reward.file=X` |
 
 ## Config schemas
 
@@ -144,9 +144,7 @@ base = "Qwen/Qwen3-4B"
 id = "ds_abc123"
 
 [reward]
-id = "rf_abc"
-file = "./reward.py"
-format = "trl"
+file = "./reward.py"    # resolves against this config file's directory
 
 [method]
 type = "grpo"           # grpo | sft_text | dpo | sft_video_gen (grpo_agentic is being rebuilt; not currently available)
@@ -164,7 +162,7 @@ destination = "veri"    # or { type = "s3", uri = "s3://..." }
 ```
 
 <Note>
-  In Phase-1, `[dataset].id` and `[reward].id` must reference already-registered IDs. Upload first with `veri datasets upload` / `veri rewards upload`, then paste the returned IDs into the config.
+  `[dataset].id` must reference an already-registered dataset: upload first with `veri datasets upload`, then paste the returned id into the config. `[reward].file` is a local path (relative paths resolve against the config file's directory); the file's source is attached to the job at submit. Multi-reward: `files = ["a.py", "b.py"]` plus optional `weights = [1.0, 0.5]`.
 </Note>
 
 ### `configs/deploy.toml`
@@ -211,6 +209,6 @@ Add `--format json` for the same fields as a JSON object (`gpu_type`, `gpu_count
     Upload, connect HuggingFace, validate.
   </Card>
   <Card title="Training" icon="brain" href="/cli/training">
-    Rewards + jobs end-to-end.
+    Jobs + reward files end-to-end.
   </Card>
 </CardGroup>

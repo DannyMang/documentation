@@ -76,7 +76,7 @@ client = Client()
 job = client.training_jobs.create(
     base_model="Qwen/Qwen2.5-0.5B-Instruct",
     dataset_id=dataset.id,
-    reward_function_id=reward_fn.id,
+    reward_source=open("math_reward.py").read(),
     output_name="qwen-0.5b-math",
     method="grpo",
     hyperparameters={
@@ -129,7 +129,7 @@ Veri supports multiple GPU providers — AWS (NVIDIA, default), Hot Aisle (AMD M
 job = client.training_jobs.create(
     base_model="Qwen/Qwen2.5-0.5B-Instruct",
     dataset_id=dataset.id,
-    reward_function_id=reward_fn.id,
+    reward_source=open("math_reward.py").read(),
     gpu_type="MI300X-192GB",
     gpu_count=1,
     provider="hotaisle",
@@ -139,7 +139,7 @@ job = client.training_jobs.create(
 See [GPU providers](/training/providers) for the full provider list, GPU types, pricing, and availability checks.
 
 <Note>
-  This snippet uses the low-level client and assumes you have already uploaded a dataset and reward function (the `dataset` and `reward_fn` it references). For a runnable end-to-end version that handles those uploads for you with `@training_job` + `veri train`, see the [Managed GRPO quickstart](/demos/managed-grpo-quickstart).
+  This snippet uses the low-level client and assumes you have already uploaded a dataset (the `dataset` it references) and have a reward file on disk; the reward source is attached to the job inline. For a runnable end-to-end version with `@training_job` + `veri train`, see the [Managed GRPO quickstart](/demos/managed-grpo-quickstart).
 </Note>
 
 Same shape from the CLI:
@@ -163,6 +163,6 @@ with `kind = "train"` in the TOML config. See the [CLI training reference](/cli/
     Live loss and reward charts for your run.
   </Card>
   <Card title="CLI training commands" icon="terminal" href="/cli/training">
-    `veri run`, `veri jobs`, `veri rewards`.
+    `veri run`, `veri jobs`, reward files.
   </Card>
 </CardGroup>

@@ -16,7 +16,7 @@ For each training step, on one GPU box:
 1. **Policy-as-endpoint.** The current policy is served by vLLM (OpenAI-compatible, plus an Anthropic route) with weight sync — after each update the endpoint immediately reflects the new policy.
 2. **Rollouts.** Your harness is invoked `rollouts_per_prompt` times per task, sandboxed (gVisor) with network egress. Each invocation is one **rollout**; the N rollouts per task form the GRPO comparison group.
 3. **Capture.** A proxy between your harness and the policy records every request's token ids and logprobs. Tool results and user turns are masked out of the loss — only model-generated tokens are trained.
-4. **Reward.** Your uploaded reward function scores each finished trajectory (e.g. "did the agent extract the right URL?"). Then the GRPO update runs and the loop repeats.
+4. **Reward.** Your reward function (attached to the job inline) scores each finished trajectory (e.g. "did the agent extract the right URL?"). Then the GRPO update runs and the loop repeats.
 
 Every rollout is archived: the **Trajectories** archive sits below the logs on the job page, faceted by policy step, so you can watch behavior evolve as training progresses.
 

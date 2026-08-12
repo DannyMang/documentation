@@ -7,7 +7,7 @@ keywords: ["demo", "quickstart", "managed training", "GRPO", "GSM8K", "veri trai
 
 {/* doctest-page-gpu-required */}
 
-The shortest path to a trained model on Veri. [Managed GRPO](/training/managed) is **one decorator and one command**: define a reward function, decorate it with your config, and run `veri train`. Veri uploads the reward, connects the dataset, provisions the GPU, runs the loop, streams metrics, and captures the checkpoint.
+The shortest path to a trained model on Veri. [Managed GRPO](/training/managed) is **one decorator and one command**: define a reward function, decorate it with your config, and run `veri train`. Veri attaches the reward source to the job, connects the dataset, provisions the GPU, runs the loop, streams metrics, and captures the checkpoint.
 
 This trains **Qwen2.5-0.5B-Instruct** on [GSM8K](https://huggingface.co/datasets/openai/gsm8k) for 50 GRPO steps on a single **L4** (24 GB) — a fast smoke test.
 
@@ -86,7 +86,7 @@ def reward(completions, answer, **kwargs):
     return scores
 ```
 
-The decorator is metadata only. `veri train` does the upload, submit, and wait.
+The decorator is metadata only. `veri train` attaches the function's source as the job's reward, submits, and waits.
 
 ## Run it
 

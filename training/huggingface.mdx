@@ -75,7 +75,7 @@ Repos default to **private**; set `private = false` to publish.
     job = client.training_jobs.create(
         base_model="Qwen/Qwen3-4B",
         dataset_id="ds_...",
-        reward_function_id="rf_...",
+        reward_source=open("reward.py").read(),
         gpu_type="A100-80GB",
         gpu_count=1,
         hf_push={
@@ -98,7 +98,7 @@ Repos default to **private**; set `private = false` to publish.
       -d '{
         "base_model": "Qwen/Qwen3-4B",
         "dataset_id": "ds_...",
-        "reward_function_id": "rf_...",
+        "reward_source": "def reward(completions, answer, **kwargs):\n    ...",
         "output_name": "my-tuned-model",
         "gpu": {"gpu_type": "A100-80GB", "gpu_count": 1},
         "hf_push": {

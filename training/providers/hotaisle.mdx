@@ -23,7 +23,7 @@ Hot Aisle is a neocloud offering single- and multi-GPU AMD MI300X VMs. The MI300
 job = client.training_jobs.create(
     base_model="Qwen/Qwen2.5-0.5B-Instruct",
     dataset_id=dataset.id,
-    reward_function_id=reward_fn.id,
+    reward_source=open("reward.py").read(),
     output_name="qwen-amd-grpo",
     gpu_type="MI300X-192GB",
     gpu_count=1,

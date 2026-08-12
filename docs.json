@@ -187,15 +187,6 @@
             ]
           },
           {
-            "group": "Reward functions",
-            "openapi": "api-reference/openapi.json",
-            "pages": [
-              "POST /v1/reward_functions",
-              "GET /v1/reward_functions",
-              "GET /v1/reward_functions/{reward_id}"
-            ]
-          },
-          {
             "group": "Deployments",
             "openapi": "api-reference/openapi.json",
             "pages": [

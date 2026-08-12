@@ -20,7 +20,7 @@ Vast.ai is a GPU marketplace that rents per-host NVIDIA chunks (1-8 GPUs within 
 job = client.training_jobs.create(
     base_model="Qwen/Qwen2.5-0.5B-Instruct",
     dataset_id=dataset.id,
-    reward_function_id=reward_fn.id,
+    reward_source=open("reward.py").read(),
     gpu_type="H100-80GB",
     gpu_count=1,
     provider="vast",

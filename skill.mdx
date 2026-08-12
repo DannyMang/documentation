@@ -18,7 +18,7 @@ Every command and constraint below is verified against the live API and `veri-sd
 ````markdown SKILL.md
 ---
 name: veri
-description: Train, deploy, and manage language models on Veri, the AI compute platform (api.veri.studio). Covers the veri CLI and REST API for fine-tuning (SFT, DPO, GRPO), harness-in-the-loop RL (train the model inside your own agent), custom training scripts, GPU inference deployments with OpenAI-compatible endpoints, datasets, reward functions, volumes, and billing. Use when the user mentions Veri, veri.toml, the veri CLI, api.veri.studio, or wants to fine-tune / RL-train / serve a model on rented GPUs — including RL-training the model that powers an existing agent or harness.
+description: Train, deploy, and manage language models on Veri, the AI compute platform (api.veri.studio). Covers the veri CLI and REST API for fine-tuning (SFT, DPO, GRPO), harness-in-the-loop RL (train the model inside your own agent), custom training scripts, GPU inference deployments with OpenAI-compatible endpoints, datasets, inline reward functions, volumes, and billing. Use when the user mentions Veri, veri.toml, the veri CLI, api.veri.studio, or wants to fine-tune / RL-train / serve a model on rented GPUs — including RL-training the model that powers an existing agent or harness.
 ---
 
 # Veri
@@ -69,13 +69,13 @@ veri datasets upload ./train.jsonl --name my-train   # -> ds_...
 veri datasets connect-hf openai/gsm8k --config main --split train --map question=prompt
 ```
 
-Private/gated HF datasets are not supported. Datasets AND reward functions are deletable (API + dashboard). CAUTION: deleting a reward function that completed jobs reference succeeds silently today — those jobs keep working but their reward source is gone and the id cannot be resubmitted. Treat reward deletion as irreversible; don't bulk-clean rewards whose ids appear in job configs.
+Private/gated HF datasets are not supported. Datasets are deletable (API + dashboard).
 
 Docs (formats, column mapping, volumes as sources): https://docs.veri.studio/training/datasets · https://docs.veri.studio/cli/datasets
 
 ## Reward functions (GRPO)
 
-TRL signature, validated at upload (422 on mismatch). No network egress inside the sandbox.
+TRL signature, attached to the job inline as Python source text (no separate upload, no reward ids). No network egress inside the sandbox.
 
 ```python
 def reward(completions, answer, **kwargs) -> list[float]:
@@ -83,17 +83,18 @@ def reward(completions, answer, **kwargs) -> list[float]:
     ...
 ```
 
-```bash
-veri rewards upload ./reward.py --format trl --name my-reward   # -> rf_...
-```
-
-Multiple rewards: pass `reward_function_ids` + optional `reward_weights` (equal lengths).
+CLI: `--reward ./reward.py` on `veri jobs create` / `veri run-harness`, or `[reward] file = "./reward.py"`
+in train.toml (paths resolve against the config file's directory). The CLI AST-lints the file before
+submit (parses as Python + defines a function). API/SDK: `reward_source` = the source text; multiple
+rewards: `reward_sources` + optional `reward_weights` (equal lengths). Limits: max 8 sources, 256 KiB
+each; violations are 400 at submit. Read a job's submitted source back with
+`client.training_jobs.reward_source(job_id, index=0)` or on the job's dashboard page.
 
 Docs (contract, sandbox limits, debugging): https://docs.veri.studio/training/reward-functions
 
 ## Training
 
-Methods: `grpo` (needs `reward_function_id`), `sft_text`, `dpo`, `sft_video_gen` (these three require reward to be null), `grpo_harness` (submit via `veri run-harness`, see the harness section below). `grpo_agentic` is NOT runnable (400, being rebuilt).
+Methods: `grpo` (needs a reward source), `sft_text`, `dpo`, `sft_video_gen` (these three must omit the reward), `grpo_harness` (needs a reward source; submit via `veri run-harness`, see the harness section below). `grpo_agentic` is NOT runnable (400, being rebuilt).
 
 ```toml
 # configs/train.toml
@@ -101,7 +102,7 @@ kind = "train"
 [job]        # name, output_model
 [model]      # base = "Qwen/Qwen3-4B"
 [dataset]    # id = "ds_..."
-[reward]     # id = "rf_..."   (grpo only)
+[reward]     # file = "./reward.py"   (grpo only)
 [method]     # type = "grpo"; learning_rate = 1e-6; max_steps = 100; rollouts_per_prompt = 4
 [resources]  # gpu_type = "H100-80GB"; gpu_count = 1  (optional: provider, region)
 ```
@@ -167,14 +168,15 @@ rollout the platform injects:
 - `VERI_TASK_INPUT` → one dataset row's `prompt` (JSON string); the agent solves it
 - `VERI_POLICY_MODEL` → model name to send in requests (other names 404)
 
-The agent runs its normal loop and exits; the uploaded reward function scores the
-trajectory's FINAL assistant message (extra dataset columns arrive as lists).
+The agent runs its normal loop and exits; the reward function (attached to the job
+inline) scores the trajectory's FINAL assistant message (extra dataset columns
+arrive as lists).
 
 ```bash
 veri run-harness ./harness \
   --entrypoint "python agent.py" \
   --base-model Qwen/Qwen3-4B \
-  --dataset-id ds_... --reward-id rf_... \
+  --dataset-id ds_... --reward ./reward.py \
   --gpu-type H100-80GB --gpu-count 2 --provider vast \
   --rollouts-per-prompt 4 --max-steps 20 \
   --requirements ./harness/requirements.txt
@@ -263,7 +265,7 @@ Docs: https://docs.veri.studio/volumes · https://docs.veri.studio/deployments/c
 
 ## REST API essentials
 
-Base `https://api.veri.studio`, header `Authorization: Bearer vk_...`. Public spec: `GET /openapi.json`. Main resources: `/v1/training_jobs` (+ `/logs`, `/metrics`, `/cancel`, `/model`), `/v1/deployments` (+ `/chat/completions`, `/stop`, `/wake`), `/v1/datasets`, `/v1/reward_functions`, `/v1/volumes`, `/v1/models` (+ `/{id}/push-to-hf`, poll `/v1/hf_exports/{id}`), `/v1/settings/integrations/{wandb,huggingface}`, `/v1/billing/*`, `/v1/gpu/catalog`, `/v1/regions`. Errors: 400 invalid/gated, 401 bad key, 402 insufficient credit, 404 not found/not owned, 422 schema. Pagination: `limit` + `after` cursor, `has_more` in response.
+Base `https://api.veri.studio`, header `Authorization: Bearer vk_...`. Public spec: `GET /openapi.json`. Main resources: `/v1/training_jobs` (+ `/logs`, `/metrics`, `/cancel`, `/model`), `/v1/deployments` (+ `/chat/completions`, `/stop`, `/wake`), `/v1/datasets`, `/v1/volumes`, `/v1/models` (+ `/{id}/push-to-hf`, poll `/v1/hf_exports/{id}`), `/v1/settings/integrations/{wandb,huggingface}`, `/v1/billing/*`, `/v1/gpu/catalog`, `/v1/regions`. Errors: 400 invalid/gated, 401 bad key, 402 insufficient credit, 404 not found/not owned, 422 schema. Pagination: `limit` + `after` cursor, `has_more` in response.
 
 MCP alternative: hosted server at `https://api.veri.studio/mcp` (read-only: `/readonly/mcp`), or local `veri mcp serve` (needs `veri-sdk[mcp]`). Docs: https://docs.veri.studio/api-reference/introduction · https://docs.veri.studio/cli/mcp
 

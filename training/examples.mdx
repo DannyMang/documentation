@@ -26,16 +26,11 @@ dataset = client.datasets.connect(
     },
 )
 
-reward_fn = client.reward_functions.upload(
-    "math_reward_trl.py",  # see /training/reward-functions for the function body
-    format="trl",
-    name="math-format-correctness",
-)
-
 job = client.training_jobs.create(
     base_model="Qwen/Qwen2.5-7B-Instruct",  # production size
     dataset_id=dataset.id,
-    reward_function_id=reward_fn.id,
+    # see /training/reward-functions for the function body
+    reward_source=open("math_reward_trl.py").read(),
     output_name="qwen-7b-gsm8k",
     method="grpo",
     hyperparameters={
@@ -102,7 +97,7 @@ def reward(completions, answer, **kwargs):
     return scores
 ```
 
-Total bounded at `1.0`. Each weight is tunable. Test locally before upload:
+Total bounded at `1.0`. Each weight is tunable. Test locally before submitting:
 
 ```bash
 python -c "
@@ -115,19 +110,13 @@ print(reward(
 "
 ```
 
-Then upload + use:
+Then attach it to a job:
 
 ```python
-reward_fn = client.reward_functions.upload(
-    "multi_signal_reward.py",
-    format="trl",
-    name="math-multi-signal",
-)
-
 job = client.training_jobs.create(
     base_model="Qwen/Qwen2.5-0.5B-Instruct",
     dataset_id=dataset.id,
-    reward_function_id=reward_fn.id,
+    reward_source=open("multi_signal_reward.py").read(),
     output_name="qwen-0.5b-multi-signal",
     method="grpo",
     hyperparameters={"max_steps": 100},
@@ -146,7 +135,7 @@ job = client.training_jobs.create(
     dataset_id=video_dataset.id,
     output_name="cogvideo-5b-custom",
     method="sft_video_gen",     # not grpo
-    # No reward_function_id — SFT is supervised, not RL
+    # No reward_source — SFT is supervised, not RL
     hyperparameters={
         "learning_rate": 1e-3,
         "num_epochs": 30,

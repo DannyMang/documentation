@@ -34,7 +34,7 @@ Create a job. Returns immediately with status `queued`.
 {
   "base_model": "Qwen/Qwen2.5-7B-Instruct",
   "dataset_id": "ds_abc123",
-  "reward_function_id": "rf_xyz789",
+  "reward_source": "def reward(completions, answer, **kwargs):\n    ...",
   "method": "grpo",
   "hyperparameters": {
     "learning_rate": 1e-6,
@@ -49,17 +49,20 @@ Create a job. Returns immediately with status `queued`.
 }
 ```
 
-**Required:** `base_model`, `dataset_id`, `output_name`, `gpu`. **Required for `method=grpo`:** `reward_function_id`.
+**Required:** `base_model`, `dataset_id`, `output_name`, `gpu`. **Required for `method=grpo` and `grpo_harness`:** `reward_source` (or `reward_sources`, or `environments`).
+
+**Reward fields:** `reward_source` is the Python source text of a TRL-signature reward function. For multiple weighted rewards, pass `reward_sources` (a list) plus optional `reward_weights` (same length). `reward_source`/`reward_sources` and `environments` are mutually exclusive. Limits: at most 8 sources, 256 KiB each, and each source must define a function; violations are HTTP 400 at submit. See [Reward functions](/training/reward-functions).
 
 **Validation rules:**
-- `method=grpo` → `reward_function_id` (required). `grpo_agentic` is being rebuilt and is not currently available.
-- `method=sft_text`, `dpo`, or `sft_video_gen` → `reward_function_id` must be `null` (these learn from the dataset)
+- `method=grpo` or `grpo_harness` → reward required (`reward_source`, `reward_sources`, or `environments`). `grpo_agentic` is being rebuilt and is not currently available.
+- `method=sft_text`, `dpo`, `sft_video_gen`, or `custom_script` → reward fields must be omitted (these learn from the dataset)
 - `gpu.gpu_type` must be one of: `A100-80GB`, `H100-80GB`, `L4-24GB`, `A10G-24GB`
 - `gpu.gpu_count` in `[1, 8]`
 
 **Errors:**
+- `400 Bad Request`: invalid reward source (too many, too large, or doesn't define a function)
 - `402 Payment Required` — credit balance too low for the requested resources (see [Billing](/deployments/cost))
-- `404 Not Found` — `dataset_id` or `reward_function_id` doesn't exist or belongs to another user
+- `404 Not Found` — `dataset_id` doesn't exist or belongs to another user
 - `422 Unprocessable Entity` — schema validation failed
 
 **Response** (`TrainingJobResponse`, `201`):
@@ -71,7 +74,7 @@ Create a job. Returns immediately with status `queued`.
   "status": "queued",
   "base_model": "Qwen/Qwen2.5-7B-Instruct",
   "dataset_id": "ds_abc123",
-  "reward_function_id": "rf_xyz789",
+  "reward_count": 1,
   "method": "grpo",
   "hyperparameters": {...},
   "output_name": "qwen-7b-math",
@@ -267,7 +270,7 @@ These are documented for completeness; the worker SDK handles them.
     `dataset_id` setup before submitting.
   </Card>
   <Card title="Reward functions" icon="scale-balanced" href="/training/reward-functions">
-    `reward_function_id` setup.
+    Writing and attaching `reward_source`.
   </Card>
   <Card title="Billing" icon="dollar-sign" href="/deployments/cost">
     Billing states and balance checks.
