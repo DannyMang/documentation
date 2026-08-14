@@ -1,11 +1,11 @@
 ---
 title: "Model Context Protocol (MCP)"
 sidebarTitle: "Model Context Protocol (MCP)"
-description: "Connect agents to Veri over MCP — hosted endpoint or local server — to inspect jobs, deployment telemetry, billing, and evals or start approved runs."
+description: "Connect agents to Veri over MCP — hosted endpoint or local server — to inspect jobs, deployment telemetry, and billing, or start approved runs."
 keywords: ["veri mcp", "MCP", "Model Context Protocol", "Claude Code", "Claude Desktop", "Cursor", "agent"]
 ---
 
-Veri speaks the [Model Context Protocol](https://modelcontextprotocol.io), so MCP clients such as Claude Code, Claude Desktop, and Cursor can inspect deployment metrics and request failures, query bounded training metrics, check account burn, compare eval runs, and—when writes are enabled—submit or cancel runs on your behalf.
+Veri speaks the [Model Context Protocol](https://modelcontextprotocol.io), so MCP clients such as Claude Code, Claude Desktop, and Cursor can inspect deployment metrics and request failures, query bounded training metrics, check account burn, and—when writes are enabled—submit, cancel, or clean up runs on your behalf.
 
 There are two ways to connect, with the same tools either way:
 
@@ -160,27 +160,29 @@ claude mcp add --transport http veri-readonly https://api.veri.studio/readonly/m
 
 | Tool | What it does |
 | --- | --- |
+| `veri_whoami` | Confirm the key is valid, and return the account identity and credit balance. Call this first. |
 | `veri_list_training_jobs` | List training jobs, with optional status and method filters. |
 | `veri_get_training_job` | Get one job: status, cost, dashboard URL, and any error. |
+| `veri_get_training_metrics` | Get bounded native training curves and the W&B run URL when available. |
 | `veri_list_deployments` | List deployments, with an optional status filter. |
 | `veri_get_deployment` | Get one deployment: status, endpoint, GPU, and running cost. |
+| `veri_get_deployment_summary` | Get a compact single-call overview of one deployment. |
 | `veri_get_deployment_metrics` | Get compact lifetime request, token, percentile latency, error, uptime, and cost metrics. |
+| `veri_get_deployment_metrics_timeseries` | Get metric buckets over a time range. |
 | `veri_query_deployment_metrics` | Query up to 500 server-aggregated metric buckets for a time range (seven days by default). |
 | `veri_list_deployment_requests` | List compact request telemetry, optionally restricted to failures or a time range. |
-| `veri_get_training_metrics` | Get bounded native training curves and the W&B run URL when available. |
+| `veri_chat_deployment` | Send a chat request to a running deployment. |
 | `veri_list_models` | List custom models in your registry. |
+| `veri_get_hf_export` | Poll the status of a Hugging Face export. |
 | `veri_list_datasets` | List datasets available for training. |
+| `veri_list_volumes` | List persistent volumes with their size and file count. |
+| `veri_list_gpus` | List the GPU catalog: types, providers, and hourly price. |
 | `veri_list_regions` | List the launch regions you can target. |
 | `veri_estimate_cost` | Estimate the cost of a GPU job before submitting it. |
 | `veri_billing_balance` | Get your current credit balance. |
-| `veri_get_billing_overview` | Get balance, training and deployment burn, runway, active resources, and recent transactions. |
+| `veri_billing_burn_rate` | Get the current spend rate. |
+| `veri_billing_overview` / `veri_get_billing_overview` | Get balance, training and deployment burn, runway, active resources, and recent transactions. |
 | `veri_get_cost_summary` | Get the supported historical cost breakdown for up to 30 days. |
-| `veri_list_benchmarks` | List the curated benchmark catalog. |
-| `veri_list_evals` / `veri_get_eval` | List or inspect evaluation definitions. |
-| `veri_list_eval_runs` / `veri_get_eval_run` | List or inspect evaluation runs, results, usage, and gates. |
-| `veri_list_eval_run_items` | Inspect bounded per-item outputs and scores. |
-| `veri_compare_eval_runs` | Compare a candidate eval run with its baseline. |
-| `veri_chat_deployment` | Send a chat request to a running deployment. |
 
 ### Write tools (available unless read-only)
 
@@ -191,6 +193,26 @@ claude mcp add --transport http veri-readonly https://api.veri.studio/readonly/m
 | `veri_cancel_training_job` | Cancel a queued or running job. |
 | `veri_stop_deployment` | Stop a running deployment. |
 | `veri_register_model` | Register a completed job's checkpoint as a reusable custom model. |
+| `veri_push_model_to_hf` | Push a library model to the connected Hugging Face account. |
+
+### Delete tools (available unless read-only)
+
+Deletes are irreversible and, unlike provisioning, cost nothing, so your MCP client's
+approval prompt is the only safeguard. Every description below starts with
+`PERMANENTLY DELETES` so the stakes are visible in that prompt. Use read-only mode for
+any unattended agent.
+
+| Tool | What it does |
+| --- | --- |
+| `veri_delete_training_job` | Delete a finished job and its stored checkpoints. |
+| `veri_delete_dataset` | Delete a dataset. |
+| `veri_delete_deployment` | Delete a stopped deployment and its request history. |
+| `veri_delete_model` | Remove a model from the library. |
+| `veri_delete_volume` | Delete a volume and every file in it. |
+
+Lifecycle webhooks, Prometheus metrics export, and per-replica drain have no MCP tools
+today. Reach them over REST; see the [API reference](/api-reference/introduction).
+Evaluation tools are not registered while the Evaluations product is turned off.
 
 ## Test deployment observability with MCP
 
@@ -257,7 +279,7 @@ The transport is stateless, so the service scales horizontally behind a plain lo
 
 ## Training analysis with W&B
 
-Use Veri MCP for infrastructure, lifecycle, deployment telemetry, billing, and eval comparisons. Connect the official W&B MCP alongside it for rich cross-run training analysis, artifacts, and reports.
+Use Veri MCP for infrastructure, lifecycle, deployment telemetry, and billing. Connect the official W&B MCP alongside it for rich cross-run training analysis, artifacts, and reports.
 
 Veri returns a bounded native training metric series and the W&B run URL when available. It does not proxy W&B credentials or reimplement W&B's query surface.
 
