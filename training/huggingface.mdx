@@ -1,13 +1,21 @@
 ---
 title: "Hugging Face"
 sidebarTitle: "Hugging Face"
-description: "Connect your Hugging Face account and push trained weights or LoRA adapters to your own repos the moment a training job finishes."
+description: "Connect your Hugging Face account, then push any finished model to your own repos with one command, or have a training job push its result automatically."
 keywords: ["Hugging Face", "push to hub", "model weights", "LoRA adapter", "integrations", "hf_push"]
 ---
 
-Veri can push the artifact a training job produces straight to your [Hugging Face](https://huggingface.co) account. Connect your account once, then opt in per job: when training completes and the checkpoint is saved, Veri creates (or updates) the repo you named and uploads either the full merged weights or just the LoRA adapter.
+Veri can push trained weights straight to your [Hugging Face](https://huggingface.co) account. Connect your account once, then push either way:
 
-The pushed repo link is surfaced everywhere the job appears:
+| | [Push a finished model](#push-a-finished-model) | [Push automatically when a job finishes](#push-automatically-when-a-job-finishes) |
+| --- | --- | --- |
+| When | Any time, on a model in your library | At the end of the training run |
+| How | `veri models push-hf` (CLI), dashboard, or API | `hf_push` on the training job |
+| Needs a new training run | No | Yes, it is part of the run |
+
+If you just want your trained weights on Hugging Face, use the first one: it is a single command and works on anything already in your [model library](/deployments/custom-models). The second exists so a long run can hand off its result without you coming back to it.
+
+The pushed repo link is surfaced everywhere the model appears:
 
 - **Dashboard**: a "View on Hugging Face" button on the job page.
 - **API / SDK**: the `hf_repo_url` field on the training job object.
@@ -46,7 +54,47 @@ Create a token with **write** scope at [huggingface.co/settings/tokens](https://
   </Tab>
 </Tabs>
 
-## Push a job's artifact
+## Push a finished model
+
+Models already in your [model library](/deployments/custom-models) (finished training jobs you saved, or cached Hugging Face imports) can be pushed at any time, with no training run required. The upload happens server-side; nothing downloads to your machine.
+
+Save a finished job's checkpoint into the library first if it is not there yet:
+
+```bash
+veri models save <job_id> --name my-model
+```
+
+<Tabs>
+  <Tab title="CLI">
+    ```bash
+    veri models push-hf model_abc123 --repo your-namespace/my-model
+    # Export exp_... started: model_abc123 -> your-namespace/my-model
+    #   uploading: 40% ...
+    # Pushed: https://huggingface.co/your-namespace/my-model
+    ```
+
+    Add `--public` to create a public repo, `--no-wait` to return immediately.
+  </Tab>
+  <Tab title="Dashboard">
+    On the **Models** page, click **Push to HF** on any ready model, enter the target repo, and choose visibility. A progress banner tracks the upload and links the repo when it completes.
+  </Tab>
+  <Tab title="API">
+    ```bash
+    curl -X POST https://api.veri.studio/v1/models/{model_id}/push-to-hf \
+      -H "Authorization: Bearer $VERI_API_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{"repo": "your-namespace/my-model", "private": true}'
+
+    # poll until status is terminal; hf_repo_url carries the repo link
+    curl -s https://api.veri.studio/v1/hf_exports/{export_id} \
+      -H "Authorization: Bearer $VERI_API_KEY"
+    ```
+  </Tab>
+</Tabs>
+
+One export per model/repo pair runs at a time, and up to two exports can run concurrently per account. A failed or cancelled export leaves your model untouched; retrying re-uploads only what changed.
+
+## Push automatically when a job finishes
 
 Opt in on the job itself with a target repo and the artifact you want. `artifact` is required and picks what lands in the repo:
 
@@ -123,46 +171,12 @@ Requests that can't succeed are rejected at submit, not after a paid run: an unc
 
 ## What happens at the end of the run
 
-1. The trained checkpoint is saved and uploaded to Veri storage as usual — the push is additive, and your checkpoint stays downloadable from Veri either way.
+1. The trained checkpoint is saved and uploaded to Veri storage as usual. The push is additive, and your checkpoint stays downloadable from Veri either way.
 2. For `merged` on a LoRA run, the adapter is merged into the base model on the training machine.
 3. Veri creates the repo if it doesn't exist (honoring `private`) and uploads the artifact.
 4. The job records `hf_repo_url` on success.
 
 A failed push never fails the job: training results are kept and the skip reason appears in the job logs.
-
-## Push an existing model
-
-Models already in your [model library](/deployments/custom-models) (finished training jobs you saved, or cached Hugging Face imports) can be pushed after the fact — no training run required. The upload happens server-side; nothing downloads to your machine.
-
-<Tabs>
-  <Tab title="Dashboard">
-    On the **Models** page, click **Push to HF** on any ready model, enter the target repo, and choose visibility. A progress banner tracks the upload and links the repo when it completes.
-  </Tab>
-  <Tab title="CLI">
-    ```bash
-    veri models push-hf model_abc123 --repo your-namespace/my-model
-    # Export exp_... started: model_abc123 -> your-namespace/my-model
-    #   uploading: 40% ...
-    # Pushed: https://huggingface.co/your-namespace/my-model
-    ```
-
-    Add `--public` to create a public repo, `--no-wait` to return immediately.
-  </Tab>
-  <Tab title="API">
-    ```bash
-    curl -X POST https://api.veri.studio/v1/models/{model_id}/push-to-hf \
-      -H "Authorization: Bearer $VERI_API_KEY" \
-      -H "Content-Type: application/json" \
-      -d '{"repo": "your-namespace/my-model", "private": true}'
-
-    # poll until status is terminal; hf_repo_url carries the repo link
-    curl -s https://api.veri.studio/v1/hf_exports/{export_id} \
-      -H "Authorization: Bearer $VERI_API_KEY"
-    ```
-  </Tab>
-</Tabs>
-
-One export per model/repo pair runs at a time, and up to two exports can run concurrently per account. A failed or cancelled export leaves your model untouched; retrying re-uploads only what changed.
 
 ## How your token is handled
 
