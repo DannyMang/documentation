@@ -55,7 +55,6 @@
                 "pages": [
                   "training/providers",
                   "training/providers/aws",
-                  "training/providers/hotaisle",
                   "training/providers/vast",
                   "training/providers/digitalocean"
                 ]
@@ -83,7 +82,6 @@
                   "deployments/providers",
                   "deployments/providers/aws",
                   "deployments/providers/gcp",
-                  "deployments/providers/hotaisle",
                   "deployments/providers/azure",
                   "deployments/providers/digitalocean"
                 ]

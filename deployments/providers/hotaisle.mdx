@@ -5,6 +5,13 @@ description: "Serve on AMD MI300X: 192 GB of HBM3 on a single GPU — 70B-class 
 keywords: ["Hot Aisle", "AMD", "MI300X", "ROCm", "vLLM", "serving", "deployments"]
 ---
 
+<Warning>
+  MI300X capacity is coming soon and is not currently orderable: submits with
+  `provider: "hotaisle"` are rejected while we finish provider validation. This
+  page documents the stack for when it opens up.
+</Warning>
+
+
 Hot Aisle serves on AMD MI300X VMs. The headline: **192 GB of HBM3 on a single GPU** — enough to serve a 70B model in bf16 on one card, where NVIDIA equivalents need a multi-GPU node.
 
 ## Serving shapes

@@ -5,6 +5,13 @@ description: "Train on AMD MI300X (192 GB HBM3, ROCm): GPU types, the ROCm softw
 keywords: ["Hot Aisle", "AMD", "MI300X", "ROCm", "liger", "TunableOp", "hipBLASLt", "provider"]
 ---
 
+<Warning>
+  MI300X capacity is coming soon and is not currently orderable: submits with
+  `provider: "hotaisle"` are rejected while we finish provider validation. This
+  page documents the stack for when it opens up.
+</Warning>
+
+
 Hot Aisle is a neocloud offering single- and multi-GPU AMD MI300X VMs. The MI300X has 192 GB of HBM3 memory — more than any NVIDIA single-GPU offering — making it well-suited for large-model finetuning on a single card.
 
 ## GPU types

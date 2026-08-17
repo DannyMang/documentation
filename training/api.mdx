@@ -56,7 +56,7 @@ Create a job. Returns immediately with status `queued`.
 **Validation rules:**
 - `method=grpo` or `grpo_harness` → reward required (`reward_source`, `reward_sources`, or `environments`). `grpo_agentic` is being rebuilt and is not currently available.
 - `method=sft_text`, `dpo`, `sft_video_gen`, or `custom_script` → reward fields must be omitted (these learn from the dataset)
-- `gpu.gpu_type` must be one of: `A100-80GB`, `H100-80GB`, `L4-24GB`, `A10G-24GB`, or `MI300X-192GB` (AMD, `provider: "hotaisle"` only)
+- `gpu.gpu_type` must be one of: `A100-80GB`, `H100-80GB`, `L4-24GB`, `A10G-24GB`
 - `gpu.gpu_count` in `[1, 8]`
 
 **Errors:**
@@ -233,7 +233,7 @@ seed: int = 42
 gpu = {"gpu_type": "H100-80GB", "gpu_count": 2}
 ```
 
-Supported `gpu_type` values: `A100-80GB`, `H100-80GB`, `L4-24GB`, `A10G-24GB` (NVIDIA), and `MI300X-192GB` (AMD, `provider: "hotaisle"`, 1/2/4-GPU shapes). On AWS, `A100-80GB` and `H100-80GB` launch as 8-GPU nodes; `L4-24GB` and `A10G-24GB` are the single-GPU shapes. On [`vast`](/training/providers/vast), `A100-80GB` and `H100-80GB` rent as flexible 1-8 GPU chunks; on [`digitalocean`](/training/providers/digitalocean), `H100-80GB` comes in fixed 1x and 8x droplets. Run `veri gpu list` to see current availability and pricing for every shape.
+Supported `gpu_type` values: `A100-80GB`, `H100-80GB`, `L4-24GB`, `A10G-24GB`. AMD `MI300X-192GB` is coming soon. On AWS, `A100-80GB` and `H100-80GB` launch as 8-GPU nodes; `L4-24GB` and `A10G-24GB` are the single-GPU shapes. On [`vast`](/training/providers/vast), `A100-80GB` and `H100-80GB` rent as flexible 1-8 GPU chunks; on [`digitalocean`](/training/providers/digitalocean), `H100-80GB` comes in fixed 1x and 8x droplets. Run `veri gpu list` to see current availability and pricing for every shape.
 
 ## Checkpoint destination schema
 

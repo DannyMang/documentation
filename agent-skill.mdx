@@ -166,7 +166,7 @@ Docs (per-method guides + full hyperparameter tables): https://docs.veri.studio/
 | Provider | GPUs | Status |
 | --- | --- | --- |
 | `aws` (default) | L4-24GB, A10G-24GB (1x); A100-80GB, H100-80GB (whole 8-GPU nodes — you pay for all 8) | live |
-| `hotaisle` | MI300X-192GB (1/2/4x, AMD ROCm — no unsloth/bitsandbytes/QLoRA) | live |
+| `hotaisle` | MI300X-192GB (1/2/4x, AMD ROCm — no unsloth/bitsandbytes/QLoRA) | coming soon (submits 400) |
 | `vast` | A100/H100-80GB (1/2/4/8x marketplace) | live |
 | `digitalocean` | H100-80GB (1x/8x droplets; capacity flaps — failed submits are unbilled, retry) | live |
 | `gcp` | — | gated off: submit returns "coming soon" 400 |
@@ -255,7 +255,7 @@ handles ≤4B models). The default is `A100-80GB`, which on AWS is a whole 8-GPU
 expensive shape for small models.
 
 - Engine: `vllm` only (`max` returns 400). Extra vLLM flags: repeat `--vllm-arg=<token>` or `deployment.vllm_extra_args` list in the config.
-- Serving providers live: `aws` (default), `gcp` (single-GPU A100/H100), `hotaisle` (MI300X, 1x). Gated off (400): `azure`, `digitalocean`.
+- Serving providers live: `aws` (default), `gcp` (single-GPU A100/H100). Gated off (400): `hotaisle`, `azure`, `digitalocean`.
 - Defaults: gpu_count 1, replicas 1, concurrency_target 8, scale_to_zero_window 3600s (min 300).
 - Mutable on a live deployment: replica bounds, concurrency target, idle windows. Model/GPU/provider/engine are immutable.
 - Replica budget is 2 by default (see Account limits), so `--max-replicas` above 2 is not servable.

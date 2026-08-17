@@ -5,14 +5,14 @@ description: "Choose where your training job runs: AWS (NVIDIA), Hot Aisle (AMD 
 keywords: ["providers", "AWS", "Hot Aisle", "AMD", "MI300X", "Vast.ai", "DigitalOcean", "H100", "GPU", "cloud"]
 ---
 
-Veri runs training jobs on four GPU providers. You pick one at job submit time with the `provider` field. Each provider offers different GPU types at different price points — AWS is the default, Hot Aisle is the AMD beachhead, Vast.ai is the NVIDIA marketplace spillover, and DigitalOcean offers single-GPU H100 droplets with per-second billing.
+Veri runs training jobs on four GPU providers. You pick one at job submit time with the `provider` field. Each provider offers different GPU types at different price points — AWS is the default, Vast.ai is the NVIDIA marketplace spillover, DigitalOcean offers single-GPU H100 droplets with per-second billing, and Hot Aisle (AMD MI300X) is coming soon.
 
 ## Providers at a glance
 
 | Provider | GPUs offered | Architecture | Billing | Status |
 | --- | --- | --- | --- | --- |
 | [`aws`](/training/providers/aws) (default) | L4, A10G, A100 80GB, H100 80GB | NVIDIA (Ampere/Hopper) | Per-second, on-demand or spot | Available |
-| [`hotaisle`](/training/providers/hotaisle) | MI300X 192GB | AMD (CDNA3 / ROCm) | Per-hour, on-demand | Available |
+| [`hotaisle`](/training/providers/hotaisle) | MI300X 192GB | AMD (CDNA3 / ROCm) | Per-hour, on-demand | Coming soon |
 | [`vast`](/training/providers/vast) | A100 80GB, H100 80GB | NVIDIA (marketplace) | Per-second, marketplace pricing | Available |
 | [`digitalocean`](/training/providers/digitalocean) | H100 80GB | NVIDIA (Hopper) | Per-second, on-demand | Available |
 
