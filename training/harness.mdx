@@ -61,6 +61,8 @@ The full end-to-end walkthrough lives in the demos section: [Train a URL-extract
 | `harness_timeout_s` | 900 | Wall-clock budget for one rollout. |
 | `max_parallel_rollouts` | 4 | Concurrent harness invocations per step. |
 | `vllm_gpu_memory_utilization` | 0.85 | Policy-server memory fraction on its dedicated GPUs (see GPU layout below). |
+| `vllm_tensor_parallel_size` | auto | Policy-server tensor parallel. Default: largest power of two that fits `gpu_count - 1`. Must divide the model's attention-head count. |
+| `vllm_data_parallel_size` | 1 | Policy-server replica count. Each replica holds a full model copy on its own `TP` GPUs; requests are spread across replicas and every replica receives the per-step weight sync. `TP × DP` must fit in `gpu_count - 1`. |
 | `max_model_len` | unset | Cap the policy server's context length. |
 | `trajectory_retention_days` | keep forever | Auto-delete raw trajectories after N days. |
 | `chat_template_kwargs` | `{"enable_thinking": false}` | Forwarded to the policy server's chat template. Thinking stays off by default: reasoning models (Qwen3) strip `<think>` blocks from prior turns on re-render, which breaks multi-turn token capture. |
@@ -76,6 +78,8 @@ Recommended shapes:
 | `L4-24GB` x4 on `aws` | g6.12xlarge (192 GiB RAM) | 1 trainer + TP=2 server (1 idle) | ~4B policies |
 | `H100-80GB` x2 on `vast` | marketplace chunk | 1 trainer + TP=1 server | ~7-8B full fine-tune |
 | `H100-80GB` x8 on `aws`/`vast` | p5-class / marketplace | 1 trainer + TP=4 server (3 idle) | ~7-8B full fine-tune, large context |
+
+Idle GPUs are reclaimable with data parallelism when the model fits on fewer cards: `vllm_data_parallel_size = 3` on `L4-24GB` x4 runs three TP=1 replicas (zero idle, ~3x rollout throughput for a 4B policy). Rollout generation is usually the training bottleneck, so extra replicas translate directly into faster steps. Each replica holds a full model copy, so pick `TP` large enough for the model to fit and spend the rest on `DP`.
 
 The trainer side is a single-GPU full fine-tune today, which caps the trainable policy at roughly 7-8B regardless of the server's size. Set `lora_rank` for larger policies.
 
