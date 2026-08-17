@@ -13,7 +13,7 @@ Give your coding agent working knowledge of Veri. Copy the SKILL.md below into y
 | Devin CLI | `.devin/skills/veri/SKILL.md` |
 | Cursor / others ([agentskills spec](https://agentskills.io)) | `.agents/skills/veri/SKILL.md` |
 
-Every command and constraint below is verified against the live API and `veri-sdk` 0.2.34 (the latest release). When docs and this file disagree, trust `veri <cmd> --help` and [the docs](https://docs.veri.studio).
+Every command and constraint below is verified against the live API and `veri-sdk` 0.2.35 (the latest release). When docs and this file disagree, trust `veri <cmd> --help` and [the docs](https://docs.veri.studio).
 
 ````markdown SKILL.md
 ---
@@ -27,17 +27,18 @@ description: Train, deploy, and manage language models on Veri, the AI compute p
 
 ```bash
 uv tool install veri-sdk        # or: pipx install veri-sdk / pip install veri-sdk
-veri version                    # need sdk_version >= 0.2.34 (this skill's baseline); Python >= 3.10
+veri version                    # need sdk_version >= 0.2.35 (this skill's baseline); Python >= 3.10
 veri login                      # browser flow; or: veri login --token vk_... (headless/CI)
 veri whoami                     # verify: status must NOT be invalid_or_expired_token
 veri doctor                     # diagnose install/network if anything fails
 ```
 
-If `sdk_version` is older than 0.2.34, upgrade before continuing — older CLIs are missing
+If `sdk_version` is older than 0.2.35, upgrade before continuing — older CLIs are missing
 commands this skill uses: `uv tool upgrade veri-sdk` (or `pipx upgrade veri-sdk` /
-`pip install -U veri-sdk`). 0.2.34 is a hard floor for reward functions specifically:
-in 0.2.33 and earlier `--reward` took the id of a stored reward resource, and in 0.2.34
-it takes a path to a local `.py`. Passing a file path to an older CLI fails.
+`pip install -U veri-sdk`). 0.2.35 is a hard floor for two reasons: in 0.2.33 and
+earlier `--reward` took the id of a stored reward resource (it now takes a path to a
+local `.py`, so reward flows fail against an old CLI), and in 0.2.34 and earlier the
+`veri-sdk[mcp]` extra installs a broken MCP dependency, so `veri mcp serve` crashes.
 
 Veri rents GPUs for model post-training and serving. One CLI (`veri`), one REST API
 (`https://api.veri.studio`, Bearer auth with `vk_...` keys), TOML configs.

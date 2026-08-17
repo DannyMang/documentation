@@ -63,6 +63,7 @@
               "training/datasets",
               "training/reward-functions",
               "training/grpo",
+              "training/sft",
               "training/dpo",
               "training/wandb",
               "training/huggingface"
@@ -184,7 +185,8 @@
               "POST /v1/datasets/connect",
               "POST /v1/datasets/connect/validate",
               "GET /v1/datasets",
-              "GET /v1/datasets/{dataset_id}"
+              "GET /v1/datasets/{dataset_id}",
+              "DELETE /v1/datasets/{dataset_id}"
             ]
           },
           {
@@ -199,7 +201,8 @@
               "GET /v1/deployments/{deployment_id}/metrics/timeseries",
               "GET /v1/deployments/{deployment_id}/metrics/engine-timeseries",
               "GET /v1/deployments/{deployment_id}/requests",
-              "POST /v1/deployments/{deployment_id}/stop"
+              "POST /v1/deployments/{deployment_id}/stop",
+              "DELETE /v1/deployments/{deployment_id}"
             ]
           },
           {
@@ -225,6 +228,7 @@
               "POST /v1/models/register",
               "POST /v1/models/import",
               "GET /v1/models/{id}",
+              "DELETE /v1/models/{id}",
               "POST /v1/models/{id}/presigned-upload",
               "POST /v1/models/{model_id}/push-to-hf",
               "GET /v1/models/{model_id}/hf-exports",

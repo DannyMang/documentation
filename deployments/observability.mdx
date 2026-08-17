@@ -384,13 +384,13 @@ GPU utilization is a debugging metric, not a scaling signal: it measures the sha
 | Errors appear but latency percentiles do not change | Expected: percentiles include successful requests only |
 | Engine charts are empty | Wait for replica heartbeats and confirm the deployment is serving |
 | A stream has `client_cancelled=true` | The downstream client stopped reading before the upstream stream completed |
-| MCP cannot create or rescore an eval | The server is read-only; observability queries still work |
+| MCP cannot create, stop, or cancel a resource | The server is read-only; observability queries still work |
 
 ## Where to go next
 
 <CardGroup cols={2}>
   <Card title="MCP setup" icon="robot" href="/cli/mcp">
-    Let an agent query deployment, training, billing, and evaluation context.
+    Let an agent query deployment, training, and billing context.
   </Card>
   <Card title="Deployment commands" icon="terminal" href="/cli/deployments">
     Generate traffic, benchmark an endpoint, and inspect recent requests.
