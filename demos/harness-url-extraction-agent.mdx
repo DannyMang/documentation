@@ -244,7 +244,7 @@ langchain-openai>=0.2
 ```
 
 <Warning>
-  **Both routes are verified training paths for text-protocol agents** (token-id capture confirmed live on OpenAI and Anthropic `/v1/messages`). The remaining Anthropic caveat is native `tool_use`: requests carrying `tools` get a clear 400 until block translation ships, so tool-calling agents should use a text protocol like `agent_anthropic.py` (or the OpenAI route). Spans without token ids are rejected from training (fail-safe, never silent drift). The Claude Agent SDK proper wraps the `claude-code` CLI (Node.js), which the Python rollout images don't ship yet.
+  **Both routes are verified training paths** (token-id capture confirmed live on OpenAI and Anthropic `/v1/messages`). The Anthropic route supports native `tool_use` end to end: the `tools` array rides the policy's chat template, tool calls come back as `tool_use` blocks, and `tool_result` blocks round-trip — `agent.py` is a verified live path. Spans without token ids are rejected from training (fail-safe, never silent drift). The stock Claude Agent SDK runtime (`claude -p ...`, via `agent_claude.sh`) is also verified live; image and document content blocks are rejected with a 400 (no token-native path).
 </Warning>
 
 The complete, runnable bundle (all harness variants, the dataset prep script, 6 curated smoke tasks, reward, and a local smoke script that runs any variant against any endpoint) lives in the repo at `tests/documentation_tests/Documentation/Demos/Harness URL extraction agent/`.

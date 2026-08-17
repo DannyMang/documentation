@@ -67,14 +67,17 @@ The full end-to-end walkthrough lives in the demos section: [Train a URL-extract
 
 ## GPU layout
 
-One node, split devices: the trainer takes GPU 0 and the vLLM policy server takes the remaining GPUs (tensor parallel across them). TRL's weight-sync communicator requires the trainer and the server to sit on **different** CUDA devices, so **at least 2 GPUs** are required — 1-GPU submits are rejected with a 400.
+One node, split devices: the trainer takes GPU 0 and the vLLM policy server takes the next GPUs with tensor parallel set to the **largest power of two that fits** in the remainder (vLLM requires TP to divide the model's attention-head count, so odd remainders are clamped down and any leftover GPUs idle). TRL's weight-sync communicator requires the trainer and the server to sit on **different** CUDA devices, so **at least 2 GPUs** are required — 1-GPU submits are rejected with a 400.
 
 Recommended shapes:
 
-| Shape | Node | Fits |
-| --- | --- | --- |
-| `L4-24GB` x4 on `aws` | g6.12xlarge (192 GiB RAM) | ~4B policies (1 trainer GPU + 3-way TP server) |
-| `H100-80GB` x2/x4 on `vast` | marketplace chunk | 7B-70B policies |
+| Shape | Node | Layout | Fits |
+| --- | --- | --- | --- |
+| `L4-24GB` x4 on `aws` | g6.12xlarge (192 GiB RAM) | 1 trainer + TP=2 server (1 idle) | ~4B policies |
+| `H100-80GB` x2 on `vast` | marketplace chunk | 1 trainer + TP=1 server | ~7-8B full fine-tune |
+| `H100-80GB` x8 on `aws`/`vast` | p5-class / marketplace | 1 trainer + TP=4 server (3 idle) | ~7-8B full fine-tune, large context |
+
+The trainer side is a single-GPU full fine-tune today, which caps the trainable policy at roughly 7-8B regardless of the server's size. Set `lora_rank` for larger policies.
 
 ## Current constraints
 
