@@ -38,7 +38,7 @@
             "pages": [
               "index",
               "quickstart",
-              "skill"
+              "agent-skill"
             ]
           },
           {
@@ -47,6 +47,7 @@
             "pages": [
               "training",
               "training/custom-script",
+              "training/base-images",
               "training/managed",
               "training/harness",
               {
@@ -303,6 +304,10 @@
     ]
   },
   "redirects": [
+    {
+      "source": "/skill",
+      "destination": "/agent-skill"
+    },
     {
       "source": "/demos/deployment-analytics",
       "destination": "/deployments/observability"
