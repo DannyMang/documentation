@@ -49,7 +49,9 @@ What happens at each transition:
 - **`running`** — worker reports its first step. `started_at` populates. Metrics start streaming.
 - **`completed | failed | cancelled`** — pod auto-terminates. Cost is attributed (`cost_attributed_at`). Stripe credit is deducted (`billing_deducted_at`). The full stdout is uploaded to S3 and available via `GET /v1/training_jobs/{id}/logs/full`.
 
-Cancellation is **cooperative**: the worker terminates at the next checkpoint boundary, not instantly.
+Cancellation is **immediate**: the instance is terminated as soon as the request is
+accepted. The worker does not get a chance to flush anything, so whatever
+checkpoints already reached storage are what you keep — see [Checkpoints](#checkpoints).
 
 ## Failure modes
 
@@ -66,6 +68,82 @@ When a job ends in `failed`, `error.code` carries one of:
 | `training_error` | Worker crash, reward function error, or dataset loading error (generic catch-all) | Read `error.message` + the full log via `GET /v1/training_jobs/{id}/logs/full` |
 
 The last 200 log lines from the worker are surfaced in `error.log_tail` for fast triage; the full stdout is uploaded to S3 and accessible via `GET /v1/training_jobs/{id}/logs/full`.
+
+## Checkpoints
+
+Every managed job writes a final artifact when training finishes. It also saves
+**intermediate checkpoints** while training runs, so a job that fails at hour 19 of 20
+still leaves usable weights behind.
+
+<Info>
+  Intermediate checkpoints are rolling out behind a feature flag. Until it is enabled for
+  your workspace, jobs write only the final artifact and the `veri checkpoints` commands
+  report the feature as unavailable.
+</Info>
+
+Two hyperparameters control them:
+
+| Knob | Default | Meaning |
+| --- | --- | --- |
+| `checkpoint_every` | `0.1` | How often to save. A value between 0 and 1 is a **fraction of the run** (`0.1` = ten checkpoints, whatever the run length). A value of 1 or more is a **literal step count** and must be a whole number. `0` turns intermediate checkpoints off. |
+| `checkpoint_keep` | `3` | How many checkpoints to retain. Older ones are deleted as new ones are written. `0` keeps every checkpoint. |
+
+```python
+import veri
+
+job = veri.train(
+    base_model="Qwen/Qwen3-4B",
+    dataset="gsm8k-train",
+    method="grpo",
+    checkpoint_every=0.1,
+    checkpoint_keep=3,
+)
+```
+
+### Working with checkpoints
+
+```bash
+veri checkpoints list job_abc123
+veri checkpoints get job_abc123 job_abc123@400
+veri checkpoints download job_abc123 job_abc123@400 --output ./ckpt
+```
+
+Anywhere a checkpoint ID is accepted, `<job_id>@<step>` works too, so you can act on a
+step number you read off a loss curve.
+
+`download` fetches the model and tokenizer files by default — enough to load with
+`from_pretrained`. Optimizer state is roughly two thirds of a checkpoint's size and
+`from_pretrained` never reads it, so pass `--artifact` when you need more:
+
+| `--artifact` | Contents |
+| --- | --- |
+| `weights` (default) | Model + tokenizer. Loads with `from_pretrained`. |
+| `resumable` | Everything, including optimizer, scheduler, and RNG state. |
+| `adapter` | LoRA adapter files only. |
+
+### Checkpoints from a custom script
+
+[Custom script](/training/custom-script) jobs get a directory instead of a hyperparameter.
+Write a `checkpoint-<step>` subdirectory into `$VERI_CHECKPOINT_DIR` and Veri uploads it:
+
+```python
+import os
+
+checkpoint_dir = os.environ.get("VERI_CHECKPOINT_DIR")
+if checkpoint_dir:
+    model.save_pretrained(f"{checkpoint_dir}/checkpoint-{step}")
+    tokenizer.save_pretrained(f"{checkpoint_dir}/checkpoint-{step}")
+```
+
+Veri uploads a checkpoint directory once it stops changing, and sweeps for any remaining
+ones after your script exits. The variable is unset when the feature is not enabled, so
+guard on it as shown above.
+
+<Warning>
+  A checkpoint that was still being written when a script crashed cannot be told apart
+  from a complete one, so Veri uploads it rather than discard it. Checkpoints from a
+  custom script are reported as `weights` and are not guaranteed to be resumable.
+</Warning>
 
 ## Submitting a job
 
