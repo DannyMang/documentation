@@ -1,0 +1,118 @@
+---
+title: "Base images and runtime versions"
+sidebarTitle: "Base images"
+description: "The dependency versions Veri prebakes into its GPU images: the managed training runtime and the L3 custom-script base images (torch, CUDA, vLLM, SGLang, transformers, and more)."
+keywords: ["base image", "prebaked", "runtime versions", "torch", "CUDA", "vllm", "sglang", "transformers", "veri/base", "custom script", "dependencies"]
+---
+
+Veri prebakes the slow, compiled pieces (CUDA, PyTorch, and the inference engines) into its GPU images so cold starts stay fast. There are two runtime families:
+
+- The **managed training runtime**: the fixed stack behind the managed methods (`grpo`, `sft_text`, `dpo`).
+- The **L3 custom-script base images**: the curated images you build your own script on top of, layering extra dependencies with a `requirements.txt`.
+
+This page lists the versions in each so you can match your own dependencies to what is already installed and avoid version conflicts. If you run custom scripts, see [custom training scripts](/training/custom-script) for how to select a base image and layer a `requirements.txt`.
+
+<Note>
+  The versions below reflect the current baked images. Veri rebakes these images when the stack is validated against new pins, so treat the exact versions as a snapshot rather than a permanent contract. The relationships that matter for layering (for example, "`veri/base` ships torch 2.8.0 on CUDA 12.8") are stable; individual patch versions can move on a rebake.
+</Note>
+
+## Managed training runtime
+
+Managed jobs (`grpo`, `sft_text`, `dpo`) run on a fixed, validated stack. You do not change these versions: they are the runtime for the managed methods, and Veri owns the training loop. This section is for reference only (for example, to know which `transformers` a managed job runs). If you need to control the stack, use a [custom script](/training/custom-script).
+
+The exact versions differ by provider, because each provider delivers the stack a different way. The table below is the **AWS** runtime, baked into the GPU AMI (which supplies the NVIDIA driver, CUDA runtime, and PyTorch, with Veri layering the training stack on top). Vast, DigitalOcean, and Hot Aisle carry their own equivalent stacks, summarized in the note after the table.
+
+| Component | Version | Notes |
+| --- | --- | --- |
+| NVIDIA driver | 580.159.04 (R580) | Pinned on the host image. |
+| CUDA runtime | 12.8 | Runs via the pinned R580 driver. |
+| PyTorch | 2.9.1 (cu128) | Inherited from the base AMI; not re-pinned by Veri. |
+| vLLM | 0.15.1 | Pinned. |
+| transformers | 4.56.2 | Pinned. |
+| trl | 1.7.1 | Pinned. |
+| unsloth / unsloth_zoo | 2026.7.4 | Pinned. |
+| torchao | 0.17.0 | Pinned (installed with `--no-deps`). |
+| numpy | < 2.2 | Constraint (not a single pin). |
+| triton | latest compatible | Not pinned; resolved at bake time. |
+| bitsandbytes, xformers | latest compatible | Not pinned; resolved at bake time. |
+| torchvision, pillow, diffusers, httpx, wandb | latest compatible | Not pinned; resolved at bake time. |
+| peft, accelerate | dependency-resolved | Installed as dependencies of the pinned packages, not separately pinned. |
+| Node.js | 22.x | Present for Claude Agent SDK harness jobs. |
+| claude-code CLI | 2.1.173 | Pinned, for harness rollouts. |
+
+<Note>
+  This table is the AWS runtime. The other providers deliver an equivalent stack their own way:
+
+  - **Vast** runs from a Docker image built on `vastai/pytorch:2.9.1-cu128` (Python 3.10, torch 2.9.1 on CUDA 12.8). Same core pins (vLLM 0.15.1, transformers 4.56.2, trl 1.7.1, torchao 0.17.0), and it pins some packages the AWS image leaves floating (for example bitsandbytes 0.49.2, xformers 0.0.33.post2, triton 3.7.0).
+  - **DigitalOcean** and other generic GPU providers have no prebaked image, so the stack is installed at cold start. Their versions track the current install script rather than a baked snapshot.
+  - **Hot Aisle (AMD MI300X)** runs a separate ROCm image, not the CUDA stack above. Its PyTorch and kernels are ROCm builds.
+</Note>
+
+## L3 custom-script base images
+
+Custom scripts run inside one of three curated base images. Each prebakes CUDA, PyTorch, and the Hugging Face stack; you layer your own training dependencies (`trl`, `unsloth`, `bitsandbytes`, `deepspeed`, and so on) at job time through a `requirements.txt`. See [custom training scripts](/training/custom-script) for the base-image catalog and the `requirements.txt` flow.
+
+All three images share the same CUDA and PyTorch foundation: `nvidia/cuda:12.8.1-cudnn-runtime` on Ubuntu 22.04, Python 3.10, and PyTorch 2.8.0 built for CUDA 12.8 (`cu128`).
+
+### veri/base
+
+The default on-ramp: CUDA plus PyTorch plus the Hugging Face training stack. This is deliberately the Hugging Face stack only, so you layer your own trainer.
+
+| Package | Version |
+| --- | --- |
+| Python | 3.10 (Ubuntu 22.04) |
+| CUDA (base image) | 12.8.1 (cuDNN runtime) |
+| uv | 0.7.13 |
+| torch | 2.8.0 (cu128) |
+| torchvision | 0.23.0 |
+| torchaudio | 2.8.0 |
+| transformers | 4.56.2 |
+| tokenizers | 0.22.1 |
+| datasets | 4.0.0 |
+| accelerate | 1.10.1 |
+| peft | 0.17.1 |
+| safetensors | 0.6.2 |
+| huggingface-hub | 0.35.1 |
+| numpy | 2.1.3 |
+| pillow | 11.3.0 |
+| httpx | 0.28.1 |
+| sentencepiece, einops | latest compatible |
+
+**Not included by design:** `unsloth`, `trl`, `bitsandbytes`, `xformers`, `torchao`, and `deepspeed`. Those are training-side dependencies you layer yourself through your `requirements.txt` on top of `veri/base`. When you pin them, pick versions compatible with torch 2.8.0 on CUDA 12.8.
+
+### veri/base-vllm
+
+`veri/base` plus vLLM, for OpenRLHF-style scripts and any vLLM-rollout RL.
+
+| Package | Version |
+| --- | --- |
+| (everything in `veri/base`) | see above |
+| vllm | 0.15.1 |
+
+vLLM resolves its own compatible `flashinfer` build against torch 2.8 on CUDA 12.8; it is not separately pinned.
+
+### veri/base-sglang
+
+`veri/base` plus SGLang, for slime and SGLang-based stacks.
+
+| Package | Version |
+| --- | --- |
+| (everything in `veri/base`) | see above |
+| sglang[all] | 0.5.2 |
+
+SGLang is held at 0.5.2 (the torch-2.8 / CUDA-12.8 era). Newer SGLang releases force a torch and CUDA upgrade that would break the base pins, so do not assume a later SGLang is available. Its matching `sgl-kernel` resolves from the CUDA 12.8 wheel index.
+
+## Hardware constraints
+
+- **NVIDIA CUDA only for custom scripts.** The base-image catalog is CUDA-tier. Submitting a custom script with an AMD `gpu_type` (for example `MI300X-192GB`) returns a 400.
+- **AMD MI300X via managed training.** To run on AMD MI300X, use a managed method (`grpo`, `sft_text`, `dpo`) with `provider="hotaisle"`. See [custom training scripts](/training/custom-script) for the current NVIDIA and AMD split.
+
+## Layering your own dependencies
+
+Your `requirements.txt` installs on top of the base image at job time. To avoid conflicts:
+
+- Pin against the base versions above. For example, on `veri/base` a trainer that needs `trl` should pick a `trl` compatible with `transformers==4.56.2` and torch 2.8.0.
+- Avoid pulling a dependency that force-upgrades torch or CUDA. A package that yanks torch forward can break the prebaked engine (vLLM or SGLang) in the same image.
+- Start from the image closest to your stack (`veri/base-vllm` or `veri/base-sglang`) rather than reinstalling the engine yourself.
+
+See [custom training scripts](/training/custom-script) for the full submit flow.

@@ -123,7 +123,7 @@ These flags are sugar over `--set` on `veri jobs create`:
 name = "my-project"
 
 [defaults]
-gpu_type = "A100-80GB"
+gpu_type = "L4-24GB"    # the genuine 1-GPU node on aws (the default provider)
 gpu_count = 1
 base_model = "Qwen/Qwen3-4B"
 ```
@@ -154,7 +154,7 @@ rollouts_per_prompt = 4
 max_response_length = 512
 
 [resources]
-gpu_type = "A100-80GB"
+gpu_type = "L4-24GB"
 gpu_count = 1
 
 [checkpoint]
