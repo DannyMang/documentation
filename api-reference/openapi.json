@@ -5303,6 +5303,20 @@
           },
           "load_in_4bit": {
             "type": "boolean"
+          },
+          "checkpoint_every": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "checkpoint_keep": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
           }
         }
       },
@@ -5751,6 +5765,20 @@
           },
           "load_in_4bit": {
             "type": "boolean"
+          },
+          "checkpoint_every": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "checkpoint_keep": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
           }
         }
       },
@@ -7608,6 +7636,20 @@
           },
           "load_in_4bit": {
             "type": "boolean"
+          },
+          "checkpoint_every": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "checkpoint_keep": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
           }
         }
       },
@@ -7663,6 +7705,20 @@
           },
           "seed": {
             "type": "integer",
+            "format": "int32"
+          },
+          "checkpoint_every": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "checkpoint_keep": {
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int32"
           }
         }
