@@ -577,7 +577,7 @@
             }
           },
           "400": {
-            "description": "An active training job or an evaluation still references the dataset"
+            "description": "An active training job still references the dataset"
           },
           "404": {
             "description": "Not found or not owned by the caller"
