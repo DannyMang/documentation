@@ -308,6 +308,71 @@
         ]
       }
     },
+    "/v1/compatibility/resolve": {
+      "post": {
+        "tags": [
+          "Compatibility"
+        ],
+        "summary": "Resolve advisory model/runtime compatibility",
+        "operationId": "resolve_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompatibilityResolveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Advisory resolution with warnings and platform validation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompatibilityResolveResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing model identifier"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/compatibility/runtimes": {
+      "get": {
+        "tags": [
+          "Compatibility"
+        ],
+        "summary": "List platform-approved model runtimes",
+        "operationId": "runtimes",
+        "responses": {
+          "200": {
+            "description": "Reviewed runtime IDs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuntimeCatalogResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/credits/redeem": {
       "post": {
         "tags": [
@@ -1392,6 +1457,61 @@
         ]
       }
     },
+    "/v1/gpu/availability/cached": {
+      "get": {
+        "tags": [
+          "GPU"
+        ],
+        "summary": "Cached GPU availability with single-flight refresh",
+        "operationId": "availability_cached",
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "query",
+            "description": "\"aws\" | \"hotaisle\" | \"vast\" | \"digitalocean\". Absent = every probeable\nprovider we can reach.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "gpu_type",
+            "in": "query",
+            "description": "GPU-type filter (e.g. \"H100\", \"A100-80GB\", \"MI300X-192GB\"). Absent = all.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "region",
+            "in": "query",
+            "description": "Region filter. AWS: a real region. Hot Aisle: \"hotaisle-us\".\nDigitalOcean: a DO region slug (e.g. \"tor1\").",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Availability snapshot with probe timestamp; at most one live probe runs at a time",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GpuAvailabilitySnapshot"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/gpu/catalog": {
       "get": {
         "tags": [
@@ -1640,10 +1760,13 @@
             }
           },
           "400": {
-            "description": "Invalid name, non-completed job, or a job with no deployable checkpoint"
+            "description": "Invalid name or artifact, non-completed job, a job with no deployable checkpoint, or artifact=adapter on a non-LoRA job"
           },
           "404": {
             "description": "Training job not found or not owned by the caller"
+          },
+          "409": {
+            "description": "The job is already saved with a different artifact"
           },
           "501": {
             "description": "Source type not yet supported (huggingface, upload)"
@@ -3800,6 +3923,155 @@
           }
         }
       },
+      "CompatibilityOperation": {
+        "type": "string",
+        "enum": [
+          "serve",
+          "train"
+        ]
+      },
+      "CompatibilityResolveRequest": {
+        "type": "object",
+        "required": [
+          "operation",
+          "model"
+        ],
+        "properties": {
+          "operation": {
+            "$ref": "#/components/schemas/CompatibilityOperation",
+            "description": "\"serve\" or \"train\". A serving runtime cannot be used for training and\nvice versa; that is a platform validation rather than a matrix warning."
+          },
+          "model": {
+            "type": "string",
+            "description": "Hugging Face model ID or a saved-model identifier. Exact model ID is\npreferred; model revision is carried for future exact-revision profiles."
+          },
+          "model_revision": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "runtime_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional caller preference among the platform-approved runtime IDs from\nGET /v1/compatibility/runtimes. An unknown ID is reported as a\nnon-overridable validation error, not silently treated as a custom image."
+          },
+          "gpu_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "gpu_count": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "CompatibilityResolveResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "matrix_revision",
+          "status",
+          "operation",
+          "model",
+          "recommended_config",
+          "compatibility_warnings",
+          "platform_validation"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "matrix_revision": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CompatibilityStatus"
+          },
+          "operation": {
+            "$ref": "#/components/schemas/CompatibilityOperation"
+          },
+          "model": {
+            "type": "string"
+          },
+          "model_revision": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "matched_profile": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "recommended_runtime": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RuntimeInfo"
+              }
+            ]
+          },
+          "selected_runtime": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RuntimeInfo"
+              }
+            ]
+          },
+          "recommended_config": {
+            "$ref": "#/components/schemas/RecommendedConfig"
+          },
+          "compatibility_warnings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CompatibilityWarning"
+            }
+          },
+          "platform_validation": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlatformValidation"
+            }
+          }
+        }
+      },
+      "CompatibilityStatus": {
+        "type": "string",
+        "enum": [
+          "advisory",
+          "unknown"
+        ]
+      },
+      "CompatibilityWarning": {
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
       "CreateKeyRequest": {
         "type": "object",
         "required": [
@@ -3861,6 +4133,13 @@
           "replace_name": {
             "type": "boolean",
             "description": "Apply `name` to an already-saved model on a repeat save (idempotent save\notherwise leaves the original name untouched)."
+          },
+          "artifact": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Which artifact to save from the source job: \"full\" (default, the\nstandalone checkpoint) or \"adapter\" (LoRA jobs only — stores the PEFT\nadapter dir as-is, without merging; the row records the job's base\nmodel, VS-405)."
           }
         }
       },
@@ -4245,6 +4524,17 @@
               "type": "string"
             },
             "description": "VS-370: extra vLLM CLI flags appended verbatim to the engine command\n(argv list, e.g. [\"--speculative-config\", \"{...}\", \"--kv-cache-dtype\",\n\"fp8\"]). vllm engine only. Flags the platform owns (--model, --port,\n--host, --api-key, --served-model-name) are rejected at create."
+          },
+          "vllm_image": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "VS-426: explicit vLLM serving image (e.g. \"vllm/vllm-openai:v0.25.1\")\nfor architectures newer than the platform default vLLM. Official\nupstream images only (vllm/vllm-openai[-rocm]:<tag>). vllm engine only.\nForces the docker launcher on every provider, including AWS. Omitted =>\nplatform default."
+          },
+          "startup_profiling": {
+            "type": "boolean",
+            "description": "Opt-in vLLM startup diagnostics: the serving agent exports\nVLLM_LOGGING_LEVEL=DEBUG + VLLM_GC_DEBUG=1 to the engine, records\nstartup phase timings, and reports them on the first healthy heartbeat\n(or in the failure detail with a deeper stderr tail). Default false —\ndiagnostic logging slows inference, so use for diagnosis launches, not\nsteady customer traffic."
           }
         }
       },
@@ -5058,6 +5348,13 @@
               "null"
             ]
           },
+          "byoc_repo": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "BYOC (provider='huggingface'): the HF hub repository this endpoint\nserves under the owner's account. Null for every non-BYOC deployment."
+          },
           "engine": {
             "type": [
               "string",
@@ -5073,6 +5370,20 @@
               "type": "string"
             },
             "description": "VS-370: the extra vLLM CLI flags this deployment was created with\n(argv list). Null unless supplied at create."
+          },
+          "vllm_image": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "VS-426: the explicit vLLM serving image this deployment was created\nwith. Null unless supplied at create."
+          },
+          "startup_profiling": {
+            "type": "boolean",
+            "description": "Whether this deployment was created with startup diagnostics on."
+          },
+          "startup_metrics": {
+            "description": "Startup phase timings reported by a profiled deployment's first healthy\nheartbeat (seconds: model_sync_s, engine_start_to_healthy_s, total_s).\nNull unless startup_profiling was set and the engine reached healthy."
           },
           "num_replicas": {
             "type": "integer",
@@ -5341,6 +5652,21 @@
           }
         }
       },
+      "EnvironmentRecommendation": {
+        "type": "object",
+        "required": [
+          "name",
+          "value"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      },
       "EnvironmentSource": {
         "oneOf": [
           {
@@ -5560,6 +5886,50 @@
           }
         }
       },
+      "GpuAvailabilitySnapshot": {
+        "type": "object",
+        "required": [
+          "object",
+          "refreshed",
+          "refreshing",
+          "availability"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "checked_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When the returned rows were probed. Null only when no snapshot exists\nyet AND a refresh is already in flight (retry shortly)."
+          },
+          "age_seconds": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Seconds since `checked_at` (server clock), for staleness at a glance."
+          },
+          "refreshed": {
+            "type": "boolean",
+            "description": "True when THIS request ran the probe (cache was stale and the lock was\nfree). False = served from cache."
+          },
+          "refreshing": {
+            "type": "boolean",
+            "description": "True when another request's probe is in flight; the rows below are the\nprevious snapshot. Poll again in a few seconds for the fresh one."
+          },
+          "availability": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GpuAvailabilityRow"
+            }
+          }
+        }
+      },
       "GpuCatalogList": {
         "type": "object",
         "required": [
@@ -5699,6 +6069,22 @@
             "type": "string"
           },
           "count": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "GpuRecommendation": {
+        "type": "object",
+        "required": [
+          "gpu_type",
+          "gpu_count"
+        ],
+        "properties": {
+          "gpu_type": {
+            "type": "string"
+          },
+          "gpu_count": {
             "type": "integer",
             "format": "int32"
           }
@@ -6157,6 +6543,7 @@
           "id",
           "name",
           "base_model",
+          "artifact_type",
           "source",
           "status",
           "created_at",
@@ -6173,7 +6560,12 @@
             "type": "string"
           },
           "base_model": {
-            "type": "string"
+            "type": "string",
+            "description": "The base checkpoint this model derives from. For artifact_type\n'adapter' this names the model the adapter must be served on top of."
+          },
+          "artifact_type": {
+            "type": "string",
+            "description": "'full' (standalone checkpoint) | 'adapter' (LoRA adapter; only\nattachable to a multi_adapter deployment)."
           },
           "source": {
             "type": "string"
@@ -6743,6 +7135,13 @@
                     "null"
                   ]
                 },
+                "byoc_repo": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "BYOC (provider='huggingface'): the HF hub repository this endpoint\nserves under the owner's account. Null for every non-BYOC deployment."
+                },
                 "engine": {
                   "type": [
                     "string",
@@ -6758,6 +7157,20 @@
                     "type": "string"
                   },
                   "description": "VS-370: the extra vLLM CLI flags this deployment was created with\n(argv list). Null unless supplied at create."
+                },
+                "vllm_image": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "VS-426: the explicit vLLM serving image this deployment was created\nwith. Null unless supplied at create."
+                },
+                "startup_profiling": {
+                  "type": "boolean",
+                  "description": "Whether this deployment was created with startup diagnostics on."
+                },
+                "startup_metrics": {
+                  "description": "Startup phase timings reported by a profiled deployment's first healthy\nheartbeat (seconds: model_sync_s, engine_start_to_healthy_s, total_s).\nNull unless startup_profiling was set and the engine reached healthy."
                 },
                 "num_replicas": {
                   "type": "integer",
@@ -6876,6 +7289,7 @@
                 "id",
                 "name",
                 "base_model",
+                "artifact_type",
                 "source",
                 "status",
                 "created_at",
@@ -6892,7 +7306,12 @@
                   "type": "string"
                 },
                 "base_model": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "The base checkpoint this model derives from. For artifact_type\n'adapter' this names the model the adapter must be served on top of."
+                },
+                "artifact_type": {
+                  "type": "string",
+                  "description": "'full' (standalone checkpoint) | 'adapter' (LoRA adapter; only\nattachable to a multi_adapter deployment)."
                 },
                 "source": {
                   "type": "string"
@@ -7444,6 +7863,60 @@
           }
         }
       },
+      "PlatformValidation": {
+        "type": "object",
+        "description": "Errors in this field are platform safety/provenance checks. A user may\nchoose outside matrix guidance, but may not select an unapproved runtime ID\nor use a runtime for the wrong operation.",
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "RecommendedConfig": {
+        "type": "object",
+        "required": [
+          "vllm_extra_args",
+          "environment",
+          "gpu_candidates"
+        ],
+        "properties": {
+          "vllm_extra_args": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "These values are recommendations only in phase one. The current\ndeployment payload stays untouched, including legacy `vllm_image`."
+          },
+          "environment": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EnvironmentRecommendation"
+            }
+          },
+          "gpu_candidates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GpuRecommendation"
+            },
+            "description": "Shapes the reviewed profile was written for. This is advisory only:\ncapacity and final memory feasibility are separate checks."
+          },
+          "max_model_len": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
       "RedeemRequest": {
         "type": "object",
         "required": [
@@ -7547,6 +8020,69 @@
         "properties": {
           "name": {
             "type": "string"
+          }
+        }
+      },
+      "RuntimeCatalogResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "matrix_revision",
+          "runtimes"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "matrix_revision": {
+            "type": "string"
+          },
+          "runtimes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RuntimeInfo"
+            }
+          }
+        }
+      },
+      "RuntimeInfo": {
+        "type": "object",
+        "required": [
+          "id",
+          "operation",
+          "engine",
+          "launcher",
+          "platform_default"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Stable platform identifier. Later create endpoints will accept this ID,\nnever a caller supplied registry/image string."
+          },
+          "operation": {
+            "$ref": "#/components/schemas/CompatibilityOperation"
+          },
+          "engine": {
+            "type": "string"
+          },
+          "vllm_version": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "launcher": {
+            "type": "string",
+            "description": "\"module\" is the AMI-provided default; \"docker\" is an approved official\nimage. Image digests are intentionally deferred until Veri mirrors the\nimages it operates (the current legacy vllm_image contract accepts tags)."
+          },
+          "image": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "platform_default": {
+            "type": "boolean"
           }
         }
       },
@@ -8624,6 +9160,10 @@
     {
       "name": "GPU",
       "description": "Live GPU availability by provider and region."
+    },
+    {
+      "name": "Compatibility",
+      "description": "Advisory model and runtime compatibility guidance."
     },
     {
       "name": "Code artifacts",
