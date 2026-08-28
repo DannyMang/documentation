@@ -1,0 +1,84 @@
+---
+title: "Hugging Face (your account)"
+sidebarTitle: "Hugging Face BYOC (coming soon)"
+description: "Deploy to a dedicated HF Inference Endpoint under your own Hugging Face account — HF bills the compute, and it costs no Veri credits."
+keywords: ["Hugging Face", "BYOC", "bring your own cloud", "Inference Endpoints", "serving", "deployments", "data residency"]
+---
+
+`provider="huggingface"` is different from every other provider: the deployment does not run on GPUs Veri rents. Instead, Veri creates and manages a dedicated [HF Inference Endpoint](https://huggingface.co/inference-endpoints) **under your own Hugging Face account** — your namespace, your billing, your data path.
+
+It is currently feature-gated: a `provider="huggingface"` create returns a "coming soon" 400 until the gate lifts.
+
+## Why use it
+
+- **Compute on your own account.** Hugging Face bills you directly, by the minute, at their published instance rates. The deployment costs **zero Veri credits** — credits only meter training and Veri-hosted serving.
+- **Burn existing spend.** HF endpoint charges land on your HF organization's bill, alongside whatever you already pay them.
+- **Your data path.** Your apps can call the endpoint URL directly with your HF token; requests then never transit Veri. (The Veri chat proxy and playground still work if you want one pane of glass.)
+
+## Prerequisites
+
+1. **A connected Hugging Face token** with the *Manage Inference Endpoints* permission (and *Make calls to Inference Endpoints* if you'll invoke through it). Connect it in **Settings → Integrations**, or `PUT /v1/settings/integrations/huggingface`.
+2. **A model that lives on the HF hub**, one of:
+   - `source="huggingface"` — any repo your token can access,
+   - `source="training_job"` — a job trained with `hf_push` (its checkpoint is already in your HF account),
+   - `source="custom_model"` — a saved model you've pushed with `POST /v1/models/{id}/push-to-hf`.
+3. **A payment method on your HF account** (HF requires one for Inference Endpoints).
+
+## Planned serving shapes
+
+The `gpu_type`/`gpu_count` you request maps onto HF's instance catalog:
+
+| `gpu_type` | GPUs per endpoint replica | HF instance | Status |
+| --- | --- | --- | --- |
+| `A10G-24GB` | 1, 4 | `nvidia-a10g` (AWS us-east-1) | Coming soon |
+| `L4-24GB` | 1, 4 | `nvidia-l4` (AWS us-east-1) | Coming soon |
+| `L40S-48GB` | 1, 4, 8 | `nvidia-l40s` (AWS us-east-1) | Coming soon |
+| `A100-80GB` | 1, 2, 4, 8 | `nvidia-a100` (AWS us-east-1) | Coming soon |
+| `H100-80GB` | 1, 2, 4 | `nvidia-h100` (GCP us-east4) | Coming soon |
+
+## Creating one
+
+```python
+dep = client.deployments.create(
+    model="your-namespace/your-model",
+    source="huggingface",
+    name="my-byoc-endpoint",
+    gpu={"gpu_type": "A10G-24GB", "gpu_count": 1},
+    provider="huggingface",
+)
+```
+
+Or from the CLI:
+
+```bash
+veri deploy your-namespace/your-model --provider huggingface --gpu-type A10G-24GB
+```
+
+## How it behaves
+
+- **One endpoint, HF-native scaling.** `num_replicas` / `min_replicas` / `max_replicas` map onto the endpoint's own `minReplica`/`maxReplica`. `min_replicas=0` uses HF's native scale-to-zero (the endpoint wakes itself on the next request; the deployment stays `serving` in Veri).
+- **Status is polled.** Veri polls the HF API and mirrors the endpoint's state onto the deployment (`provisioning` → `serving`, failures surface HF's error message). The endpoint also appears in your HF console, named `veri-<id>`.
+- **Deleting is symmetric.** Stopping or deleting the deployment in Veri deletes the HF endpoint. Pausing or deleting it in the HF console settles the Veri deployment to `stopped`.
+- **Calling it.** `POST /v1/deployments/{id}/chat/completions` proxies to the endpoint, or call the endpoint URL directly: it is an `authenticated`-type endpoint, so pass your own HF token as the bearer.
+
+```bash
+curl https://<endpoint-url>/v1/chat/completions \
+  -H "Authorization: Bearer $HF_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "your-namespace/your-model", "messages": [{"role": "user", "content": "hi"}]}'
+```
+
+<Note>
+  Not supported on BYOC endpoints: the `max` engine, `vllm_extra_args`, model caching, and multi-adapter serving. Requests that include them return a 400 at create.
+</Note>
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="All serving providers" icon="server" href="/deployments/providers">
+    Compare shapes, status, and the live CLI catalog.
+  </Card>
+  <Card title="Push a checkpoint to HF" icon="upload" href="/training">
+    Train with hf_push so your checkpoint is deployable on your account.
+  </Card>
+</CardGroup>

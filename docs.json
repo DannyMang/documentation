@@ -83,7 +83,8 @@
                   "deployments/providers/aws",
                   "deployments/providers/gcp",
                   "deployments/providers/azure",
-                  "deployments/providers/digitalocean"
+                  "deployments/providers/digitalocean",
+                  "deployments/providers/huggingface"
                 ]
               },
               "deployments/cost",

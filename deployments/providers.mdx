@@ -5,7 +5,9 @@ description: "Choose where your deployment runs: AWS (default), GCP, Hot Aisle (
 keywords: ["providers", "serving", "deployments", "AWS", "GCP", "Azure", "Hot Aisle", "AMD", "MI300X", "DigitalOcean"]
 ---
 
-Deployments run on five providers. You pick one at create time with the `provider` field; it defaults to `aws`. There is no automatic cross-provider routing — you pick the provider explicitly, and capacity errors don't spill to another cloud.
+Deployments run on six providers. You pick one at create time with the `provider` field; it defaults to `aws`. There is no automatic cross-provider routing — you pick the provider explicitly, and capacity errors don't spill to another cloud.
+
+One provider is special: [`huggingface`](/deployments/providers/huggingface) is BYOC — the deployment runs as an HF Inference Endpoint under **your own Hugging Face account**, billed by HF, at zero Veri credits.
 
 ## Providers at a glance
 
@@ -20,6 +22,7 @@ Deployments run on five providers. You pick one at create time with the `provide
 | [`hotaisle`](/deployments/providers/hotaisle) | `MI300X-192GB` | 192 GB | 1 | Coming soon |
 | [`azure`](/deployments/providers/azure) | `A100-80GB`, `H100-80GB` | 80 GB | 1 | Coming soon |
 | [`digitalocean`](/deployments/providers/digitalocean) | `H100-80GB`, `L40S-48GB`, `MI300X-192GB` | 80/48/192 GB | 1 | Coming soon |
+| [`huggingface`](/deployments/providers/huggingface) (BYOC: your HF account) | `A10G-24GB`, `L4-24GB`, `L40S-48GB`, `A100-80GB`, `H100-80GB` | 24-80 GB | 1-8 | Coming soon |
 
 Each provider sells fixed node shapes. The `gpu_count` you request must match one of the counts above — asking for a shape a provider doesn't sell returns a 400 at create, before anything boots.
 
@@ -79,6 +82,9 @@ veri gpu list --format json             # machine-readable, incl. usd_per_hour
   </Card>
   <Card title="DigitalOcean" icon="droplet" href="/deployments/providers/digitalocean">
     H100, L40S, and MI300X droplets — coming soon.
+  </Card>
+  <Card title="Hugging Face (BYOC)" icon="cloud-arrow-up" href="/deployments/providers/huggingface">
+    An HF Inference Endpoint under your own account — HF bills the compute, zero Veri credits.
   </Card>
 </CardGroup>
 
