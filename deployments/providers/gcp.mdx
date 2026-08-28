@@ -1,18 +1,19 @@
 ---
 title: "GCP"
 sidebarTitle: "GCP"
-description: "Genuine single-GPU A100/H100 VMs on Google Cloud — the way to rent one big NVIDIA card instead of a whole AWS node."
-keywords: ["GCP", "Google Cloud", "serving", "deployments", "A100", "H100"]
+description: "Genuine single-GPU A100 VMs on Google Cloud — the way to rent one big NVIDIA card instead of a whole AWS node."
+keywords: ["GCP", "Google Cloud", "serving", "deployments", "A100"]
 ---
 
-GCP offers genuine single-GPU A100 and H100 VMs — the main reason to pick it over AWS, where those cards only come as whole 8-GPU nodes.
+GCP offers genuine single-GPU A100 VMs — the main reason to pick it over AWS, where the big cards only come as whole 8-GPU nodes.
 
 ## Serving shapes
 
 | `gpu_type` | Memory | GPUs per node |
 | --- | --- | --- |
 | `A100-80GB` | 80 GB | 1 |
-| `H100-80GB` | 80 GB | 1 |
+
+Single H100 VMs on GCP are Spot-only (preemptible), so they are not offered for serving. To serve on H100, use AWS.
 
 ## Creating a deployment
 
@@ -21,7 +22,7 @@ client.deployments.create(
     model="Qwen/Qwen2.5-7B-Instruct",
     source="huggingface",
     name="my-deploy",
-    gpu={"gpu_type": "H100-80GB", "gpu_count": 1},
+    gpu={"gpu_type": "A100-80GB", "gpu_count": 1},
     provider="gcp",
 )
 ```

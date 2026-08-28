@@ -18,7 +18,6 @@ One provider is special: [`huggingface`](/deployments/providers/huggingface) is 
 | [`aws`](/deployments/providers/aws) (default) | `A100-80GB` | 80 GB | 8 (whole node) | Available |
 | [`aws`](/deployments/providers/aws) (default) | `H100-80GB` | 80 GB | 8 (whole node) | Available |
 | [`gcp`](/deployments/providers/gcp) | `A100-80GB` | 80 GB | 1 | Available |
-| [`gcp`](/deployments/providers/gcp) | `H100-80GB` | 80 GB | 1 | Available |
 | [`hotaisle`](/deployments/providers/hotaisle) | `MI300X-192GB` | 192 GB | 1 | Coming soon |
 | [`azure`](/deployments/providers/azure) | `A100-80GB`, `H100-80GB` | 80 GB | 1 | Coming soon |
 | [`digitalocean`](/deployments/providers/digitalocean) | `H100-80GB`, `L40S-48GB`, `MI300X-192GB` | 80/48/192 GB | 1 | Coming soon |
@@ -37,7 +36,7 @@ client.deployments.create(
     model="Qwen/Qwen2.5-0.5B-Instruct",
     source="huggingface",
     name="my-deploy",
-    gpu={"gpu_type": "H100-80GB", "gpu_count": 1},
+    gpu={"gpu_type": "A100-80GB", "gpu_count": 1},
     provider="gcp",
 )
 ```
