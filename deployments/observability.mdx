@@ -175,6 +175,50 @@ When `replica_id` is set, buckets, the window summary, engine gauges (queue dept
 
 See the interactive [API reference](/api-reference/introduction) for complete response schemas.
 
+## Request traces
+
+Request telemetry (above) records that requests happened; **traces** additionally
+capture the full request and response bodies so you can see exactly what was asked
+and what the model answered. Traces are opt-in per deployment and off by default,
+because enabling them stores your end users' prompt and completion content.
+
+Opt in at create time:
+
+```bash
+veri deploy Qwen/Qwen3-4B --trace-bodies                       # 14-day retention
+veri deploy Qwen/Qwen3-4B --trace-bodies --trace-retention extended   # 400-day
+```
+
+Or in the SDK: `client.deployments.create(..., trace_bodies=True)`.
+
+Browse traces from the deployment page in the dashboard, the CLI, or the API:
+
+```bash
+veri deployments traces dep_abc --page 1 --limit 20
+veri deployments trace dep_abc veri-req000000001
+```
+
+```python
+listing = client.deployments.traces(dep.id, page=1, limit=20)
+trace = client.deployments.trace(dep.id, listing["data"][0]["id"])
+# trace["input"] / trace["output"] are the request and response bodies
+```
+
+Details worth knowing:
+
+- **Cross-linking.** Every trace's `metadata.veri_request_id` matches an id from
+  `deployments.requests()`, so you can join body-level traces with the timing,
+  token, and error telemetry for the same request.
+- **Retention.** `base` traces are deleted after 14 days, `extended` after 400.
+- **Pricing.** The first 5,000 base-retention traces per workspace each month are
+  free; beyond that, $2.50 per 1k traces at base retention and $5.00 per 1k at
+  extended, metered from credits at month end.
+- **Never in the request path.** Capture is asynchronous and drop-tolerant: if the
+  trace store is unavailable, requests are unaffected and the affected traces are
+  dropped.
+- **Streaming.** Bodies of streamed (`stream: true`) responses are not captured
+  yet; those requests still appear in request telemetry.
+
 ## Export metrics to Prometheus
 
 `GET /v1/metrics/export` returns your account's deployment and replica metrics in Prometheus text exposition format (`text/plain; version=0.0.4`). Authenticate with your API key as a Bearer credential, exactly like every other endpoint. The response covers your deployments only.

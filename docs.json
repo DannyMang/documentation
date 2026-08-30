@@ -206,6 +206,8 @@
               "GET /v1/deployments/{deployment_id}/metrics/timeseries",
               "GET /v1/deployments/{deployment_id}/metrics/engine-timeseries",
               "GET /v1/deployments/{deployment_id}/requests",
+              "GET /v1/deployments/{deployment_id}/traces",
+              "GET /v1/deployments/{deployment_id}/traces/{trace_id}",
               "POST /v1/deployments/{deployment_id}/stop",
               "DELETE /v1/deployments/{deployment_id}"
             ]

@@ -28,6 +28,9 @@ In a terminal, it asks whether to cache the model in Veri storage for faster sta
 | `--replicas` | GPU-box replicas behind the endpoint. Default `1`. |
 | `--cache` / `--no-cache` | Cache the model in your library (or don't) without prompting. |
 | `--yes` / `-y` | Skip the prompt. No caching unless `--cache` is passed. |
+| `--vllm-image` | Explicit vLLM serving image for [architectures newer than the platform vLLM](/deployments#serving-newer-architectures), e.g. `vllm/vllm-openai:v0.25.1`. |
+| `--trace-bodies` / `--no-trace-bodies` | Capture request/response bodies as browsable [traces](/deployments/observability#request-traces). Off by default. |
+| `--trace-retention` | `base` (14 days, default) or `extended` (400 days). Requires `--trace-bodies`. |
 
 Outside a terminal (scripts, CI) the prompt is skipped and caching stays off unless `--cache` is explicit.
 
@@ -48,6 +51,8 @@ Outside a terminal (scripts, CI) the prompt is skipped and caching stays off unl
 | `bench <id>` | Load-test the endpoint; report TTFB/TTFT/ITL/TPS/e2e at p50/p90/p99. |
 | `metrics <id>` | RPS, latency, GPU utilization. |
 | `requests <id>` | Recent inference requests. |
+| `traces <id>` | Captured request traces (deployments created with `--trace-bodies`). |
+| `trace <id> <trace-id>` | One trace with its full request/response bodies. |
 
 ## Create from a config
 
@@ -102,6 +107,9 @@ veri deployments create \
 | `--idle-delete-after` | Auto-stop a parked deployment after N idle days. Default: keep it wakeable forever. |
 | `--cache` / `--no-cache` | With `--from-hf` only: also save the downloaded model to your [library](/deployments/custom-models) so later deploys of the repo start from Veri storage. |
 | `--vllm-arg` | Extra vLLM CLI token appended verbatim to the engine command; repeat per token (e.g. `--vllm-arg=--kv-cache-dtype --vllm-arg=fp8`). vllm engine only; platform-managed flags (`--model`, `--port`, `--host`, `--api-key`, `--served-model-name`) are rejected. Also available as `deployment.vllm_extra_args` (list of strings) in a deploy config. |
+| `--vllm-image` | Explicit vLLM serving image for [architectures newer than the platform vLLM](/deployments#serving-newer-architectures), e.g. `vllm/vllm-openai:v0.25.1`. Official upstream images only (`vllm/vllm-openai[-rocm]:<tag>`); vllm engine only. Also available as `deployment.vllm_image` in a deploy config. Default: platform vLLM. |
+| `--trace-bodies` / `--no-trace-bodies` | Capture this deployment's request/response bodies as browsable [traces](/deployments/observability#request-traces). Off by default: enabling stores your end users' prompt/completion content. Also available as `deployment.trace_bodies` in a deploy config. |
+| `--trace-retention` | Trace retention class: `base` (14 days, default) or `extended` (400 days, extended rate). Requires `--trace-bodies`. Also available as `deployment.trace_retention`. |
 
 See [Replicas, autoscaling, and scale to zero](#replicas-autoscaling-and-scale-to-zero) for how the bounds behave.
 
@@ -218,6 +226,14 @@ Recent requests:
 ```bash
 veri deployments requests dep_abc --limit 50
 veri deployments requests dep_abc --after req_xyz --limit 100   # pagination
+```
+
+Request traces (deployments created with `--trace-bodies` — see the
+[traces guide](/deployments/observability#request-traces)):
+
+```bash
+veri deployments traces dep_abc --page 1 --limit 20
+veri deployments trace dep_abc veri-req000000001    # full request/response bodies
 ```
 
 ## List, get

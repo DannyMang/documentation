@@ -46,6 +46,9 @@ You set these at create time, whether from the [SDK](/deployments/examples) (`cl
 | `scale_to_zero_window_seconds` | No | `3600` | Idle seconds before a `min_replicas: 0` deployment parks. Minimum `300`. |
 | `idle_delete_after_days` | No | off | Auto-stop a deployment that has been parked at zero with no traffic for this many days. |
 | `cache` | No | `false` | `source: huggingface` only: also [save the model to your library](/deployments/custom-models#cache-a-hugging-face-model-while-deploying-it) for faster future starts. Best-effort; never affects this deployment. |
+| `vllm_image` | No | platform vLLM | Explicit vLLM serving image (e.g. `vllm/vllm-openai:v0.25.1`) for architectures newer than the platform's vLLM. See [Serving newer architectures](#serving-newer-architectures). |
+| `trace_bodies` | No | `false` | Capture this deployment's request/response bodies as browsable [traces](/deployments/observability#request-traces). Enabling stores end-user prompt/completion content. First 5,000 traces per workspace each month are free, then metered per 1k from credits. |
+| `trace_retention` | No | `base` | Trace retention class: `base` (14 days) or `extended` (400 days, extended rate). Requires `trace_bodies: true`. |
 
 `min_replicas`, `max_replicas`, `concurrency_target`, `scale_to_zero_window_seconds`, and `idle_delete_after_days` can also be changed later on a live deployment — see [Scaling](/cli/deployments#replicas-autoscaling-and-scale-to-zero). Model, GPU, and provider are immutable: changing those means a new deployment.
 
@@ -141,6 +144,39 @@ Pick a GPU large enough to hold the weights with headroom. Some rough starting p
 
 Serving usually needs **less** GPU than training the same model. A 7B you trained on 8×A100 typically serves on 1×A100.
 
+## Serving newer architectures
+
+Deployments run a platform-managed vLLM version by default. A model architecture released after that version fails to start (`vllm_failed_to_start`) because vLLM doesn't recognize it yet.
+
+To serve one, pin the deployment to a newer official vLLM image:
+
+```bash
+veri deployments create \
+  --from-hf poolside/Laguna-M.1 \
+  --gpu-type A100-80GB --gpu-count 8 \
+  --vllm-image vllm/vllm-openai:v0.25.1
+```
+
+Or in a deploy config:
+
+```toml
+[deployment]
+vllm_image = "vllm/vllm-openai:v0.25.1"
+```
+
+How it behaves:
+
+- Only official upstream images are accepted: `vllm/vllm-openai:<tag>` (NVIDIA) or `vllm/vllm-openai-rocm:<tag>` (AMD). Anything else is rejected at create.
+- The image runs via Docker on the deployment's box, on every provider. Without `vllm_image`, provider defaults are unchanged.
+- `engine: vllm` only.
+- The image is set at create and immutable, like model and GPU.
+
+Check the [vLLM release notes](https://docs.vllm.ai) for the minimum version your architecture needs.
+
+<Note>
+  A `vllm_image` deployment keeps its Hugging Face download inside the serving container, so it can't be combined with `cache: true` model-library uploads — the cache upload is skipped.
+</Note>
+
 ## Observability
 
 Every deployment records request, token, latency, error, cost, and engine-health telemetry. The [Deployment observability guide](/deployments/observability) includes an end-to-end smoke test plus dashboard, SDK, REST, and MCP workflows.
@@ -161,6 +197,10 @@ Or via CLI:
 veri deployments metrics <id>
 veri deployments requests <id> --limit 50 --format jsonl
 ```
+
+Deployments created with `trace_bodies: true` additionally capture full
+request/response bodies as [traces](/deployments/observability#request-traces),
+browsable from the dashboard, CLI, and API.
 
 ## Billing
 
