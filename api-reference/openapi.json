@@ -1359,6 +1359,130 @@
         ]
       }
     },
+    "/v1/deployments/{deployment_id}/traces": {
+      "get": {
+        "tags": [
+          "Deployments"
+        ],
+        "summary": "List request traces for a deployment the caller's workspace owns.",
+        "operationId": "traces",
+        "parameters": [
+          {
+            "name": "deployment_id",
+            "in": "path",
+            "description": "Deployment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "path",
+            "description": "1-based page.",
+            "required": true,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "path",
+            "description": "Page size, 1..=100 (default 20).",
+            "required": true,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "from",
+            "in": "path",
+            "description": "ISO-8601 lower bound on trace time.",
+            "required": true,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "to",
+            "in": "path",
+            "description": "ISO-8601 upper bound on trace time.",
+            "required": true,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paged trace list ({object, data, page, limit, total_items, total_pages}); each item is a trace with input/output bodies, tags, and metadata.veri_request_id cross-linking to GET /requests",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/deployments/{deployment_id}/traces/{trace_id}": {
+      "get": {
+        "tags": [
+          "Deployments"
+        ],
+        "summary": "Fetch one trace, with full request/response bodies.",
+        "operationId": "trace",
+        "parameters": [
+          {
+            "name": "deployment_id",
+            "in": "path",
+            "description": "Deployment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "trace_id",
+            "in": "path",
+            "description": "Trace ID (veri-<request_id>)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The trace, bodies included",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "404": {
+            "description": "No such trace in this workspace"
+          }
+        }
+      }
+    },
     "/v1/deployments/{deployment_id}/wake": {
       "post": {
         "tags": [
@@ -4535,6 +4659,17 @@
           "startup_profiling": {
             "type": "boolean",
             "description": "Opt-in vLLM startup diagnostics: the serving agent exports\nVLLM_LOGGING_LEVEL=DEBUG + VLLM_GC_DEBUG=1 to the engine, records\nstartup phase timings, and reports them on the first healthy heartbeat\n(or in the failure detail with a deeper stderr tail). Default false —\ndiagnostic logging slows inference, so use for diagnosis launches, not\nsteady customer traffic."
+          },
+          "trace_bodies": {
+            "type": "boolean",
+            "description": "Request traces: capture this deployment's chat request/response bodies\nand make them queryable via /v1/deployments/{id}/traces. Default false\n(privacy: enabling stores end-user prompt/completion content, retained\nper trace_retention). Requires the traces feature; billed per 1k traces\nbeyond the monthly free allowance."
+          },
+          "trace_retention": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Trace retention class: omitted/null = \"base\" (14-day retention, base\nrate), \"extended\" = 400-day retention at the extended rate. Only\nmeaningful with trace_bodies=true."
           }
         }
       },
@@ -5381,6 +5516,17 @@
           "startup_profiling": {
             "type": "boolean",
             "description": "Whether this deployment was created with startup diagnostics on."
+          },
+          "trace_bodies": {
+            "type": "boolean",
+            "description": "Whether request/response bodies are captured as traces."
+          },
+          "trace_retention": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Trace retention class (\"extended\" or null = base). Null unless\ntrace_bodies deployments set it."
           },
           "startup_metrics": {
             "description": "Startup phase timings reported by a profiled deployment's first healthy\nheartbeat (seconds: model_sync_s, engine_start_to_healthy_s, total_s).\nNull unless startup_profiling was set and the engine reached healthy."
@@ -7168,6 +7314,17 @@
                 "startup_profiling": {
                   "type": "boolean",
                   "description": "Whether this deployment was created with startup diagnostics on."
+                },
+                "trace_bodies": {
+                  "type": "boolean",
+                  "description": "Whether request/response bodies are captured as traces."
+                },
+                "trace_retention": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Trace retention class (\"extended\" or null = base). Null unless\ntrace_bodies deployments set it."
                 },
                 "startup_metrics": {
                   "description": "Startup phase timings reported by a profiled deployment's first healthy\nheartbeat (seconds: model_sync_s, engine_start_to_healthy_s, total_s).\nNull unless startup_profiling was set and the engine reached healthy."
