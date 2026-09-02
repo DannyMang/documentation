@@ -880,6 +880,273 @@
         ]
       }
     },
+    "/v1/deployments/{deployment_id}/adapters": {
+      "get": {
+        "tags": [
+          "Deployments"
+        ],
+        "summary": "List adapters",
+        "operationId": "list",
+        "parameters": [
+          {
+            "name": "deployment_id",
+            "in": "path",
+            "description": "Deployment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Adapter list ({object: \"list\", data: AdapterResponse[]}), each item carrying the alias, current model/version, status, and per-replica load state",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "Not a multi_adapter deployment"
+          },
+          "404": {
+            "description": "Deployment not found, or not owned by the caller"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Deployments"
+        ],
+        "summary": "Attach an adapter",
+        "description": "Attach a LoRA adapter model to a serving_mode='multi_adapter' deployment under a stable public alias (serve_name). The fleet's replicas download and load the adapter asynchronously: the attachment starts in status 'attaching' and becomes 'active' once every serving replica reports it loaded (poll the list endpoint).",
+        "operationId": "attach",
+        "parameters": [
+          {
+            "name": "deployment_id",
+            "in": "path",
+            "description": "Deployment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdapterAttachBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "The new attachment, status 'attaching'; replicas[] carries the per-replica load state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdapterResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a multi_adapter deployment, invalid serve_name, or the model is not an attachable adapter (wrong artifact_type, not ready, or base-model mismatch)"
+          },
+          "404": {
+            "description": "Deployment or model not found, or not owned by the caller"
+          },
+          "409": {
+            "description": "serve_name already attached to this deployment, or the per-deployment adapter cap (128) is reached"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/deployments/{deployment_id}/adapters/{serve_name}": {
+      "delete": {
+        "tags": [
+          "Deployments"
+        ],
+        "summary": "Detach an adapter",
+        "description": "Remove an adapter attachment. When no serving replica still holds the adapter it is deleted immediately (deleted=true); otherwise the attachment enters status 'detaching' (deleted=false) and is garbage-collected once every replica has unloaded it.",
+        "operationId": "detach",
+        "parameters": [
+          {
+            "name": "deployment_id",
+            "in": "path",
+            "description": "Deployment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "serve_name",
+            "in": "path",
+            "description": "The adapter's public alias",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Detach result: {serve_name, deleted} — deleted=true when removed immediately, else deleted=false with status 'detaching'",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "Not a multi_adapter deployment"
+          },
+          "404": {
+            "description": "Deployment or adapter not found, or not owned by the caller"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "Deployments"
+        ],
+        "summary": "Flip an adapter to a new version",
+        "description": "Point an attached alias at a new adapter model with zero downtime. The new version is staged alongside the current one; the alias cuts over atomically only once EVERY serving replica reports the new version loaded. Until then the call answers 409 'not yet converged' — retry the identical PATCH until it succeeds; the current version keeps serving throughout.",
+        "operationId": "flip",
+        "parameters": [
+          {
+            "name": "deployment_id",
+            "in": "path",
+            "description": "Deployment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "serve_name",
+            "in": "path",
+            "description": "The adapter's public alias",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdapterFlipBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The cutover completed: the alias now serves the new model at version+1, status 'active'",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdapterResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a multi_adapter deployment, the model is not an attachable adapter, or the alias already serves this model"
+          },
+          "404": {
+            "description": "Deployment, adapter, or model not found, or not owned by the caller"
+          },
+          "409": {
+            "description": "Staged but not yet converged (retry until every replica reports the new version loaded), or the adapter changed concurrently"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/deployments/{deployment_id}/adapters/{serve_name}/rollback": {
+      "post": {
+        "tags": [
+          "Deployments"
+        ],
+        "summary": "Roll back an adapter",
+        "description": "Point the alias back at the previously served adapter model (previous_model_id) under a fresh version. Status returns to 'attaching' until every serving replica reports the rollback target loaded — usually immediate when the old weights are still resident, otherwise after a re-download.",
+        "operationId": "rollback",
+        "parameters": [
+          {
+            "name": "deployment_id",
+            "in": "path",
+            "description": "Deployment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "serve_name",
+            "in": "path",
+            "description": "The adapter's public alias",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The alias now serves the previous model at version+1, status 'attaching' until the fleet converges",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdapterResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a multi_adapter deployment"
+          },
+          "404": {
+            "description": "Deployment or adapter not found, or not owned by the caller"
+          },
+          "409": {
+            "description": "No previous version to roll back to, the previous model no longer exists, or the adapter changed concurrently"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/deployments/{deployment_id}/chat/completions": {
       "post": {
         "tags": [
@@ -3851,6 +4118,150 @@
           "accrued_cost_usd": {
             "type": "number",
             "format": "double"
+          }
+        }
+      },
+      "AdapterAttachBody": {
+        "type": "object",
+        "required": [
+          "serve_name",
+          "model_id"
+        ],
+        "properties": {
+          "serve_name": {
+            "type": "string",
+            "description": "Public routing alias for the adapter: 1-64 chars of [A-Za-z0-9._-].\nRequests to the deployment addressed with this model name are served\nby the adapter. Must not collide with the deployment's base alias."
+          },
+          "model_id": {
+            "type": "string",
+            "description": "ID of a ready custom model with artifact_type='adapter' whose\nbase_model matches the deployment's base model."
+          }
+        }
+      },
+      "AdapterFlipBody": {
+        "type": "object",
+        "required": [
+          "model_id"
+        ],
+        "properties": {
+          "model_id": {
+            "type": "string",
+            "description": "ID of the adapter model to flip the alias to. Same constraints as\nattach: owned, ready, artifact_type='adapter', matching base model."
+          }
+        }
+      },
+      "AdapterReplicaState": {
+        "type": "object",
+        "description": "Per-replica load state for one internal_name, rolled up into the GET list.",
+        "required": [
+          "replica_id",
+          "state"
+        ],
+        "properties": {
+          "replica_id": {
+            "type": "string",
+            "description": "Serving replica ID."
+          },
+          "state": {
+            "type": "string",
+            "description": "downloading | loading | loaded | failed — or \"missing\" when the\nreplica's last report doesn't mention this internal_name at all."
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Replica-reported error detail, present when state='failed'."
+          }
+        }
+      },
+      "AdapterResponse": {
+        "type": "object",
+        "description": "A LoRA adapter attached to a multi_adapter deployment.",
+        "required": [
+          "object",
+          "id",
+          "deployment_id",
+          "serve_name",
+          "model_id",
+          "version",
+          "internal_name",
+          "status",
+          "created_at",
+          "updated_at",
+          "replicas"
+        ],
+        "properties": {
+          "object": {
+            "type": "string",
+            "description": "Always \"deployment_adapter\"."
+          },
+          "id": {
+            "type": "string",
+            "description": "Attachment ID (ada_...)."
+          },
+          "deployment_id": {
+            "type": "string",
+            "description": "The deployment (fleet) this adapter is attached to."
+          },
+          "serve_name": {
+            "type": "string",
+            "description": "Public routing alias the adapter serves under."
+          },
+          "model_id": {
+            "type": "string",
+            "description": "The custom model currently served under this alias."
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Monotonic version counter; incremented on every flip/rollback."
+          },
+          "internal_name": {
+            "type": "string",
+            "description": "Versioned vLLM-facing name (\"{serve_name}@v{version}\")."
+          },
+          "status": {
+            "type": "string",
+            "description": "attaching | active | detaching. 'active' means every serving replica\nreports the current version loaded."
+          },
+          "previous_model_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The previously served model, if any — the rollback target."
+          },
+          "pending_model_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Mid-flip only: the staged new version awaiting fleet convergence."
+          },
+          "pending_internal_name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Mid-flip only: the staged version's internal name."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Attachment creation time."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last status/version change time."
+          },
+          "replicas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdapterReplicaState"
+            },
+            "description": "Per-serving-replica load state for the CURRENT internal_name."
           }
         }
       },
