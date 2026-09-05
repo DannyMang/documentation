@@ -167,7 +167,9 @@ vllm_image = "vllm/vllm-openai:v0.25.1"
 How it behaves:
 
 - Only official upstream images are accepted: `vllm/vllm-openai:<tag>` (NVIDIA) or `vllm/vllm-openai-rocm:<tag>` (AMD). Anything else is rejected at create.
-- The image runs via Docker on the deployment's box, on every provider. Without `vllm_image`, provider defaults are unchanged.
+- The image runs via Docker on the deployment's box, on every provider, and is used exactly as written: the platform never rewrites or substitutes it.
+- The image is pulled from Docker Hub when the box boots. This pull can be too slow or rate limited to provision reliably, and a deployment that hits the provisioning timeout fails. Explicit images are supported as literal overrides; the supported route for a newer architecture is the platform's next validated vLLM version.
+- Without `vllm_image`, the deployment runs the platform-managed vLLM version for its provider, which never pulls at boot.
 - `engine: vllm` only.
 - The image is set at create and immutable, like model and GPU.
 
