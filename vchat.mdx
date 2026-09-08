@@ -12,6 +12,15 @@ Vchat can also be a self-improving system: you can enable fine-tuning, and the m
 
 This page explains how the system works end to end so you know exactly what happens to your data and where answers come from.
 
+## Getting set up
+
+1. **Invite the bot** to your Discord server. It posts a welcome message with a one-time claim link (the link expires after 7 days; @mention the bot to get a fresh one).
+2. **Claim it** by opening the link while signed in to veri.studio. The confirm screen names the workspace and account it will bind to; the server becomes owned by that workspace, and its knowledge base, traces, and settings live there.
+3. **Connect a source** right from chat: `@vchat connect github.com/your-org/your-repo`. The repository is indexed automatically and appears under Connected sources on the vchat page, with document counts and last-sync times.
+4. Ask away: `@vchat how do I ...?`
+
+Kicking the bot from the server unlinks it (your data stays in the workspace; re-inviting runs the claim flow again). You can also move the bot to another workspace you belong to from the vchat page (Transfer workspace in the settings menu): its sources, traces, and training history move with it, and the old workspace loses access.
+
 ## Architecture at a glance
 
 ```mermaid
@@ -62,12 +71,14 @@ If the corpus has no relevant material, the assistant says so rather than guessi
 
 Every question and answer is recorded as a trace you can inspect in the dashboard: what was asked, which passages were retrieved, and what the model answered. This is your window into how the assistant is behaving in your Discord server.
 
+Workspace admins can also **grade** any trace as Good or Bad directly in the dashboard (graded rows tint green or red). Grades are the curated feedback signal the improvement loop trains on, and grading is restricted to admins so casual reactions never steer your model.
+
 ## The self-improving part (optional)
 
 Fine-tuning is off by default: out of the box, Vchat answers with retrieval over your corpus. When you enable fine-tuning, your tenant gets its own model adapter, trained from a shared tool-calling base model. Fine-tuning runs as LoRA training jobs on the Veri platform and consumes credits from your workspace balance:
 
 1. **Change detection.** When your documentation changes, the pipeline diffs the corpus against the last training snapshot.
-2. **Training data synthesis.** Question-and-answer pairs are generated from the changed material, grounded in the retrieved passages that support them. Feedback from the web chat (thumbs up or down, corrections) can also feed a preference-tuning pass, and that data goes through a stricter review step.
+2. **Training data synthesis.** Question-and-answer pairs are generated from the changed material, grounded in the retrieved passages that support them. Admin grades on traces (Good and Bad answers to the same kinds of questions) feed a preference-tuning pass, and that data goes through a stricter review step.
 3. **LoRA fine-tune.** A training job produces a new adapter version for your tenant.
 4. **Quality gate.** Before the new version serves any traffic, it must pass an evaluation suite: tool-call correctness, citation grounding, and answer-quality checks against a held-back set. If it does not beat the currently serving version, it is not promoted.
 5. **Instant switchover.** Promotion is an adapter flip on the serving fleet: the new version starts serving immediately, and a regression triggers automatic rollback to the previous version.
