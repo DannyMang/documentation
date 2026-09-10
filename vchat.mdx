@@ -4,22 +4,24 @@ description: "How the Vchat knowledge assistant works under the hood"
 keywords: ["vchat", "knowledge assistant", "discord bot", "rag", "fine-tuning", "lora"]
 ---
 
+## Getting set up
+
+Four steps from zero to answers:
+
+1. **Invite the bot** to your Discord server. It posts a one-time claim link (valid 7 days; @mention the bot for a fresh one).
+2. **Claim it**: open the link signed in to veri.studio. The confirm screen names the workspace and account the server will bind to.
+3. **Connect a source** from chat: `@vchat connect github.com/your-org/your-repo`. It's indexed automatically and appears under Connected sources on veri.studio/vchat.
+4. **Ask**: `@vchat how do I ...?` — answers come with citations into your repo.
+
+Kicking the bot unlinks the server (your data stays in the workspace; re-inviting re-runs the claim flow). To move the bot to another workspace you belong to, use Transfer workspace in the vchat page's settings menu: sources, traces, and training history move with it, and the old workspace loses access.
+
 ## What Vchat is
 
 Vchat is a knowledge assistant built by Veri that answers your team's questions from your own documentation, with citations. You connect knowledge sources (a GitHub repository, a web crawl, Confluence, or Notion), add the bot to Discord, and @mention it wherever your team works. Every answer links back to the source documents it came from.
 
 Vchat can also be a self-improving system: you can enable fine-tuning, and the model behind your assistant is then periodically trained on your documentation using the Veri training platform, so answer quality tracks your docs as they change.
 
-This page explains how the system works end to end so you know exactly what happens to your data and where answers come from.
-
-## Getting set up
-
-1. **Invite the bot** to your Discord server. It posts a welcome message with a one-time claim link (the link expires after 7 days; @mention the bot to get a fresh one).
-2. **Claim it** by opening the link while signed in to veri.studio. The confirm screen names the workspace and account it will bind to; the server becomes owned by that workspace, and its knowledge base, traces, and settings live there.
-3. **Connect a source** right from chat: `@vchat connect github.com/your-org/your-repo`. The repository is indexed automatically and appears under Connected sources on the vchat page, with document counts and last-sync times.
-4. Ask away: `@vchat how do I ...?`
-
-Kicking the bot from the server unlinks it (your data stays in the workspace; re-inviting runs the claim flow again). You can also move the bot to another workspace you belong to from the vchat page (Transfer workspace in the settings menu): its sources, traces, and training history move with it, and the old workspace loses access.
+The rest of this page explains how the system works end to end so you know exactly what happens to your data and where answers come from.
 
 ## Architecture at a glance
 
