@@ -466,13 +466,24 @@
         "tags": [
           "Datasets"
         ],
-        "summary": "Upload dataset",
+        "summary": "Create dataset",
+        "description": "Two bodies share this route. `multipart/form-data` (`name` + `file`) uploads a one-shot JSONL, which becomes a stream with one snapshot (`snap-1`). `application/json` `{name, format, auto_snapshot_rows?}` creates an EMPTY append-only stream with a locked row format (`prompt` | `preference` | `completion` | `chat`); append rows with POST /v1/datasets/{id}/rows.",
         "operationId": "create",
         "requestBody": {
-          "description": "JSONL dataset file upload",
+          "description": "JSON `{name, format}` for an empty stream, or a multipart JSONL file upload",
           "content": {
-            "multipart/form-data": {}
-          }
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DatasetStreamCreate"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          },
+          "required": true
         },
         "responses": {
           "200": {
@@ -485,8 +496,11 @@
               }
             }
           },
+          "409": {
+            "description": "JSON create: a dataset with that name already exists"
+          },
           "422": {
-            "description": "Empty file, invalid JSONL, or a row missing the 'prompt' field"
+            "description": "Empty file, invalid JSONL, a row missing the 'prompt' field, or an unknown format"
           }
         },
         "security": [
@@ -643,6 +657,317 @@
           },
           "400": {
             "description": "An active training job still references the dataset"
+          },
+          "404": {
+            "description": "Not found or not owned by the caller"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "Datasets"
+        ],
+        "summary": "Update dataset rule",
+        "description": "Set or clear the auto-snapshot rule: with `auto_snapshot_rows = N`, the platform cuts a snapshot once N new rows have landed since the newest snapshot (fires once per threshold crossing).",
+        "operationId": "patch",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "description": "Dataset ID or name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DatasetPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The updated dataset",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "auto_snapshot_rows < 1"
+          },
+          "404": {
+            "description": "Not found or not owned by the caller"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/datasets/{dataset_id}/rows": {
+      "post": {
+        "tags": [
+          "Datasets"
+        ],
+        "summary": "Append rows",
+        "description": "Append rows to the stream. Every row is validated against the locked format; one bad row rejects the whole batch (nothing is written). A correction is a new row with `supersedes` naming the row it replaces — it takes effect in snapshots cut from now on, older snapshots keep the original. Emits one `dataset.rows_appended` webhook per batch.",
+        "operationId": "append_rows",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "description": "Dataset ID or name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppendRowsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "The appended row range",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppendResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Format mismatch, empty batch, or a supersedes target that does not exist"
+          },
+          "404": {
+            "description": "Not found or not owned by the caller"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/datasets/{dataset_id}/snapshots": {
+      "get": {
+        "tags": [
+          "Datasets"
+        ],
+        "summary": "List snapshots",
+        "operationId": "list_snapshots",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "description": "Dataset ID or name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Snapshot timeline, oldest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SnapshotList"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found or not owned by the caller"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Datasets"
+        ],
+        "summary": "Cut snapshot",
+        "description": "Record an immutable pointer at the current head. O(1) at any size. Training jobs pin it with `dataset_id: \"<id>@snap-N\"`. Emits `dataset.snapshot_created`.",
+        "operationId": "create_snapshot",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "description": "Dataset ID or name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SnapshotCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "The new snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SnapshotResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found or not owned by the caller"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/datasets/{dataset_id}/snapshots/{a}/diff/{b}": {
+      "get": {
+        "tags": [
+          "Datasets"
+        ],
+        "summary": "Diff snapshots",
+        "description": "Rows added, superseded, and tombstoned between snapshot `a` and the later snapshot `b`. `b` may be `head` for the live stream.",
+        "operationId": "diff",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "description": "Dataset ID or name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "a",
+            "in": "path",
+            "description": "Older snapshot (snap-N)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "b",
+            "in": "path",
+            "description": "Newer snapshot (snap-N) or `head`",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The delta",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SnapshotDiff"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "a is newer than b"
+          },
+          "404": {
+            "description": "Dataset or snapshot not found"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/datasets/{dataset_id}/tombstones": {
+      "post": {
+        "tags": [
+          "Datasets"
+        ],
+        "summary": "Tombstone a row",
+        "description": "Append a tombstone: the row is absent from every snapshot cut from now on and still present in earlier ones. Nothing is deleted.",
+        "operationId": "tombstone",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "description": "Dataset ID or name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TombstoneRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "The appended tombstone entry (one-row range)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppendResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Unknown row, or the target is itself a tombstone entry"
           },
           "404": {
             "description": "Not found or not owned by the caller"
@@ -1793,6 +2118,314 @@
         ]
       }
     },
+    "/v1/evals/runs": {
+      "get": {
+        "tags": [
+          "Evals"
+        ],
+        "summary": "List eval runs",
+        "operationId": "list_runs",
+        "parameters": [
+          {
+            "name": "target",
+            "in": "path",
+            "description": "Filter by target: \"<deployment_id>[:<model>]\", \"deployment:<id>[:<model>]\",\nor \"model_version:<id>\".",
+            "required": true,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "suite",
+            "in": "path",
+            "description": "Filter by suite ID or name.",
+            "required": true,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "path",
+            "description": "Page size (default 20, max 100).",
+            "required": true,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            }
+          },
+          {
+            "name": "after",
+            "in": "path",
+            "description": "Cursor: return runs created before this run id.",
+            "required": true,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Runs, newest first (scorecards included)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedList_RunResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Unparseable ?target="
+          },
+          "404": {
+            "description": "?suite= names a suite that does not exist in the workspace"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Evals"
+        ],
+        "summary": "Start an eval run",
+        "description": "Run every prompt of a suite against a target's OpenAI-compatible endpoint (bounded concurrency), score it (expect_contains / expect_not_contains / tools_expected deterministically; `judge` rubrics via a judge model answering PASS/FAIL), and store a scorecard plus a diff against the previous run. Returns immediately with status 'queued'; poll GET /v1/evals/runs/{id}. Runs are billed as ordinary inference requests.",
+        "operationId": "create_run",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunCreateBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Run accepted (status queued)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad target/judge shape, or the target deployment is not runnable"
+          },
+          "404": {
+            "description": "Suite, target deployment, judge deployment, or previous run not found / not owned by the caller"
+          },
+          "501": {
+            "description": "target.model_version_id: lineage resolution lands in a follow-up"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/evals/runs/{run_id}": {
+      "get": {
+        "tags": [
+          "Evals"
+        ],
+        "summary": "Get an eval run",
+        "operationId": "get_run",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "description": "Run ID (evr_...)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The run with its scorecard and diff once completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found or not owned by the caller"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/evals/suites": {
+      "get": {
+        "tags": [
+          "Evals"
+        ],
+        "summary": "List eval suites",
+        "operationId": "list_suites",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "path",
+            "description": "Page size (default 20, max 100).",
+            "required": true,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            }
+          },
+          {
+            "name": "after",
+            "in": "path",
+            "description": "Cursor: return suites created before this suite id.",
+            "required": true,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Suites, newest first (yaml omitted; GET one for the document)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedList_SuiteResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Evals"
+        ],
+        "summary": "Upload an eval suite",
+        "description": "Validate and store a prompt-suite yaml document. The suite's `name` key identifies it within the workspace: a new name creates a suite (201); re-uploading an existing name with different yaml bumps its version in place (200, changed=true); identical yaml is a no-op (200, changed=false). Validation errors are line-precise (`line L:C: ...`).",
+        "operationId": "upload_suite",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SuiteUploadBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Existing suite (version bumped when the yaml changed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuiteResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "New suite created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuiteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed suite (message carries line:column)"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/evals/suites/{suite_id}": {
+      "get": {
+        "tags": [
+          "Evals"
+        ],
+        "summary": "Get an eval suite",
+        "operationId": "get_suite",
+        "parameters": [
+          {
+            "name": "suite_id",
+            "in": "path",
+            "description": "Suite ID (evs_...) or name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The suite with its yaml",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuiteResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found or not owned by the caller"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/gpu/availability": {
       "get": {
         "tags": [
@@ -2194,7 +2827,8 @@
         "tags": [
           "Models"
         ],
-        "summary": "Save a model (compat alias)",
+        "summary": "Save a model and register a version",
+        "description": "Save a completed training job as a library model (same as POST /v1/models with a training_job source). With `model` set, the saved model is also registered as the next version of that lineage (created on first use; its first version becomes `production`). Promote it with POST /v1/models/{name}/aliases/{alias}.",
         "operationId": "register",
         "requestBody": {
           "content": {
@@ -2218,7 +2852,7 @@
             }
           },
           "201": {
-            "description": "The saved model",
+            "description": "The saved model (plus `version` when `model` was given)",
             "content": {
               "application/json": {
                 "schema": {
@@ -2226,6 +2860,12 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "Invalid name/lineage, non-completed job, or the lineage is built on a different base model"
+          },
+          "404": {
+            "description": "Training job not found or not owned by the caller"
           }
         },
         "security": [
@@ -2467,6 +3107,241 @@
           },
           "409": {
             "description": "Model not ready, duplicate active export, or per-user export limit reached"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/models/{name}/aliases/{alias}": {
+      "post": {
+        "tags": [
+          "Models"
+        ],
+        "summary": "Promote a version (move an alias)",
+        "description": "Point `alias` at `version`. Promotion is an alias move, never a copy; the move and its audit row (actor, from, to, reason) commit in one transaction. `production` and `staging` are the reserved aliases; any other [a-z0-9._-] name is a custom alias. Moving `production` also stages a flip on every multi-adapter fleet currently serving a version of this lineage.",
+        "operationId": "promote",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Lineage name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "alias",
+            "in": "path",
+            "description": "Alias to move (production, staging, or custom)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromoteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The alias now points at the version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AliasMoveResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid alias or version reference, or missing reason"
+          },
+          "404": {
+            "description": "Lineage or version not found in the caller's workspace"
+          },
+          "409": {
+            "description": "The alias already points at that version"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/models/{name}/aliases/{alias}/rollback": {
+      "post": {
+        "tags": [
+          "Models"
+        ],
+        "summary": "Roll an alias back",
+        "description": "Move `alias` back to the version it pointed at before its most recent move (the newest audit row's from_version). The rollback is itself audited, so rolling back twice returns to the promoted version.",
+        "operationId": "rollback",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Lineage name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "alias",
+            "in": "path",
+            "description": "Alias to roll back (default flow: production)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Optional reason",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RollbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The alias now points at the previous version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AliasMoveResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Lineage not found in the caller's workspace"
+          },
+          "409": {
+            "description": "The alias has no previous version to roll back to"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/models/{name}/versions": {
+      "get": {
+        "tags": [
+          "Models"
+        ],
+        "summary": "List model versions",
+        "description": "The lineage named `name`: every registered version (newest first), its aliases (`production`, `staging`, custom) and the alias audit trail (who moved what, from where, why).",
+        "operationId": "list_versions",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Lineage name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The lineage with versions, aliases and audit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelLineageResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No lineage with this name in the caller's workspace"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/models/{name}/versions/{version}/pin": {
+      "post": {
+        "tags": [
+          "Models"
+        ],
+        "summary": "Pin a version",
+        "description": "Mark a version pinned: it is never purged by retention and its library model cannot be deleted. Send {\"pinned\": false} to unpin.",
+        "operationId": "pin",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Lineage name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "description": "Version: \"v3\" or \"3\"",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Optional; defaults to pinned=true",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PinRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The version with its new pinned state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelVersionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid version reference"
+          },
+          "404": {
+            "description": "Lineage or version not found in the caller's workspace"
           }
         },
         "security": [
@@ -4246,6 +5121,20 @@
             ],
             "description": "Mid-flip only: the staged version's internal name."
           },
+          "model_version_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The platform model version (model_versions.id) currently served under\nthis alias, when the model belongs to a lineage."
+          },
+          "pending_model_version_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Mid-flip only: the platform model version staged by a `production`\nalias move; the fleet cuts over to it automatically on convergence."
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -4284,6 +5173,55 @@
             }
           }
         ]
+      },
+      "AliasMoveResponse": {
+        "type": "object",
+        "description": "The result of a promote or rollback.",
+        "required": [
+          "object",
+          "model",
+          "alias",
+          "to_version",
+          "version",
+          "audit",
+          "fleet_flips_staged"
+        ],
+        "properties": {
+          "object": {
+            "type": "string",
+            "description": "Always \"model_alias_move\"."
+          },
+          "model": {
+            "type": "string"
+          },
+          "alias": {
+            "type": "string"
+          },
+          "from_version": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "The version the alias pointed at before (absent when the alias was created)."
+          },
+          "to_version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "version": {
+            "$ref": "#/components/schemas/ModelVersionResponse",
+            "description": "The version the alias now resolves to."
+          },
+          "audit": {
+            "$ref": "#/components/schemas/ModelAliasAuditResponse"
+          },
+          "fleet_flips_staged": {
+            "type": "integer",
+            "description": "Multi-adapter fleets serving this lineage on which a flip to the new\nversion was staged (production moves only). The fleet cuts over once\nevery replica has the version loaded — no redeploy.",
+            "minimum": 0
+          }
+        }
       },
       "AnyHyperparameters": {
         "oneOf": [
@@ -4342,6 +5280,80 @@
           }
         }
       },
+      "AppendResult": {
+        "type": "object",
+        "required": [
+          "dataset_id",
+          "first_row",
+          "last_row",
+          "count",
+          "format",
+          "head_row"
+        ],
+        "properties": {
+          "dataset_id": {
+            "type": "string"
+          },
+          "first_row": {
+            "type": "integer",
+            "format": "int64",
+            "description": "row_id of the first entry in this batch."
+          },
+          "last_row": {
+            "type": "integer",
+            "format": "int64",
+            "description": "row_id of the last entry in this batch (== the new stream head)."
+          },
+          "count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "format": {
+            "$ref": "#/components/schemas/RowFormat"
+          },
+          "head_row": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "AppendRowsRequest": {
+        "oneOf": [
+          {
+            "type": "array",
+            "items": {}
+          },
+          {
+            "type": "object",
+            "required": [
+              "rows"
+            ],
+            "properties": {
+              "rows": {
+                "type": "array",
+                "items": {}
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "row",
+              "supersedes"
+            ],
+            "properties": {
+              "row": {
+                "type": "object"
+              },
+              "supersedes": {
+                "type": "integer",
+                "format": "int64"
+              }
+            }
+          }
+        ],
+        "description": "`POST /v1/datasets/{id}/rows` accepts three shapes:\n  * a bare JSON array of rows: `[{...}, {...}]`\n  * `{\"rows\": [{...}, ...]}`\n  * a single correction: `{\"row\": {...}, \"supersedes\": 12}`"
+      },
       "BalanceResponse": {
         "type": "object",
         "required": [
@@ -4395,6 +5407,29 @@
             "items": {
               "$ref": "#/components/schemas/ActiveDeploymentEntry"
             }
+          }
+        }
+      },
+      "CheckResult": {
+        "type": "object",
+        "required": [
+          "kind",
+          "passed"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "expect_contains | expect_not_contains | tools_expected | judge"
+          },
+          "passed": {
+            "type": "boolean"
+          },
+          "detail": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Why it failed (or the judge's reason when it passed)."
           }
         }
       },
@@ -4808,6 +5843,19 @@
           "credentials": {}
         }
       },
+      "DatasetPatch": {
+        "type": "object",
+        "properties": {
+          "auto_snapshot_rows": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "null disables the auto-snapshot rule; N >= 1 enables it."
+          }
+        }
+      },
       "DatasetResponse": {
         "type": "object",
         "required": [
@@ -4851,6 +5899,73 @@
           "created_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "format": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Locked row format (prompt | preference | completion | chat). Null on\na legacy dataset until its first append locks it."
+          },
+          "head_row": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Highest row_id appended so far (0 = empty stream). Includes supersede\nand tombstone entries, so it is the log length, not the live row count."
+          },
+          "auto_snapshot_rows": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "\"cut a snapshot every N new rows\" rule; null = off."
+          },
+          "latest_snapshot_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Newest snapshot id (\"<id>@snap-N\"); populated by GET /v1/datasets/{id}."
+          },
+          "unsnapshotted_rows": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Rows appended since the newest snapshot; populated by GET /v1/datasets/{id}."
+          },
+          "snapshot_count": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          }
+        }
+      },
+      "DatasetStreamCreate": {
+        "type": "object",
+        "description": "JSON body for `POST /v1/datasets`: an empty stream with a locked format.",
+        "required": [
+          "name",
+          "format"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "format": {
+            "$ref": "#/components/schemas/RowFormat",
+            "description": "Row format every append is validated against."
+          },
+          "auto_snapshot_rows": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Optional rule: cut a snapshot automatically once this many rows have\nlanded since the newest snapshot (evaluated by the reconciler)."
           }
         }
       },
@@ -6113,6 +7228,59 @@
           }
         }
       },
+      "DiffVs": {
+        "type": "object",
+        "required": [
+          "run_id",
+          "previous_passed",
+          "previous_total",
+          "newly_failing",
+          "newly_passing",
+          "still_failing"
+        ],
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "description": "The run compared against."
+          },
+          "previous_passed": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "previous_total": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "newly_failing": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Passed in the previous run, fail now."
+          },
+          "newly_passing": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Failed in the previous run, pass now."
+          },
+          "still_failing": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Failed in both."
+          },
+          "not_comparable": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Prompt ids present in only one of the two runs (suite changed)."
+          }
+        }
+      },
       "DpoHyperparameters": {
         "type": "object",
         "properties": {
@@ -7073,6 +8241,89 @@
           }
         }
       },
+      "ModelAliasAuditResponse": {
+        "type": "object",
+        "description": "One audited alias move.",
+        "required": [
+          "id",
+          "alias",
+          "to_version_id",
+          "actor",
+          "reason",
+          "at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "alias": {
+            "type": "string"
+          },
+          "from_version_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "from_version": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "to_version_id": {
+            "type": "string"
+          },
+          "to_version": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "actor": {
+            "type": "string",
+            "description": "Who moved it (\"api_key:<id>\", \"web-proxy\", \"system:migration\")."
+          },
+          "reason": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ModelAliasResponse": {
+        "type": "object",
+        "description": "An alias of a lineage and the version it points at.",
+        "required": [
+          "alias",
+          "version_id",
+          "updated_at"
+        ],
+        "properties": {
+          "alias": {
+            "type": "string"
+          },
+          "version_id": {
+            "type": "string"
+          },
+          "version": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "The version number the alias resolves to."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "ModelDownload": {
         "type": "object",
         "required": [
@@ -7090,6 +8341,64 @@
               "$ref": "#/components/schemas/CheckpointFile"
             },
             "description": "Every file of the final HF checkpoint. Download all of them, preserving\npaths, to get a directory loadable with `from_pretrained`."
+          }
+        }
+      },
+      "ModelLineageResponse": {
+        "type": "object",
+        "description": "A lineage with its versions, aliases and audit trail.",
+        "required": [
+          "object",
+          "id",
+          "name",
+          "base_model",
+          "versions",
+          "aliases",
+          "audit",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "object": {
+            "type": "string",
+            "description": "Always \"model_lineage\"."
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "base_model": {
+            "type": "string"
+          },
+          "versions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ModelVersionResponse"
+            },
+            "description": "Newest first."
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ModelAliasResponse"
+            }
+          },
+          "audit": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ModelAliasAuditResponse"
+            },
+            "description": "Newest first (capped at 100)."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
@@ -7160,6 +8469,126 @@
             "format": "date-time"
           },
           "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ModelVersionResponse",
+                "description": "Present when the save also registered the model into a version\nlineage (`POST /v1/models/register` with `model`): the version it\nbecame (e.g. acme-bot@v6)."
+              }
+            ]
+          }
+        }
+      },
+      "ModelVersionResponse": {
+        "type": "object",
+        "description": "One version of a lineage (`{name}@v{version}`).",
+        "required": [
+          "object",
+          "id",
+          "model_id",
+          "model",
+          "version",
+          "name",
+          "artifact_type",
+          "tags",
+          "pinned",
+          "aliases",
+          "created_at"
+        ],
+        "properties": {
+          "object": {
+            "type": "string",
+            "description": "Always \"model_version\"."
+          },
+          "id": {
+            "type": "string",
+            "description": "Version id (mv...)."
+          },
+          "model_id": {
+            "type": "string",
+            "description": "Lineage id."
+          },
+          "model": {
+            "type": "string",
+            "description": "Lineage name."
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Dense, monotonic version number within the lineage."
+          },
+          "name": {
+            "type": "string",
+            "description": "Human handle: \"{model}@v{version}\"."
+          },
+          "custom_model_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The library model (custom_models row) whose weights this version is;\ndeploy or attach by this id."
+          },
+          "artifact_type": {
+            "type": "string",
+            "description": "'full' | 'adapter'."
+          },
+          "dataset_snapshot_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Dataset snapshot (Task 2) or plain dataset id the version was trained on."
+          },
+          "training_job_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "parent_version_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The version `production` pointed at when this one was registered."
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "pinned": {
+            "type": "boolean",
+            "description": "Pinned versions are protected from retention."
+          },
+          "pinned_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Aliases currently pointing at this version."
+          },
+          "created_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
             "type": "string",
             "format": "date-time"
           }
@@ -7275,6 +8704,48 @@
                 "created_at": {
                   "type": "string",
                   "format": "date-time"
+                },
+                "format": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Locked row format (prompt | preference | completion | chat). Null on\na legacy dataset until its first append locks it."
+                },
+                "head_row": {
+                  "type": "integer",
+                  "format": "int64",
+                  "description": "Highest row_id appended so far (0 = empty stream). Includes supersede\nand tombstone entries, so it is the log length, not the live row count."
+                },
+                "auto_snapshot_rows": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "int32",
+                  "description": "\"cut a snapshot every N new rows\" rule; null = off."
+                },
+                "latest_snapshot_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Newest snapshot id (\"<id>@snap-N\"); populated by GET /v1/datasets/{id}."
+                },
+                "unsnapshotted_rows": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "int64",
+                  "description": "Rows appended since the newest snapshot; populated by GET /v1/datasets/{id}."
+                },
+                "snapshot_count": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "format": "int64"
                 }
               }
             }
@@ -7919,6 +9390,151 @@
                 "updated_at": {
                   "type": "string",
                   "format": "date-time"
+                },
+                "version": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ModelVersionResponse",
+                      "description": "Present when the save also registered the model into a version\nlineage (`POST /v1/models/register` with `model`): the version it\nbecame (e.g. acme-bot@v6)."
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "has_more": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PaginatedList_RunResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "data",
+          "has_more"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "object",
+                "id",
+                "suite_id",
+                "suite_name",
+                "suite_version",
+                "target",
+                "target_key",
+                "status",
+                "created_at"
+              ],
+              "properties": {
+                "object": {
+                  "type": "string",
+                  "description": "Always \"eval_run\"."
+                },
+                "id": {
+                  "type": "string",
+                  "description": "Run ID (evr_...)."
+                },
+                "suite_id": {
+                  "type": "string"
+                },
+                "suite_name": {
+                  "type": "string"
+                },
+                "suite_version": {
+                  "type": "integer",
+                  "format": "int32"
+                },
+                "target": {
+                  "$ref": "#/components/schemas/TargetSpec"
+                },
+                "target_key": {
+                  "type": "string",
+                  "description": "Canonical target string (\"deployment:<id>[:<model>]\" | \"model_version:<id>\")."
+                },
+                "judge": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$ref": "#/components/schemas/TargetSpec"
+                    }
+                  ]
+                },
+                "status": {
+                  "type": "string",
+                  "description": "queued | running | completed | failed"
+                },
+                "passed": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ],
+                  "description": "Set once finished: every prompt passed (failed runs read false)."
+                },
+                "scorecard": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$ref": "#/components/schemas/Scorecard",
+                      "description": "Per-prompt results + aggregate; present once completed."
+                    }
+                  ]
+                },
+                "diff_vs": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$ref": "#/components/schemas/DiffVs",
+                      "description": "Newly failing / passing prompts vs. the previous run; present when one existed."
+                    }
+                  ]
+                },
+                "previous_run_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "error": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Failure reason when status = failed."
+                },
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "started_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "finished_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
                 }
               }
             }
@@ -7983,6 +9599,81 @@
           }
         }
       },
+      "PaginatedList_SuiteResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "data",
+          "has_more"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "object",
+                "id",
+                "name",
+                "version",
+                "prompt_count",
+                "created_at",
+                "updated_at"
+              ],
+              "properties": {
+                "object": {
+                  "type": "string",
+                  "description": "Always \"eval_suite\"."
+                },
+                "id": {
+                  "type": "string",
+                  "description": "Suite ID (evs_...)."
+                },
+                "name": {
+                  "type": "string"
+                },
+                "version": {
+                  "type": "integer",
+                  "format": "int32",
+                  "description": "Monotonic; bumps when the same name is re-uploaded with different yaml."
+                },
+                "prompt_count": {
+                  "type": "integer",
+                  "format": "int32"
+                },
+                "yaml": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Only on the single-suite GET and on upload."
+                },
+                "changed": {
+                  "type": [
+                    "boolean",
+                    "null"
+                  ],
+                  "description": "Upload only: false when the yaml matched the stored version byte for byte."
+                },
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "updated_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "has_more": {
+            "type": "boolean"
+          }
+        }
+      },
       "PaginatedList_TrainingJobResponse": {
         "type": "object",
         "required": [
@@ -8028,6 +9719,13 @@
                     "string",
                     "null"
                   ]
+                },
+                "dataset_snapshot_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "The dataset snapshot this job was pinned to at submit\n(\"<dataset_id>@snap-N\"); set when dataset_id was given as `…@snap-N`\nor `…@latest` (or names a stream dataset). Null for legacy submits."
                 },
                 "reward_count": {
                   "type": [
@@ -8431,6 +10129,15 @@
           }
         }
       },
+      "PinRequest": {
+        "type": "object",
+        "properties": {
+          "pinned": {
+            "type": "boolean",
+            "description": "true (default) pins; false unpins."
+          }
+        }
+      },
       "PlatformValidation": {
         "type": "object",
         "description": "Errors in this field are platform safety/provenance checks. A user may\nchoose outside matrix guidance, but may not select an unapproved runtime ID\nor use a runtime for the wrong operation.",
@@ -8444,6 +10151,79 @@
           },
           "message": {
             "type": "string"
+          }
+        }
+      },
+      "PromoteRequest": {
+        "type": "object",
+        "required": [
+          "version",
+          "reason"
+        ],
+        "properties": {
+          "version": {
+            "type": "string",
+            "description": "The version to point the alias at: \"v6\" or \"6\"."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why (required): recorded verbatim in the audit trail."
+          }
+        }
+      },
+      "PromptResult": {
+        "type": "object",
+        "required": [
+          "id",
+          "prompt",
+          "passed",
+          "checks"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "passed": {
+            "type": "boolean"
+          },
+          "latency_ms": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Target round-trip time (judge time excluded). None when the request errored.",
+            "minimum": 0
+          },
+          "response": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The assistant reply text (truncated)."
+          },
+          "tool_calls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Tool names the response called, when any."
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CheckResult"
+            }
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Set when the target request itself failed; the prompt counts as failed."
           }
         }
       },
@@ -8559,7 +10339,7 @@
       },
       "RegisterRequest": {
         "type": "object",
-        "description": "Legacy flat body for POST /v1/models/register (compat alias).",
+        "description": "Body for POST /v1/models/register: save a completed job as a library\nmodel and (model versions Task 1) optionally register it into a lineage.",
         "required": [
           "training_job_id",
           "name"
@@ -8569,7 +10349,36 @@
             "type": "string"
           },
           "name": {
-            "type": "string"
+            "type": "string",
+            "description": "Library display name (slug)."
+          },
+          "model": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Lineage name to register the saved model into (created on first use).\nThe saved model becomes the lineage's next version; the response\ncarries it under `version`."
+          },
+          "artifact": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "\"full\" (default) or \"adapter\" (LoRA jobs; required for fleet flips)."
+          },
+          "dataset_snapshot_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Dataset snapshot (Task 2) or plain dataset id recorded on the version."
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Free-form tags recorded on the version."
           }
         }
       },
@@ -8588,6 +10397,178 @@
         "properties": {
           "name": {
             "type": "string"
+          }
+        }
+      },
+      "RollbackRequest": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional reason; defaults to naming the audit row being undone."
+          }
+        }
+      },
+      "RowFormat": {
+        "type": "string",
+        "description": "The locked row format of a stream. Detected from the first row and\nenforced on every later append (a mismatched row 400s the whole batch).",
+        "enum": [
+          "prompt",
+          "preference",
+          "completion",
+          "chat"
+        ]
+      },
+      "RunCreateBody": {
+        "type": "object",
+        "required": [
+          "suite",
+          "target"
+        ],
+        "properties": {
+          "suite": {
+            "type": "string",
+            "description": "Suite ID (evs_...) or suite name within the workspace."
+          },
+          "target": {
+            "$ref": "#/components/schemas/TargetSpec",
+            "description": "What to run against: {deployment_id, model?} today; {model_version_id}\nis accepted and answers 501 until lineage resolution lands."
+          },
+          "judge": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TargetSpec",
+                "description": "Judge model for `judge` rubrics. Default: the target itself."
+              }
+            ]
+          },
+          "previous_run_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Diff this run against a specific earlier run. Default: the latest\ncompleted run of the same suite against the same target."
+          }
+        }
+      },
+      "RunResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "id",
+          "suite_id",
+          "suite_name",
+          "suite_version",
+          "target",
+          "target_key",
+          "status",
+          "created_at"
+        ],
+        "properties": {
+          "object": {
+            "type": "string",
+            "description": "Always \"eval_run\"."
+          },
+          "id": {
+            "type": "string",
+            "description": "Run ID (evr_...)."
+          },
+          "suite_id": {
+            "type": "string"
+          },
+          "suite_name": {
+            "type": "string"
+          },
+          "suite_version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "target": {
+            "$ref": "#/components/schemas/TargetSpec"
+          },
+          "target_key": {
+            "type": "string",
+            "description": "Canonical target string (\"deployment:<id>[:<model>]\" | \"model_version:<id>\")."
+          },
+          "judge": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TargetSpec"
+              }
+            ]
+          },
+          "status": {
+            "type": "string",
+            "description": "queued | running | completed | failed"
+          },
+          "passed": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Set once finished: every prompt passed (failed runs read false)."
+          },
+          "scorecard": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Scorecard",
+                "description": "Per-prompt results + aggregate; present once completed."
+              }
+            ]
+          },
+          "diff_vs": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DiffVs",
+                "description": "Newly failing / passing prompts vs. the previous run; present when one existed."
+              }
+            ]
+          },
+          "previous_run_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Failure reason when status = failed."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "started_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "finished_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
           }
         }
       },
@@ -8687,6 +10668,50 @@
           "created_at": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "Scorecard": {
+        "type": "object",
+        "required": [
+          "suite",
+          "total",
+          "passed",
+          "failed",
+          "pass_rate",
+          "duration_ms",
+          "prompts"
+        ],
+        "properties": {
+          "suite": {
+            "$ref": "#/components/schemas/SuiteRef"
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "passed": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "failed": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "pass_rate": {
+            "type": "number",
+            "format": "double"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "prompts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PromptResult"
+            }
           }
         }
       },
@@ -8827,6 +10852,137 @@
           }
         }
       },
+      "SnapshotCreateRequest": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "SnapshotDiff": {
+        "type": "object",
+        "required": [
+          "dataset_id",
+          "from",
+          "to",
+          "from_head",
+          "to_head",
+          "added",
+          "superseded",
+          "tombstoned"
+        ],
+        "properties": {
+          "dataset_id": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          },
+          "from_head": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "to_head": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "added": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "description": "Data rows appended in (from_head, to_head] (supersede rows included:\nthey are new rows too)."
+          },
+          "superseded": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SupersededRow"
+            }
+          },
+          "tombstoned": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TombstonedRow"
+            }
+          }
+        }
+      },
+      "SnapshotList": {
+        "type": "object",
+        "required": [
+          "object",
+          "data"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SnapshotResponse"
+            }
+          }
+        }
+      },
+      "SnapshotResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "id",
+          "dataset_id",
+          "seq",
+          "name",
+          "head_row",
+          "auto",
+          "created_at"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "description": "\"<dataset_id>@snap-<seq>\" — the id a job pins."
+          },
+          "dataset_id": {
+            "type": "string"
+          },
+          "seq": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string",
+            "description": "Short reference (\"snap-<seq>\") accepted wherever a snapshot is named."
+          },
+          "head_row": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "auto": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "SourceSpec": {
         "type": "object",
         "required": [
@@ -8837,6 +10993,180 @@
             "type": "string"
           },
           "training_job_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "SuiteRef": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "version"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "SuiteResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "id",
+          "name",
+          "version",
+          "prompt_count",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "object": {
+            "type": "string",
+            "description": "Always \"eval_suite\"."
+          },
+          "id": {
+            "type": "string",
+            "description": "Suite ID (evs_...)."
+          },
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Monotonic; bumps when the same name is re-uploaded with different yaml."
+          },
+          "prompt_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "yaml": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Only on the single-suite GET and on upload."
+          },
+          "changed": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Upload only: false when the yaml matched the stored version byte for byte."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "SuiteUploadBody": {
+        "type": "object",
+        "required": [
+          "yaml"
+        ],
+        "properties": {
+          "yaml": {
+            "type": "string",
+            "description": "The suite document (see the yaml schema in the docs). Its `name` key\nidentifies the suite within the workspace."
+          }
+        }
+      },
+      "SupersededRow": {
+        "type": "object",
+        "required": [
+          "row_id",
+          "by_row"
+        ],
+        "properties": {
+          "row_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The row that was corrected."
+          },
+          "by_row": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The correcting row (carries `supersedes = row_id`)."
+          }
+        }
+      },
+      "TargetSpec": {
+        "type": "object",
+        "description": "The API's `target`/`judge` object. Exactly one of deployment_id or\nmodel_version_id must be set (validated by `TargetSpec::validate`).",
+        "properties": {
+          "deployment_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Deployment to run against."
+          },
+          "model": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "On a multi_adapter deployment: the adapter serve_name to address\n(request `model`). Omit to hit the base model."
+          },
+          "model_version_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "A model version (lineage) target. Accepted by the schema; resolved in\na follow-up (Task 1), 501 today."
+          }
+        }
+      },
+      "TombstoneRequest": {
+        "type": "object",
+        "required": [
+          "row_id",
+          "reason"
+        ],
+        "properties": {
+          "row_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The row to hide from every snapshot cut from here on."
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      },
+      "TombstonedRow": {
+        "type": "object",
+        "required": [
+          "row_id",
+          "tombstone_row"
+        ],
+        "properties": {
+          "row_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tombstone_row": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "reason": {
             "type": [
               "string",
               "null"
@@ -8864,7 +11194,8 @@
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "description": "Dataset reference: a dataset id or name, optionally pinned to a\nsnapshot — `ds_…@snap-3` trains on that snapshot, `ds_…@latest` cuts\n(or reuses) a snapshot at the current head and pins it. A plain\nreference to a stream dataset behaves like `@latest`; a plain\nreference to a one-shot upload trains on it as before."
           },
           "script": {
             "oneOf": [
@@ -9004,6 +11335,13 @@
               "string",
               "null"
             ]
+          },
+          "dataset_snapshot_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The dataset snapshot this job was pinned to at submit\n(\"<dataset_id>@snap-N\"); set when dataset_id was given as `…@snap-N`\nor `…@latest` (or names a stream dataset). Null for legacy submits."
           },
           "reward_count": {
             "type": [
@@ -9760,6 +12098,10 @@
     {
       "name": "Metrics",
       "description": "Prometheus metrics export for your own observability stack."
+    },
+    {
+      "name": "Evals",
+      "description": "Prompt-suite evals: upload yaml suites and run them against deployments."
     }
   ]
 }
