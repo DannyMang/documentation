@@ -60,6 +60,7 @@
                 ]
               },
               "training/datasets",
+              "training/dataset-streams",
               "training/reward-functions",
               "training/grpo",
               "training/sft",
@@ -75,6 +76,7 @@
               "deployments",
               "deployments/observability",
               "deployments/custom-models",
+              "deployments/model-versions",
               "deployments/hosting",
               {
                 "group": "Providers",
@@ -88,6 +90,13 @@
               },
               "deployments/cost",
               "deployments/openai-compat"
+            ]
+          },
+          {
+            "group": "Evals",
+            "icon": "list-checks",
+            "pages": [
+              "evals"
             ]
           },
           {
@@ -191,7 +200,12 @@
               "POST /v1/datasets/connect/validate",
               "GET /v1/datasets",
               "GET /v1/datasets/{dataset_id}",
-              "DELETE /v1/datasets/{dataset_id}"
+              "DELETE /v1/datasets/{dataset_id}",
+              "POST /v1/datasets/{dataset_id}/rows",
+              "POST /v1/datasets/{dataset_id}/tombstones",
+              "GET /v1/datasets/{dataset_id}/snapshots",
+              "POST /v1/datasets/{dataset_id}/snapshots",
+              "GET /v1/datasets/{dataset_id}/snapshots/{a}/diff/{b}"
             ]
           },
           {
@@ -240,7 +254,26 @@
               "POST /v1/models/{model_id}/push-to-hf",
               "GET /v1/models/{model_id}/hf-exports",
               "GET /v1/hf_exports/{export_id}",
-              "POST /v1/hf_exports/{export_id}/cancel"
+              "POST /v1/hf_exports/{export_id}/cancel",
+              "GET /v1/models/{name}/versions",
+              "POST /v1/models/{name}/aliases/{alias}",
+              "POST /v1/models/{name}/aliases/{alias}/rollback",
+              "POST /v1/models/{name}/versions/{version}/pin",
+              "PATCH /v1/models/{name}/lineage",
+              "GET /v1/models/{name}/retention",
+              "PATCH /v1/models/{name}/retention"
+            ]
+          },
+          {
+            "group": "Evals",
+            "openapi": "api-reference/openapi.json",
+            "pages": [
+              "POST /v1/evals/suites",
+              "GET /v1/evals/suites",
+              "GET /v1/evals/suites/{suite_id}",
+              "POST /v1/evals/runs",
+              "GET /v1/evals/runs",
+              "GET /v1/evals/runs/{run_id}"
             ]
           },
           {
@@ -264,6 +297,14 @@
               "GET /v1/billing/balance",
               "GET /v1/billing/transactions",
               "GET /v1/billing/burn_rate"
+            ]
+          },
+          {
+            "group": "Workspace settings",
+            "openapi": "api-reference/openapi.json",
+            "pages": [
+              "GET /v1/settings/retention",
+              "PUT /v1/settings/retention"
             ]
           },
           {

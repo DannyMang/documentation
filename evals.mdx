@@ -1,0 +1,148 @@
+---
+title: "Evals"
+sidebarTitle: "Evals"
+description: "Prompt-suite evals: score a deployment or model version against a yaml suite of prompts, diff runs, and gate production promotions."
+keywords: ["evals", "eval suite", "prompt suite", "scorecard", "judge", "expect_contains", "promotion gate", "regression testing"]
+---
+
+An eval suite is a yaml file of prompts with checks. A run executes every prompt against a target's OpenAI-compatible endpoint, scores the responses, and stores a per-prompt scorecard plus a diff against the previous run. Suites are smoke sets, not benchmarks: up to 500 prompts, meant to catch "did v6 break refunds" before anyone promotes it.
+
+Runs are ordinary inference requests against your own deployment and are billed as such.
+
+## Write a suite
+
+```yaml suites/support.yaml
+name: support
+description: Smoke checks for the acme-bot support model
+defaults:
+  system: "You are Acme's support assistant."
+  max_tokens: 256
+  temperature: 0
+prompts:
+  - id: refund-window
+    prompt: How long do I have to request a refund?
+    expect_contains: ["30 days"]
+  - id: no-hallucinated-discounts
+    prompt: Do you offer a student discount?
+    expect_not_contains: ["50% off"]
+  - id: greeting
+    prompt: hi
+    judge: PASS if the reply greets the user and offers help.
+  - id: order-lookup
+    prompt: Where is order 4821?
+    tools_expected: ["lookup_order"]
+    tools:
+      - type: function
+        function:
+          name: lookup_order
+          description: Look up an order by id
+          parameters:
+            type: object
+            properties:
+              order_id: { type: string }
+```
+
+| Key | Meaning |
+| --- | --- |
+| `name` | Required. Identifies the suite in your workspace (1-128 chars of letters, digits, `.`, `_`, `-`). |
+| `description` | Optional free text. |
+| `defaults` | Optional `system`, `max_tokens`, `temperature` applied to every prompt. |
+| `prompts[].id` | Optional, unique; defaults to `p1`, `p2`, ... Shows up in scorecards and gate refusals. |
+| `prompts[].prompt` | Required. The user message. |
+| `prompts[].system` / `max_tokens` / `temperature` | Per-prompt overrides. |
+| `expect_contains` | String or list. Case-insensitive substring the response must contain. |
+| `expect_not_contains` | String or list. Substrings the response must not contain. |
+| `judge` | A rubric string. A judge model reads the response and the rubric and returns pass or fail. |
+| `tools_expected` | List of tool names the response must call. An empty list asserts the response makes no tool calls. |
+| `tools` | OpenAI tool definitions, forwarded verbatim in the request. |
+
+Every prompt needs at least one check (`expect_contains`, `expect_not_contains`, `judge`, or `tools_expected`). Unknown keys and malformed values are rejected with line-precise errors (`line 3:5: prompts[0] ('p1') has no checks`), so a typo fails at upload, not mid-run.
+
+## Run a suite
+
+```bash
+veri evals run suites/support.yaml --target dep_7f3a91
+```
+
+```text
+Uploaded suite support v1 (4 prompts).
+Run evr_a41c88 started against deployment:dep_7f3a91.
+
+eval run evr_a41c88
+id                        result  latency_ms  detail
+refund-window             PASS    412
+no-hallucinated-discounts PASS    377
+greeting                  FAIL    198         judge: did not greet
+order-lookup              PASS    455
+3/4 passed (75%) in 1442 ms
+```
+
+`run` uploads the suite first: a changed yaml bumps the suite's version in place, an unchanged one is a no-op ("Suite support v1 unchanged."). It then polls until the run settles and prints the scorecard. Exit code `0` only when every prompt passed, `1` when any prompt failed, `2` on API errors, so it drops straight into CI. `--no-wait` starts the run and returns; Ctrl-C leaves the run going server-side.
+
+### Targets
+
+| `--target` | Runs against |
+| --- | --- |
+| `dep_7f3a91` | The deployment's base model. |
+| `dep_7f3a91:acme-bot` | The adapter served as `acme-bot` on a multi-adapter fleet. |
+| `acme-bot@v6` | A [model version](/deployments/model-versions). Resolved to the fleet currently serving that version. |
+| `model_version:mv_...` | Same, by version id. |
+
+A version target only works while the version is actually being served somewhere: if it is attached to no fleet, the run is refused with `409 version_not_servable`. Deploy the version (or target the deployment directly) and rerun.
+
+### The judge
+
+Prompts with a `judge` rubric are graded by a model: it reads the response and the rubric and answers pass or fail. By default the target itself grades; pass `--judge <deployment_id>[:<model>]` to grade with a different (usually stronger or fixed) deployment so scores stay comparable across versions.
+
+## Compare runs
+
+Each run automatically diffs against the latest completed run of the same suite on the same target. A version target's first run diffs against the nearest earlier version of the same lineage, so `acme-bot@v6`'s first scorecard tells you what moved since v5. The diff prints with the scorecard:
+
+```text
+vs evr_9d02e1: newly failing: greeting, newly passing: refund-window
+```
+
+`--diff-vs <run_id>` diffs against a specific earlier run instead. List and revisit runs any time:
+
+```bash
+veri evals runs --suite support          # newest first; add --target dep_7f3a91 to filter
+veri evals get evr_a41c88                # one run's full scorecard
+veri evals suites                        # every suite in the workspace
+```
+
+## Gate promotions to production
+
+Make a passing eval a precondition for `production`:
+
+```bash
+veri models gate acme-bot --suite support
+```
+
+With the gate on, `veri models promote acme-bot v6` is refused unless the latest settled run of `support` against `v6` passed. A refusal is a `409` with code `eval_gate_failed` that names every failing prompt:
+
+```text
+Promotion of acme-bot@v6 refused by the eval gate.
+  the latest eval run of 'support' against acme-bot@v6 (evr_a41c88) failed 1 prompt(s)
+  Failing prompts (1):
+    - greeting
+  Scorecard: veri evals get evr_a41c88
+```
+
+Fix the data or the model, retrain, run the suite again, and promote once it passes. Only `production` moves are gated: [rollback](/deployments/model-versions#roll-back), `staging`, and custom aliases never are, so you can always test a candidate and always retreat. `veri models gate acme-bot --off` turns the gate off (the configured suite is remembered).
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="Model versions" icon="git-branch" href="/deployments/model-versions">
+    Register, promote, roll back, and pin the versions you are scoring.
+  </Card>
+  <Card title="Dataset streams" icon="database" href="/training/dataset-streams">
+    Fix failing prompts at the data layer with supersede rows, then retrain.
+  </Card>
+  <Card title="Deployments" icon="server" href="/deployments">
+    The OpenAI-compatible endpoints eval runs execute against.
+  </Card>
+  <Card title="API reference" icon="code" href="/api-reference/introduction">
+    The `/v1/evals/suites` and `/v1/evals/runs` endpoints.
+  </Card>
+</CardGroup>

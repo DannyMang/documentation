@@ -1,0 +1,159 @@
+---
+title: "Dataset streams"
+sidebarTitle: "Dataset streams"
+description: "Append-only datasets with immutable snapshots: append rows as they arrive, cut a snapshot, and pin training jobs to it."
+keywords: ["dataset streams", "snapshots", "append", "supersede", "tombstone", "diff", "@latest", "reproducible training data"]
+---
+
+A dataset stream is an append-only dataset that grows as your data arrives. Training never reads the live stream: a job pins an immutable **snapshot**, so the exact rows a model trained on are reproducible forever. Rows are never edited or deleted in place: a correction is a new row that **supersedes** an old one, and a removal is a **tombstone**. Both take effect in snapshots cut from that point on; earlier snapshots keep the original rows, so history stays honest.
+
+One-shot datasets ([upload or connect](/training/datasets)) keep working exactly as before; streams are for data that keeps growing, like production feedback.
+
+## Create a stream
+
+```bash
+veri datasets create acme-feedback --format preference
+```
+
+```text
+Created stream ds_9f2c81ab (acme-feedback, format=preference).
+Append with `veri datasets append acme-feedback <file.jsonl|->`, then train on `acme-feedback@latest`.
+```
+
+`--format` locks the row shape and is required: `prompt`, `preference`, `completion`, or `chat`. Every append is validated against it, so a malformed row is rejected at append time rather than at training time.
+
+Every stream command accepts the dataset's name or its `ds_...` id.
+
+## Append rows
+
+Append a JSONL file, or pipe rows on stdin with `-`:
+
+<CodeGroup>
+```bash File
+veri datasets append acme-feedback ./new-pairs.jsonl
+```
+
+```bash Stdin
+echo '{"prompt": "Where is my order?", "chosen": "Let me check that for you.", "rejected": "No idea."}' \
+  | veri datasets append acme-feedback -
+```
+
+```python SDK
+client.datasets.append("acme-feedback", rows=[
+    {"prompt": "Where is my order?", "chosen": "Let me check that for you.", "rejected": "No idea."},
+])
+```
+</CodeGroup>
+
+```text
+Appended 3 row(s) as 341..343 (head now 343).
+```
+
+Each row gets a permanent row id. Blank lines are skipped; a malformed line fails the whole append with its line number, and nothing is written.
+
+## Correct a row (supersede)
+
+A supersede is a new row that replaces an earlier one in every snapshot cut from now on. Snapshots cut before the correction keep the original, so an old training run still resolves to exactly what it trained on.
+
+```bash
+echo '{"prompt": "Where is my order?", "chosen": "Let me look that up.", "rejected": "No idea."}' \
+  | veri datasets append acme-feedback - --supersedes 342
+```
+
+`--supersedes` takes exactly one row.
+
+## Remove a row (tombstone)
+
+```bash
+veri datasets tombstone acme-feedback 343 --reason "duplicate of 217"
+```
+
+The row disappears from every snapshot cut from now on and stays in every snapshot cut before. Nothing is deleted; `--reason` is required and shows up in diffs.
+
+## Cut a snapshot
+
+```bash
+veri datasets snapshot acme-feedback --note "week 2 feedback"
+```
+
+```text
+Cut snap-2 at row 612 -> ds_9f2c81ab@snap-2
+```
+
+A snapshot is a pointer at the current head, so cutting one is instant at any size. Reading a snapshot resolves supersessions and skips tombstones as of that snapshot. `--quiet` prints just the pinned id (`ds_9f2c81ab@snap-2`) for scripting.
+
+To cut a snapshot automatically every N new rows, set a rule at create time (`--auto-snapshot 100`) or later via the SDK (`client.datasets.set_auto_snapshot("acme-feedback", 100)`). Auto-cut snapshots show `auto` in the timeline.
+
+## Train on a snapshot
+
+Pin a training job to a stream with `<name>@latest` or `<name>@snap-N` as the dataset id:
+
+<CodeGroup>
+```bash CLI
+veri run configs/train.toml --set dataset.id=acme-feedback@latest
+```
+
+```toml train.toml
+[dataset]
+id = "acme-feedback@snap-2"
+```
+
+```python SDK
+client.training_jobs.create(
+    base_model="Qwen/Qwen3-4B",
+    dataset_id="acme-feedback@latest",
+    ...
+)
+```
+</CodeGroup>
+
+What `@latest` resolves to at submit time:
+
+- If the newest snapshot already sits at the stream head, the job pins that snapshot.
+- Otherwise a new snapshot is cut at the head (noted "pinned at job submit") and the job pins it.
+- A plain stream name with no `@` suffix implies `@latest`.
+- An empty stream is rejected: append rows before pinning `@latest`.
+
+Either way the job stores the resolved `ds_...@snap-N` id, so rows appended after submit never change what the job trains on. The pinned id is on the job record as `dataset_snapshot_id` (SDK: `client.training_jobs.get(job_id).dataset_snapshot_id`, or `GET /v1/training_jobs/{job_id}`), and you can record it on the resulting model version with `veri models register ... --dataset-snapshot <id>` (see [Model versions](/deployments/model-versions)).
+
+## Diff two snapshots
+
+See exactly what changed between two snapshots (or between a snapshot and the live head, the default for the second argument):
+
+```bash
+veri datasets diff acme-feedback snap-1 snap-2
+```
+
+```text
+snap-1 (row 340) -> snap-2 (row 612): +272 added, 1 superseded, 1 tombstoned
+  added rows: 341..612
+  row 2 superseded by row 400
+  row 3 tombstoned by entry 401 (dupe)
+```
+
+This answers "what data made v6 different from v5" when each version pins a snapshot.
+
+## Inspect a stream
+
+```bash
+veri datasets get acme-feedback
+```
+
+Shows the locked format, the current head row, how many rows arrived since the last snapshot, and the snapshot timeline (name, head row, note, auto flag, created time). To read rows as of a snapshot programmatically, use the SDK: `client.datasets.rows("acme-feedback", snapshot="snap-2")` resolves supersessions and tombstones exactly as training does.
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="Model versions" icon="git-branch" href="/deployments/model-versions">
+    Register the trained job as a version and record the snapshot it trained on.
+  </Card>
+  <Card title="Evals" icon="list-checks" href="/evals">
+    Score the new version against a prompt suite before promoting it.
+  </Card>
+  <Card title="Datasets" icon="database" href="/training/datasets">
+    One-shot uploads, Hugging Face connects, and JSONL formats.
+  </Card>
+  <Card title="Dataset CLI" icon="terminal" href="/cli/datasets">
+    Every `veri datasets` command in one place.
+  </Card>
+</CardGroup>

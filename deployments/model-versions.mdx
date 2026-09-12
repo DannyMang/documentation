@@ -1,0 +1,154 @@
+---
+title: "Model versions"
+sidebarTitle: "Model versions"
+description: "Register trained checkpoints into a versioned lineage, promote through staging to production, roll back, pin, and control retention."
+keywords: ["model versions", "lineage", "aliases", "production", "staging", "promote", "rollback", "pin", "retention", "audit"]
+---
+
+A model lineage collects every trained iteration of one model under a single name, as numbered versions: `acme-bot@v1`, `acme-bot@v2`, and so on. Two reserved **aliases**, `production` and `staging` (plus any custom names you invent), point at versions. Promotion moves an alias; it never copies weights. Every alias move is audited: who, from which version, to which version, when, and why.
+
+Versions build on the [model library](/deployments/custom-models): each version is a saved model plus its place in the lineage.
+
+## Register a training job as a version
+
+When a training job completes, register it into a lineage. The lineage is created on first use, and its first version becomes `production` automatically; later versions are only served after you promote them.
+
+```bash
+veri models register job_8c41d2 --model acme-bot
+```
+
+```text
+Registered mdl_e51b09 as acme-bot@v6 (aliases: -).
+```
+
+```python
+resp = client.models.register_version("job_8c41d2", "acme-bot")
+print(resp["version"]["name"])   # acme-bot@v6
+```
+
+Useful flags:
+
+| Flag | Purpose |
+| --- | --- |
+| `--artifact adapter` | Save a LoRA job's adapter instead of the merged checkpoint. Required if a multi-adapter fleet serves this lineage and should follow promotions. |
+| `--dataset-snapshot <id>` | Record the [dataset snapshot](/training/dataset-streams) the version trained on (`ds_...@snap-N`, from the job's `dataset_snapshot_id`). Not inferred automatically; pass it if you want provenance on the version. |
+| `--tag <t>` | Tag the version (repeatable). Tagged versions are protected from retention. |
+| `--name <n>` | Library display name (default `<model>-<job id>`). |
+
+Without `--model`, `register` behaves like [`veri models save`](/deployments/custom-models) and requires `--name`. `--quiet` prints just the version handle (`acme-bot@v6`) for scripting.
+
+## Inspect a lineage
+
+```bash
+veri models versions acme-bot
+```
+
+```text
+acme-bot  base_model=Qwen/Qwen3-4B  aliases: production=v5, staging=v6
+
+versions
+version  aliases  custom_model_id  artifact_type  pinned  dataset_snapshot_id  created_at
+v6       staging  mdl_e51b09       adapter                ds_9f2c81ab@snap-2   2026-09-09T00:12:31Z
+v5       production  mdl_c02a77    adapter        yes     ds_9f2c81ab@snap-1   2026-09-02T18:03:10Z
+
+alias audit (newest first)
+at                    alias       from  to  actor       reason
+2026-09-09T00:14:02Z  staging     -     v6  api_key:k1  team test
+2026-09-02T18:05:40Z  production  v4    v5  api_key:k1  fixes refund answers
+```
+
+`--audit N` controls how many alias moves are shown (`--audit 0` hides the trail); `--format json` returns the whole lineage, versions, aliases, and audit as one object.
+
+## Promote
+
+Point an alias at a version. `--reason` is required and lands in the audit trail. The conventional flow is staging first, production after your team has tested:
+
+```bash
+veri models promote acme-bot v6 --alias staging --reason "team test"
+# ...test against staging...
+veri models promote acme-bot v6 --reason "fixes refund answers"
+```
+
+```text
+acme-bot: production v5 -> v6 (fixes refund answers)
+Staged a flip on 1 fleet adapter(s) serving this lineage.
+```
+
+The version argument accepts `v6` or `6`. The alias move and its audit row commit together.
+
+**What promotion changes in serving.** A multi-adapter fleet that serves this lineage follows the `production` alias: promoting flips its adapter to the new version without a redeploy, and the next request is answered by the new weights. A deployment created from one specific library model (`--from-model`) is deliberately fixed: it keeps serving the version it was created from until you redeploy it.
+
+If the lineage has an [eval gate](/evals#gate-promotions-to-production) enabled, a promotion to `production` is refused unless the version's latest eval run passed.
+
+## Roll back
+
+```bash
+veri models rollback acme-bot --reason "refund answers regressed"
+```
+
+```text
+acme-bot: production v6 -> v5 (refund answers regressed)
+Staged a flip on 1 fleet adapter(s) serving this lineage.
+```
+
+Rollback moves the alias back to the version it pointed at before its last move; fleets follow the same way. The rollback is itself an audited move, so rolling back twice returns to the promoted version. `--alias` rolls back a different alias; `--reason` is optional here and defaults to naming the undone move. Rollbacks are never blocked by the eval gate.
+
+## Pin a version
+
+```bash
+veri models pin acme-bot v3        # e.g. "legal baseline"
+veri models pin acme-bot v3 --unpin
+```
+
+A pinned version is never purged by retention and its library model cannot be deleted.
+
+## Retention
+
+Old, unprotected versions are purged by a nightly sweep so storage does not grow forever. Two knobs control the window:
+
+```bash
+veri settings retention                    # show the workspace default (90 days)
+veri settings retention --days 30          # set it
+veri models retention acme-bot             # show this lineage's effective window
+veri models retention acme-bot --days 7    # per-lineage override
+veri models retention acme-bot --clear     # back to the workspace default
+```
+
+```text
+acme-bot: keep 7 days (lineage override)
+```
+
+`--days 0` is a zero-data-retention opt-in: eligible versions are purged on the next nightly sweep.
+
+**What is protected.** These are never purged, regardless of age:
+
+- Versions any alias points at (`production`, `staging`, or custom).
+- The previous `production` version, so rollback always has somewhere to go.
+- Pinned versions and versions carrying any tag.
+- Versions a live deployment or fleet adapter is serving.
+- Dataset snapshots pinned by any of the above (and a stream's newest snapshot, the `@latest` anchor).
+
+Everything else becomes eligible once it ages out of the window. Age counts from the last time the version was live (the later of its creation and the last time an alias left it), so "30 days" means 30 days since it last mattered, not since training.
+
+**What "purged" looks like.** A purged version keeps its row: the version number, tags, alias audit, and eval scorecards all remain, but its weights are deleted and its library model can no longer be deployed or attached. A purged dataset snapshot stops resolving (training against it fails); its underlying rows remain in the stream.
+
+## See which version answered a request
+
+Every request served by a registered version carries its `model_version_id` in the [request log](/deployments/api), and in [trace metadata](/deployments/observability#request-traces) when tracing is enabled. Because an alias is a moving pointer, this is how you attribute quality to a version across promotes and rollbacks.
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="Evals" icon="list-checks" href="/evals">
+    Score versions with a prompt suite and gate promotions on it.
+  </Card>
+  <Card title="Dataset streams" icon="database" href="/training/dataset-streams">
+    Pin each version to the exact snapshot it trained on.
+  </Card>
+  <Card title="Custom models" icon="box" href="/deployments/custom-models">
+    The model library that versions build on.
+  </Card>
+  <Card title="Observability" icon="chart-line" href="/deployments/observability">
+    Request telemetry and traces, grouped by version identity.
+  </Card>
+</CardGroup>
