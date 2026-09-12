@@ -51,6 +51,8 @@ Create a job. Returns immediately with status `queued`.
 
 **Required:** `base_model`, `dataset_id`, `output_name`, `gpu`. **Required for `method=grpo` and `grpo_harness`:** `reward_source` (or `reward_sources`, or `environments`).
 
+`dataset_id` also accepts [dataset stream](/training/dataset-streams) references: a stream's name or id with `@latest` or `@snap-N` (for example `acme-feedback@latest`). The job resolves and stores the pinned snapshot as `dataset_snapshot_id` in its response, so later appends never change what the job trains on.
+
 **Reward fields:** `reward_source` is the Python source text of a TRL-signature reward function. For multiple weighted rewards, pass `reward_sources` (a list) plus optional `reward_weights` (same length). `reward_source`/`reward_sources` and `environments` are mutually exclusive. Limits: at most 8 sources, 256 KiB each, and each source must define a function; violations are HTTP 400 at submit. See [Reward functions](/training/reward-functions).
 
 **Validation rules:**

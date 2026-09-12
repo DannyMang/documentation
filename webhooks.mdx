@@ -34,6 +34,8 @@ Omit `event_types` (or pass `[]`) to subscribe to all event types. Endpoint URLs
 | `deployment.scaled_to_zero` | An idle deployment with `min_replicas: 0` is parked. The deployment wakes on the next request. |
 | `job.completed` | A training job finishes successfully. |
 | `job.failed` | A training job fails (worker error, provisioning failure, timeout watchdogs, cancellation is not included). |
+| `dataset.rows_appended` | Rows land on a [dataset stream](/training/dataset-streams). One event per append batch, never per row. |
+| `dataset.snapshot_created` | A stream snapshot is cut: manually, by an `@latest` pin at job submit, or by the auto-snapshot rule. |
 | `webhook.test` | You called `POST /v1/webhooks/{id}/test`. Delivered only to that endpoint, regardless of its subscription filter. |
 
 Each event fires exactly once per real state transition. Deliveries, however, are at-least-once (see [Idempotency](#idempotency-and-ordering)).

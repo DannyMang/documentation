@@ -5,13 +5,14 @@ description: "JSONL upload + Hugging Face connect + Veri Volumes. Validation, de
 keywords: ["datasets", "jsonl", "huggingface", "volumes", "training data"]
 ---
 
-A dataset is a collection of training examples Veri reads at job submission time. Three ways to get one in:
+A dataset is a collection of training examples Veri reads at job submission time. Four ways to get one in:
 
 1. **Upload** a JSONL file directly
 2. **Connect** a Hugging Face dataset — Veri pulls from the Hub
 3. **Point at a [Veri Volume](/volumes)** — train from a JSONL file you already uploaded to a managed volume
+4. **Create a [dataset stream](/training/dataset-streams)**: an append-only dataset that grows as data arrives; training pins immutable snapshots (`name@latest`, `name@snap-N`)
 
-Either way, the result is a dataset record with an `id` you reference in `client.training_jobs.create(dataset_id=...)`.
+Either way, the result is a dataset record with an `id` you reference in `client.training_jobs.create(dataset_id=...)`. This page covers the one-shot sources (upload, Hugging Face, volumes); streams have [their own page](/training/dataset-streams).
 
 ## JSONL format
 

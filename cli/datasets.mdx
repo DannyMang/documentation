@@ -1,11 +1,11 @@
 ---
 title: "veri datasets"
 sidebarTitle: "Datasets"
-description: "Upload JSONL files, connect HuggingFace datasets, validate, and inspect datasets."
-keywords: ["veri datasets", "upload", "connect-hf", "jsonl", "huggingface"]
+description: "Upload JSONL files, connect HuggingFace datasets, validate, inspect, and manage append-only dataset streams."
+keywords: ["veri datasets", "upload", "connect-hf", "jsonl", "huggingface", "streams", "snapshot", "append", "tombstone", "diff"]
 ---
 
-The `veri datasets` group covers every dataset operation: upload local JSONL, connect a HuggingFace dataset, validate structure, and inspect registered datasets.
+The `veri datasets` group covers every dataset operation: upload local JSONL, connect a HuggingFace dataset, validate structure, inspect registered datasets, and manage append-only [dataset streams](/training/dataset-streams).
 
 ## Commands
 
@@ -16,8 +16,13 @@ The `veri datasets` group covers every dataset operation: upload local JSONL, co
 | `check <path>` | Standalone structural validator. |
 | `preview <path> [--n N]` | Print the first N rows of a local JSONL. |
 | `list` | List registered datasets. |
-| `get <id>` | Show one dataset. |
+| `get <id>` | Show one dataset (streams: head, unsnapshotted rows, snapshot timeline). |
 | `delete <id>` | Delete a dataset. |
+| `create <name> --format F` | Create an empty append-only stream with a locked row format. |
+| `append <name> <file\|->` | Append JSONL rows from a file or stdin (`--supersedes <row>` to correct a row). |
+| `tombstone <name> <row>` | Remove a row from snapshots cut from now on (`--reason` required). |
+| `snapshot <name> [--note]` | Cut an immutable snapshot at the current head. |
+| `diff <name> <a> [<b>]` | Rows added, superseded, and tombstoned between two snapshots (default `b` is the live head). |
 
 ## Upload a local JSONL
 
@@ -126,6 +131,20 @@ veri datasets delete ds_abc123
 ```
 
 `delete` is irreversible. The CLI exits `0` and prints the deleted ID; no confirmation prompt.
+
+## Streams
+
+Streams are append-only datasets with immutable snapshots; training pins `name@latest` or `name@snap-N`. The full flow (create, append, supersede, tombstone, snapshot, diff, pinning a training job) lives on [Dataset streams](/training/dataset-streams). The short version:
+
+```bash
+veri datasets create acme-feedback --format preference
+veri datasets append acme-feedback ./new-pairs.jsonl
+veri datasets snapshot acme-feedback --note "week 2"
+veri run configs/train.toml --set dataset.id=acme-feedback@latest
+veri datasets diff acme-feedback snap-1 snap-2
+```
+
+Every stream command accepts the dataset's name or `ds_...` id. `snapshot --quiet` prints the pinned `ds_...@snap-N` id for scripting.
 
 ## Exit codes
 

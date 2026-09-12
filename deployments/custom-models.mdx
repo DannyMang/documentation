@@ -27,6 +27,10 @@ model = client.models.create_from_training_job("<job-id>", name="support-agent-v
 
 Saving is idempotent per job: saving the same completed job again returns the existing model rather than creating a duplicate. The saved model reuses the completed checkpoint already in Veri storage; it does not copy the weights.
 
+<Note>
+  If you retrain the same model repeatedly, register the job into a versioned lineage instead of saving flat entries: `veri models register <job-id> --model acme-bot` makes it `acme-bot@v6` with `production`/`staging` aliases, audited promotion, and rollback. See [Model versions](/deployments/model-versions).
+</Note>
+
 Only completed jobs that produced a Hugging Face checkpoint can be saved. Jobs that are still running, failed, or ran a custom script (which produces arbitrary output rather than a standard checkpoint) cannot be saved as a model.
 
 You can also keep working with the raw checkpoint directly:

@@ -169,6 +169,22 @@ veri billing balance
 veri billing transactions --limit 50 --format jsonl
 ```
 
+## `veri settings` {#settings}
+
+Workspace-level settings. Today that is the [retention window](/deployments/model-versions#retention) for model versions and dataset snapshots.
+
+| Command | Purpose |
+| --- | --- |
+| `retention` | Show the workspace default retention window (default 90 days). |
+| `retention --days N` | Set it. `0` opts into zero-data-retention. |
+
+```bash
+veri settings retention
+veri settings retention --days 30
+```
+
+Per-lineage overrides live under `veri models retention <name>`; protected versions (alias targets, the previous production version, pinned or tagged versions, versions a deployment serves) are never purged.
+
 ## `veri wandb` {#wandb}
 
 Account-level [Weights & Biases integration](/training/wandb): store your key once and every training job logs to your W&B account.
