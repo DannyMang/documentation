@@ -214,6 +214,7 @@ curl ".../v1/deployments/dep_abc/requests?limit=50" -H "Authorization: Bearer vk
     {
       "id": "req_xyz",
       "deployment_id": "dep_abc",
+      "model_version_id": "mv_1a2b3c4d5e6f",
       "prompt_tokens": 12,
       "completion_tokens": 8,
       "latency_ms": 245.3,
@@ -227,6 +228,13 @@ curl ".../v1/deployments/dep_abc/requests?limit=50" -H "Authorization: Bearer vk
 ```
 
 Includes failed requests (`status_code >= 400`) for debugging.
+
+`model_version_id` pins the request to the registered model version that
+answered it: on a multi-adapter fleet, the version behind the adapter alias the
+request resolved through (an alias is a moving pointer, so after a `production`
+flip the same alias serves different weights); for base-model requests on a
+fleet built from a registered model, that model's version. `null` when nothing
+served belongs to a model lineage.
 
 ## GET /v1/deployments/{id}/metrics
 

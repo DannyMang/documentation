@@ -209,6 +209,12 @@ Details worth knowing:
 - **Cross-linking.** Every trace's `metadata.veri_request_id` matches an id from
   `deployments.requests()`, so you can join body-level traces with the timing,
   token, and error telemetry for the same request.
+- **Model version identity.** When the request was answered by a registered
+  model version (an adapter alias on a fleet, or a fleet built from a
+  registered model), `metadata.model_version_id` carries that version's id —
+  the same value as the request log's `model_version_id` — so per-version
+  quality can group traces by identity instead of by a serve-name string that
+  moves on every promote.
 - **Retention.** `base` traces are deleted after 14 days, `extended` after 400.
 - **Pricing.** The first 5,000 base-retention traces per workspace each month are
   free; beyond that, $2.50 per 1k traces at base retention and $5.00 per 1k at
