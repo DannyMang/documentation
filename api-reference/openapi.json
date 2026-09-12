@@ -2232,10 +2232,13 @@
             "description": "Bad target/judge shape, or the target deployment is not runnable"
           },
           "404": {
-            "description": "Suite, target deployment, judge deployment, or previous run not found / not owned by the caller"
+            "description": "Suite, target deployment, model version, judge deployment, or previous run not found / not owned by the caller"
+          },
+          "409": {
+            "description": "target.model_version_id is attached to no fleet (`code: version_not_servable`)"
           },
           "501": {
-            "description": "target.model_version_id: lineage resolution lands in a follow-up"
+            "description": "judge.model_version_id: judge-by-version lands in a follow-up"
           }
         },
         "security": [
@@ -3172,7 +3175,7 @@
             "description": "Lineage or version not found in the caller's workspace"
           },
           "409": {
-            "description": "The alias already points at that version"
+            "description": "The alias already points at that version, or the promotion gate refused (`code: eval_gate_failed`, with `failing_prompts` and `run_id`)"
           }
         },
         "security": [
@@ -3237,6 +3240,153 @@
           },
           "409": {
             "description": "The alias has no previous version to roll back to"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/models/{name}/lineage": {
+      "patch": {
+        "tags": [
+          "Models"
+        ],
+        "summary": "Update lineage settings",
+        "description": "Partial update of a lineage's settings. Promotion gate: with `require_passing_eval` set, `production` only moves to a version whose latest settled eval run of `default_eval_suite` passed; a refused promote is a 409 `eval_gate_failed` listing the failing prompt ids. Rollback and non-production aliases are never gated.",
+        "operationId": "patch_lineage",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Lineage name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LineagePatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The lineage with its settings applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelLineageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Gate turned on without a default suite"
+          },
+          "404": {
+            "description": "Lineage or suite not found in the caller's workspace"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/models/{name}/retention": {
+      "get": {
+        "tags": [
+          "Models"
+        ],
+        "summary": "Get a lineage's retention window",
+        "description": "How long unprotected versions of this lineage are kept before the nightly sweep purges their weights. Protected versions — targeted by an alias, the previous production version, pinned or tagged, or in use by a deployment — are never purged.",
+        "operationId": "get_model_retention",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Lineage name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The lineage window and the effective one",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelRetentionResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No lineage with this name in the caller's workspace"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "Models"
+        ],
+        "summary": "Set a lineage's retention window",
+        "description": "Override the workspace default for this lineage. `retention_days` 0 opts the lineage into zero-data-retention (eligible versions purged by the next nightly sweep); null clears the override.",
+        "operationId": "set_model_retention",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Lineage name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelRetentionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The updated window",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelRetentionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "retention_days out of range"
+          },
+          "404": {
+            "description": "No lineage with this name in the caller's workspace"
           }
         },
         "security": [
@@ -3534,6 +3684,71 @@
           },
           "404": {
             "description": "No W&B integration configured"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/settings/retention": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Get the workspace retention default",
+        "description": "Days unprotected model versions and unreferenced dataset snapshots are kept when a lineage sets no override. Default 90.",
+        "operationId": "get_workspace_retention",
+        "responses": {
+          "200": {
+            "description": "The workspace default",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceRetentionResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Set the workspace retention default",
+        "description": "0 = zero-data-retention opt-in: every eligible (unprotected, unreferenced) version and snapshot in the workspace is purged by the next nightly sweep. Lineages with their own retention_days are unaffected.",
+        "operationId": "set_workspace_retention",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceRetentionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The stored default",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceRetentionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "model_retention_days out of range"
           }
         },
         "security": [
@@ -8113,6 +8328,26 @@
           "cancelled"
         ]
       },
+      "LineagePatchRequest": {
+        "type": "object",
+        "description": "Partial update of a lineage's settings: every field optional, absent =\nunchanged. Siblings (retention) add their fields here.",
+        "properties": {
+          "require_passing_eval": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Promotion gate on/off. Turning it on needs a default suite (set or given)."
+          },
+          "default_eval_suite": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Suite id (evs_...) or name the gate reads. Explicit `null` clears it\n(only when the gate is off)."
+          }
+        }
+      },
       "MeResponse": {
         "type": "object",
         "required": [
@@ -8352,6 +8587,7 @@
           "id",
           "name",
           "base_model",
+          "require_passing_eval",
           "versions",
           "aliases",
           "audit",
@@ -8371,6 +8607,17 @@
           },
           "base_model": {
             "type": "string"
+          },
+          "require_passing_eval": {
+            "type": "boolean",
+            "description": "Promotion gate: when true, `production` only moves to a version whose\nlatest settled run of `default_eval_suite_id` passed."
+          },
+          "default_eval_suite_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The eval suite the gate reads (evs_...)."
           },
           "versions": {
             "type": "array",
@@ -8485,6 +8732,57 @@
           }
         }
       },
+      "ModelRetentionRequest": {
+        "type": "object",
+        "properties": {
+          "retention_days": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Days to keep unprotected versions (0..=3650; 0 = zero-data-retention).\nnull or omitted clears the override so the workspace default applies."
+          }
+        }
+      },
+      "ModelRetentionResponse": {
+        "type": "object",
+        "description": "A lineage's retention window.",
+        "required": [
+          "object",
+          "model",
+          "workspace_default_days",
+          "effective_days"
+        ],
+        "properties": {
+          "object": {
+            "type": "string",
+            "description": "Always \"model_retention\"."
+          },
+          "model": {
+            "type": "string",
+            "description": "Lineage name."
+          },
+          "retention_days": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "The lineage override in days; null = the workspace default applies."
+          },
+          "workspace_default_days": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The workspace default (workspace_settings.model_retention_days)."
+          },
+          "effective_days": {
+            "type": "integer",
+            "format": "int32",
+            "description": "What the sweeper actually applies to this lineage: the override if\nset, else the workspace default. 0 = eligible versions are purged by\nthe next nightly sweep."
+          }
+        }
+      },
       "ModelVersionResponse": {
         "type": "object",
         "description": "One version of a lineage (`{name}@v{version}`).",
@@ -8498,6 +8796,7 @@
           "artifact_type",
           "tags",
           "pinned",
+          "status",
           "aliases",
           "created_at"
         ],
@@ -8569,6 +8868,17 @@
             "description": "Pinned versions are protected from retention."
           },
           "pinned_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "status": {
+            "type": "string",
+            "description": "'ready' | 'purged' (Task 6, VS-84). A purged version still lists —\nnumber, tags, audit and scorecards stay — but its weights are deleted\nand it can no longer be deployed, attached or promoted."
+          },
+          "purged_at": {
             "type": [
               "string",
               "null"
@@ -10435,7 +10745,7 @@
           },
           "target": {
             "$ref": "#/components/schemas/TargetSpec",
-            "description": "What to run against: {deployment_id, model?} today; {model_version_id}\nis accepted and answers 501 until lineage resolution lands."
+            "description": "What to run against: {deployment_id, model?} or {model_version_id}\n(resolved to the multi-adapter fleet the version is attached to;\n409 version_not_servable when it is attached nowhere)."
           },
           "judge": {
             "oneOf": [
@@ -11130,7 +11440,7 @@
               "string",
               "null"
             ],
-            "description": "A model version (lineage) target. Accepted by the schema; resolved in\na follow-up (Task 1), 501 today."
+            "description": "A model version (lineage) target. The API resolves it to a\nmulti_adapter fleet the version is attached to (api::evals::\nresolve_version_target) and stores the resolved deployment_id + model\nalongside, so a persisted version target carries all three fields;\n`key()` stays \"model_version:<id>\" — the gate's lookup key."
           }
         }
       },
@@ -12025,6 +12335,38 @@
           },
           "message": {
             "type": "string"
+          }
+        }
+      },
+      "WorkspaceRetentionRequest": {
+        "type": "object",
+        "required": [
+          "model_retention_days"
+        ],
+        "properties": {
+          "model_retention_days": {
+            "type": "integer",
+            "format": "int32",
+            "description": "0..=3650. 0 = purge eligible items on the next nightly sweep."
+          }
+        }
+      },
+      "WorkspaceRetentionResponse": {
+        "type": "object",
+        "description": "The workspace default retention window.",
+        "required": [
+          "object",
+          "model_retention_days"
+        ],
+        "properties": {
+          "object": {
+            "type": "string",
+            "description": "Always \"workspace_retention\"."
+          },
+          "model_retention_days": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Days unprotected model versions and unreferenced dataset snapshots are\nkept (default 90; 0 = zero-data-retention opt-in)."
           }
         }
       }
