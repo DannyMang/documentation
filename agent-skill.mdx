@@ -355,10 +355,23 @@ at 15s or slower.
 
 ## Evaluations
 
-Not available: `/v1/evals*` routes are not registered (404). The `veri evals` command group
-is not registered in the CLI either. Note that `veri run` still accepts a config with
-`kind = "eval"` and will fail against the API — only `kind = "train"` and `kind = "deploy"`
-work. `veri init` scaffolds a `configs/eval.toml` placeholder; ignore it. Don't propose eval runs.
+Prompt-suite evals are live under `/v1/evals/*` and the `veri evals` command group. A suite is
+a yaml file (name + prompts, each with at least one check: `expect_contains`,
+`expect_not_contains`, a `judge` rubric, or `tools_expected`); a run executes it against a
+serving target and prints a per-prompt scorecard plus the diff vs. the previous run.
+
+```bash
+veri evals run suites/support.yaml --target dep_...        # or dep_...:<adapter>, or <model>@v6
+veri evals runs --suite support | veri evals get evr_...   # history / one scorecard
+veri models gate acme-bot --suite support                  # production promotes require a pass
+```
+
+Exit codes: 0 all prompts passed, 1 any failed, 2 API error. A `<model>@v6` target needs the
+version live on a fleet (409 `version_not_servable` otherwise; target the deployment instead).
+With a gate on, `veri models promote` answers 409 `eval_gate_failed` listing the failing prompt
+ids. `veri run` configs remain `kind = "train" | "deploy"` only; evals run via `veri evals run`.
+
+Docs: https://docs.veri.studio/evals
 
 ## Volumes, models, billing, W&B, Hugging Face
 
@@ -366,6 +379,9 @@ work. `veri init` scaffolds a `configs/eval.toml` placeholder; ignore it. Don't 
 veri volumes create my-corpus && veri volumes upload my-corpus ./big.jsonl   # >5GiB auto-multipart
 veri volumes ls my-corpus                        # then: veri datasets ... source volume
 veri models save <job_id> --name my-model        # reusable model library; deploy with --from-model
+veri models register <job_id> --model acme-bot   # versioned lineage (acme-bot@v6); first version = production
+veri models promote acme-bot v6 -m "reason"      # move production (--alias staging); rollback / pin / retention exist
+veri datasets create acme-feedback --format preference   # append-only stream; snapshot, then train on acme-feedback@latest
 veri billing balance | veri billing burn-rate | veri cost summary
 veri wandb set --api-key <key> --project <p>     # training jobs auto-log to W&B
 veri hf set                                      # connect a write-scope HF token (prompted, hidden)
@@ -374,7 +390,7 @@ veri models push-hf <model_id> --repo ns/name    # push a ready library model to
 
 Hugging Face pushes run server-side (nothing downloads locally): connect once with `veri hf set`, then either push at end of training (`[huggingface]` in the train config, see Training) or push any ready library model with `veri models push-hf`. Repos default private. One export per model/repo at a time, two concurrent per account (409 = wait, don't retry-loop).
 
-Docs: https://docs.veri.studio/volumes · https://docs.veri.studio/deployments/custom-models · https://docs.veri.studio/training/wandb · https://docs.veri.studio/training/huggingface
+Docs: https://docs.veri.studio/volumes · https://docs.veri.studio/deployments/custom-models · https://docs.veri.studio/deployments/model-versions · https://docs.veri.studio/training/dataset-streams · https://docs.veri.studio/training/wandb · https://docs.veri.studio/training/huggingface
 
 ## REST API essentials
 
