@@ -119,13 +119,6 @@
             "pages": [
               "webhooks"
             ]
-          },
-          {
-            "group": "Vchat",
-            "icon": "comments",
-            "pages": [
-              "vchat"
-            ]
           }
         ]
       },
