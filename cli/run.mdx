@@ -25,8 +25,7 @@ my-project/
 ├── reward.py                  # TRL-style reward function stub
 ├── configs/
 │   ├── train.toml             # kind = "train"
-│   ├── deploy.toml            # kind = "deploy"
-│   └── eval.toml              # kind = "eval"
+│   └── deploy.toml            # kind = "deploy"
 ├── datasets/
 │   └── README.md
 ├── AGENTS.md                  # directory contract for coding agents
@@ -45,7 +44,7 @@ veri init --force
 Every config starts with a required `kind` line:
 
 ```toml
-kind = "train"    # or "deploy" or "eval"
+kind = "train"    # or "deploy"
 ```
 
 `veri run <path>` reads `kind` and routes:
@@ -54,14 +53,13 @@ kind = "train"    # or "deploy" or "eval"
 | --- | --- |
 | `"train"` | `veri jobs create` |
 | `"deploy"` | `veri deployments create` |
-| `"eval"` | Reserved. Evaluations are not available yet; submitting errors against the API. |
 
 Missing `kind` or an unknown value errors with a "did you mean" hint:
 
 ```bash
 $ veri run nokind.toml
 Error: config 'nokind.toml' is missing required `kind` field.
-Add one of: kind = "train" | "deploy" | "eval"
+Add one of: kind = "train" | "deploy"
 ```
 
 ## Override TOML fields from the CLI

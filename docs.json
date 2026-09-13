@@ -93,13 +93,6 @@
             ]
           },
           {
-            "group": "Evals",
-            "icon": "list-checks",
-            "pages": [
-              "evals"
-            ]
-          },
-          {
             "group": "CLI",
             "icon": "terminal",
             "pages": [
@@ -259,21 +252,8 @@
               "POST /v1/models/{name}/aliases/{alias}",
               "POST /v1/models/{name}/aliases/{alias}/rollback",
               "POST /v1/models/{name}/versions/{version}/pin",
-              "PATCH /v1/models/{name}/lineage",
               "GET /v1/models/{name}/retention",
               "PATCH /v1/models/{name}/retention"
-            ]
-          },
-          {
-            "group": "Evals",
-            "openapi": "api-reference/openapi.json",
-            "pages": [
-              "POST /v1/evals/suites",
-              "GET /v1/evals/suites",
-              "GET /v1/evals/suites/{suite_id}",
-              "POST /v1/evals/runs",
-              "GET /v1/evals/runs",
-              "GET /v1/evals/runs/{run_id}"
             ]
           },
           {
@@ -381,10 +361,6 @@
       "destination": "/api-reference/introduction"
     },
     {
-      "source": "/api-reference/evaluations",
-      "destination": "/api-reference/introduction"
-    },
-    {
       "source": "/api-reference/volumes",
       "destination": "/api-reference/introduction"
     },
@@ -431,30 +407,6 @@
     {
       "source": "/quickstart/deploy",
       "destination": "/deployments"
-    },
-    {
-      "source": "/evaluations",
-      "destination": "/"
-    },
-    {
-      "source": "/evaluations/benchmarks",
-      "destination": "/"
-    },
-    {
-      "source": "/evaluations/scorers",
-      "destination": "/"
-    },
-    {
-      "source": "/evaluations/examples",
-      "destination": "/"
-    },
-    {
-      "source": "/evaluations/api",
-      "destination": "/"
-    },
-    {
-      "source": "/cli/evals",
-      "destination": "/cli"
     }
   ]
 }

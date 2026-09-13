@@ -80,7 +80,7 @@ API routes — nothing to create, switch, or pass. Raising a limit is a "contact
 
 ## Project conventions
 
-`veri init <name>` scaffolds: `veri.toml` (project defaults), `configs/{train,deploy,eval}.toml`, `reward.py`, `AGENTS.md`. Every config starts with `kind = "train"|"deploy"|"eval"`; `veri run <config.toml>` dispatches on it. Override any key from the CLI: `--set method.learning_rate=2e-6` (TOML-typed; `--set-string` forces string).
+`veri init <name>` scaffolds: `veri.toml` (project defaults), `configs/{train,deploy}.toml`, `reward.py`, `AGENTS.md`. Every config starts with `kind = "train"|"deploy"`; `veri run <config.toml>` dispatches on it. Override any key from the CLI: `--set method.learning_rate=2e-6` (TOML-typed; `--set-string` forces string).
 
 Docs (full config schemas + `--set` rules): https://docs.veri.studio/cli/run
 
@@ -353,26 +353,6 @@ Only live replicas emit series, and an idle account returns an empty body — th
 not an error. Scrapes share the account's 120-requests-per-60s budget, so keep the interval
 at 15s or slower.
 
-## Evaluations
-
-Prompt-suite evals are live under `/v1/evals/*` and the `veri evals` command group. A suite is
-a yaml file (name + prompts, each with at least one check: `expect_contains`,
-`expect_not_contains`, a `judge` rubric, or `tools_expected`); a run executes it against a
-serving target and prints a per-prompt scorecard plus the diff vs. the previous run.
-
-```bash
-veri evals run suites/support.yaml --target dep_...        # or dep_...:<adapter>, or <model>@v6
-veri evals runs --suite support | veri evals get evr_...   # history / one scorecard
-veri models gate acme-bot --suite support                  # production promotes require a pass
-```
-
-Exit codes: 0 all prompts passed, 1 any failed, 2 API error. A `<model>@v6` target needs the
-version live on a fleet (409 `version_not_servable` otherwise; target the deployment instead).
-With a gate on, `veri models promote` answers 409 `eval_gate_failed` listing the failing prompt
-ids. `veri run` configs remain `kind = "train" | "deploy"` only; evals run via `veri evals run`.
-
-Docs: https://docs.veri.studio/evals
-
 ## Volumes, models, billing, W&B, Hugging Face
 
 ```bash
@@ -418,4 +398,4 @@ MCP alternative: hosted server at `https://api.veri.studio/mcp` (read-only: `/re
 
 ## Keeping it current
 
-Feature gates (providers, engines, evals) change server-side without an SDK release. The skill tells agents to trust live signals — `veri gpu list`, `--dry-run`, and API error messages — over any static table, including its own.
+Feature gates (providers and engines) change server-side without an SDK release. The skill tells agents to trust live signals — `veri gpu list`, `--dry-run`, and HTTP error messages — over any static table, including its own.

@@ -78,8 +78,6 @@ The version argument accepts `v6` or `6`. The alias move and its audit row commi
 
 **What promotion changes in serving.** A multi-adapter fleet that serves this lineage follows the `production` alias: promoting flips its adapter to the new version without a redeploy, and the next request is answered by the new weights. A deployment created from one specific library model (`--from-model`) is deliberately fixed: it keeps serving the version it was created from until you redeploy it.
 
-If the lineage has an [eval gate](/evals#gate-promotions-to-production) enabled, a promotion to `production` is refused unless the version's latest eval run passed.
-
 ## Roll back
 
 ```bash
@@ -91,7 +89,7 @@ acme-bot: production v6 -> v5 (refund answers regressed)
 Staged a flip on 1 fleet adapter(s) serving this lineage.
 ```
 
-Rollback moves the alias back to the version it pointed at before its last move; fleets follow the same way. The rollback is itself an audited move, so rolling back twice returns to the promoted version. `--alias` rolls back a different alias; `--reason` is optional here and defaults to naming the undone move. Rollbacks are never blocked by the eval gate.
+Rollback moves the alias back to the version it pointed at before its last move; fleets follow the same way. The rollback is itself an audited move, so rolling back twice returns to the promoted version. `--alias` rolls back a different alias; `--reason` is optional here and defaults to naming the undone move.
 
 ## Pin a version
 
@@ -130,7 +128,7 @@ acme-bot: keep 7 days (lineage override)
 
 Everything else becomes eligible once it ages out of the window. Age counts from the last time the version was live (the later of its creation and the last time an alias left it), so "30 days" means 30 days since it last mattered, not since training.
 
-**What "purged" looks like.** A purged version keeps its row: the version number, tags, alias audit, and eval scorecards all remain, but its weights are deleted and its library model can no longer be deployed or attached. A purged dataset snapshot stops resolving (training against it fails); its underlying rows remain in the stream.
+**What "purged" looks like.** A purged version keeps its row: the version number, tags, and alias audit remain, but its weights are deleted and its library model can no longer be deployed or attached. A purged dataset snapshot stops resolving (training against it fails); its underlying rows remain in the stream.
 
 ## See which version answered a request
 
@@ -139,9 +137,6 @@ Every request served by a registered version carries its `model_version_id` in t
 ## Where to go next
 
 <CardGroup cols={2}>
-  <Card title="Evals" icon="list-checks" href="/evals">
-    Score versions with a prompt suite and gate promotions on it.
-  </Card>
   <Card title="Dataset streams" icon="database" href="/training/dataset-streams">
     Pin each version to the exact snapshot it trained on.
   </Card>
