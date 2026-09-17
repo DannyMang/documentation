@@ -2118,6 +2118,131 @@
         ]
       }
     },
+    "/v1/explore/runs": {
+      "get": {
+        "tags": [
+          "Training jobs"
+        ],
+        "summary": "List Explore runs",
+        "operationId": "explore_feed",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "description": "Cursor: return runs published strictly before this instant.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Published runs, newest first, with the caller's like state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExploreRunList"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/explore/runs/{run_id}/like": {
+      "put": {
+        "tags": [
+          "Training jobs"
+        ],
+        "summary": "Like a public run",
+        "operationId": "like",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "description": "Run (training job) ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Liked (idempotent)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LikeResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No public run with this id"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Training jobs"
+        ],
+        "summary": "Unlike a public run",
+        "operationId": "unlike",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "description": "Run (training job) ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Unliked (idempotent)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LikeResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No public run with this id"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/gpu/availability": {
       "get": {
         "tags": [
@@ -3136,6 +3261,153 @@
         ]
       }
     },
+    "/v1/public/runs": {
+      "get": {
+        "tags": [
+          "Public runs"
+        ],
+        "summary": "List public runs",
+        "operationId": "feed",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "description": "Cursor: return runs published strictly before this instant.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Published runs, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicRunList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/public/runs/{run_id}": {
+      "get": {
+        "tags": [
+          "Public runs"
+        ],
+        "summary": "Get a public run",
+        "operationId": "get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "description": "Run (training job) ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The published run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicRun"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No public run with this id"
+          }
+        }
+      }
+    },
+    "/v1/public/runs/{run_id}/metrics": {
+      "get": {
+        "tags": [
+          "Public runs"
+        ],
+        "summary": "Get a public run's metrics",
+        "operationId": "metrics",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "description": "Run (training job) ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "keys",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from_step",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "to_step",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "max_points",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sampled per-step training metrics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetricsResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No public run with this id"
+          }
+        }
+      }
+    },
     "/v1/regions": {
       "get": {
         "tags": [
@@ -3889,6 +4161,95 @@
           },
           "400": {
             "description": "Job has not completed yet"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/training_jobs/{job_id}/publish": {
+      "post": {
+        "tags": [
+          "Training jobs"
+        ],
+        "summary": "Publish a training run",
+        "operationId": "publish",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "description": "Training job ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Optional publisher display name",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublishRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The run is public; the response carries its shareable URL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The run was removed by Veri and cannot be re-published"
+          },
+          "422": {
+            "description": "The run name or display name failed the content check"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Training jobs"
+        ],
+        "summary": "Unpublish a training run",
+        "operationId": "unpublish",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "description": "Training job ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The run is private again",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublishResponse"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -7303,6 +7664,54 @@
           }
         }
       },
+      "ExploreRun": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/PublicRun"
+          },
+          {
+            "type": "object",
+            "required": [
+              "liked_by_me"
+            ],
+            "properties": {
+              "liked_by_me": {
+                "type": "boolean"
+              }
+            }
+          }
+        ],
+        "description": "A public card plus the caller's own like state."
+      },
+      "ExploreRunList": {
+        "type": "object",
+        "required": [
+          "object",
+          "data",
+          "has_more"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExploreRun"
+            }
+          },
+          "has_more": {
+            "type": "boolean"
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        }
+      },
       "GpuAvailabilityList": {
         "type": "object",
         "required": [
@@ -7719,6 +8128,39 @@
         ],
         "description": "Harness-in-the-loop GRPO (VS-372): the user's own agent harness (Claude\nAgent SDK / LangChain / OpenAI Agents SDK) drives multi-turn rollouts\nagainst the in-training policy. Shares GRPO's core knobs; the\nharness-specific ones tune rollout execution and the colocated vLLM\npolicy server. The harness code itself arrives via the job's `script`\npayload (same shape as custom_script)."
       },
+      "HeadlineMetric": {
+        "type": "object",
+        "description": "The headline number on a card: the run's primary metric, latest value and\nits change since the first logged step. `reward` when the run logs it\n(RL methods), else `loss`.",
+        "required": [
+          "key",
+          "latest",
+          "first",
+          "delta",
+          "step"
+        ],
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "latest": {
+            "type": "number",
+            "format": "double"
+          },
+          "first": {
+            "type": "number",
+            "format": "double"
+          },
+          "delta": {
+            "type": "number",
+            "format": "double",
+            "description": "latest - first."
+          },
+          "step": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
       "HfExportCreate": {
         "type": "object",
         "required": [
@@ -7886,6 +8328,30 @@
           "failed",
           "cancelled"
         ]
+      },
+      "LikeResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "run_id",
+          "liked",
+          "like_count"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "run_id": {
+            "type": "string"
+          },
+          "liked": {
+            "type": "boolean"
+          },
+          "like_count": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
       },
       "MeResponse": {
         "type": "object",
@@ -9522,6 +9988,17 @@
                   ],
                   "format": "date-time"
                 },
+                "visibility": {
+                  "$ref": "#/components/schemas/RunVisibility",
+                  "description": "Public-run state (Explore): `private` (default), `public`, or\n`admin_hidden` (removed by Veri; cannot be re-published)."
+                },
+                "published_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
                 "created_at": {
                   "type": "string",
                   "format": "date-time"
@@ -9799,6 +10276,191 @@
           }
         }
       },
+      "PublicRun": {
+        "type": "object",
+        "description": "A published run as the public sees it. This is an allowlist: see the\nmodule docs and `leak_tests` before adding a field.",
+        "required": [
+          "object",
+          "id",
+          "name",
+          "method",
+          "status",
+          "publisher",
+          "like_count"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "description": "The run's display name (training_jobs.output_name)."
+          },
+          "method": {
+            "type": "string"
+          },
+          "base_model": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStatus"
+          },
+          "current_step": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "total_steps": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "started_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "completed_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "duration_seconds": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "published_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "publisher": {
+            "type": "string",
+            "description": "The publisher's display name as supplied at publish time."
+          },
+          "hf_repo_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The user's own Hugging Face link, rendered as-is (a private repo 404s\non HF's side; accepted)."
+          },
+          "wandb_run_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "like_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "headline_metric": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/HeadlineMetric"
+              }
+            ]
+          }
+        }
+      },
+      "PublicRunList": {
+        "type": "object",
+        "required": [
+          "object",
+          "data",
+          "has_more"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicRun"
+            }
+          },
+          "has_more": {
+            "type": "boolean"
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Pass back as `before` to fetch the next page (the last card's\npublished_at). Null when has_more is false."
+          }
+        }
+      },
+      "PublishRequest": {
+        "type": "object",
+        "properties": {
+          "display_name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The name shown as the publisher on the public page. The web app sends\nthe signed-in user's name; CLI/SDK callers may omit it (shown as\n\"Veri user\"). Stored as a snapshot at publish time."
+          }
+        }
+      },
+      "PublishResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "id",
+          "visibility"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/RunVisibility"
+          },
+          "published_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "public_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The shareable public page, e.g. https://veri.studio/runs/<id>."
+          }
+        }
+      },
       "RecommendedConfig": {
         "type": "object",
         "required": [
@@ -9992,6 +10654,14 @@
           "preference",
           "completion",
           "chat"
+        ]
+      },
+      "RunVisibility": {
+        "type": "string",
+        "enum": [
+          "private",
+          "public",
+          "admin_hidden"
         ]
       },
       "RuntimeCatalogResponse": {
@@ -10773,6 +11443,17 @@
             ],
             "format": "date-time"
           },
+          "visibility": {
+            "$ref": "#/components/schemas/RunVisibility",
+            "description": "Public-run state (Explore): `private` (default), `public`, or\n`admin_hidden` (removed by Veri; cannot be re-published)."
+          },
+          "published_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time"
@@ -11393,6 +12074,10 @@
     {
       "name": "Metrics",
       "description": "Prometheus metrics export for your own observability stack."
+    },
+    {
+      "name": "Public runs",
+      "description": "Unauthenticated reads of runs their owners published to Explore."
     }
   ]
 }

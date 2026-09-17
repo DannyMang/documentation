@@ -1,0 +1,63 @@
+---
+title: "Sharing runs"
+sidebarTitle: "Sharing runs"
+description: "Publish a training run to a public page with live metric charts, and browse runs the community has shared on the Explore tab."
+keywords: ["sharing", "public runs", "explore", "publish", "likes", "community"]
+---
+
+Every training run is private by default. Publishing a run puts it on a public page at `veri.studio/runs/<job_id>` that anyone can open without an account, and lists it on the **Explore** tab inside the dashboard. The public page shows live metric charts and updates while the run trains, so you can share an in-progress experiment the same way you'd share a finished one.
+
+## What becomes public
+
+A published run shows:
+
+- The run name, training method, and base model.
+- Your display name as the publisher.
+- Status, step progress, and elapsed time.
+- Metric charts (everything the trainer logs: loss, reward, and any custom metrics).
+- Links to the model weights on Hugging Face and the W&B run, when the job has them.
+
+Cost, datasets, hyperparameters, logs, events, and trajectories are never part of a public run. Unpublishing removes the run from Explore and returns its page to a 404.
+
+<Note>
+The Hugging Face link is shown exactly as the job recorded it. If the repository is private, visitors get a 404 from Hugging Face; publish the repo there if you want the weights reachable.
+</Note>
+
+## Publish from the dashboard
+
+1. Open the run under **Training**.
+2. Select **Share**, review what will be shown, and select **Publish**.
+3. Copy the public URL from the dialog.
+
+The same dialog unpublishes the run later. Run names go through a content check at publish time; a rejected name means renaming the run before it can be published.
+
+## Publish over the API
+
+```bash
+curl -X POST https://api.veri.studio/v1/training_jobs/$JOB_ID/publish \
+  -H "Authorization: Bearer $VERI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"display_name": "Ada"}'
+```
+
+```json
+{
+  "object": "training_job.publication",
+  "id": "a1b2c3d4e5f6",
+  "visibility": "public",
+  "published_at": "2026-09-16T21:00:00Z",
+  "public_url": "https://veri.studio/runs/a1b2c3d4e5f6"
+}
+```
+
+`display_name` is optional; omitting it lists the publisher as "Veri user". Unpublish with `DELETE` on the same path. The job object's `visibility` field reports `private`, `public`, or `admin_hidden` (removed by Veri; contact support).
+
+Public data is also readable without authentication, which is what the public page uses:
+
+- `GET /v1/public/runs` — published runs, newest first, cursor-paginated with `limit` and `before`.
+- `GET /v1/public/runs/{job_id}` — one published run.
+- `GET /v1/public/runs/{job_id}/metrics` — its per-step metrics, same shape as the private metrics endpoint.
+
+## Explore
+
+The **Explore** tab in the dashboard lists published runs newest first. Opening a card shows its public page, and the heart on each card likes or unlikes the run. Likes require a Veri account; the public page shows the count.
