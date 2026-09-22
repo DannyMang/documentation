@@ -141,6 +141,40 @@ veri datasets get acme-feedback
 
 Shows the locked format, the current head row, how many rows arrived since the last snapshot, and the snapshot timeline (name, head row, note, auto flag, created time). To read rows as of a snapshot programmatically, use the SDK: `client.datasets.rows("acme-feedback", snapshot="snap-2")` resolves supersessions and tombstones exactly as training does.
 
+## Import request traces
+
+Turn a window of a deployment's [request traces](/deployments/observability#request-traces) into
+rows on a stream — production traffic becoming training data in one call:
+
+```bash
+veri datasets import-traces acme-feedback \
+  --deployment dep_ab12cd34 \
+  --from 2026-09-11T00:00:00Z --to 2026-09-18T00:00:00Z \
+  --snapshot
+```
+
+Each trace becomes one row. On a `chat` stream the row is the full transcript (the request
+messages plus the assistant's reply); on a `prompt` stream the reply is discarded and only the
+request messages are kept (GRPO samples its own completions). `--model-version mv_...` keeps only
+traces answered by that model version. `--snapshot` cuts a snapshot right after the append, with
+a note recording the source deployment and window, so the imported set is immediately pinnable
+for training.
+
+Two guardrails to know about:
+
+- **Overlap protection.** Re-importing a window that overlaps a previous import for the same
+  dataset and deployment is refused with a `409`, because the same traffic would land twice.
+  Import adjacent windows instead, or pass `--force` if the duplication is intentional.
+- **Imports reflect what was captured.** Traces exist only for deployments created with trace
+  capture enabled, and only for non-streamed, successful requests. A response cut short by
+  `max_tokens` looks complete in the trace, so consider your serving token limits before
+  training on imported transcripts. Unmappable traces are skipped and counted in the response,
+  never imported silently.
+
+One call imports up to 10,000 rows (`--limit` to lower that); cover longer ranges with
+consecutive windows. Base-retention traces are deleted after 14 days — import windows you care
+about before they age out.
+
 ## Where to go next
 
 <CardGroup cols={2}>

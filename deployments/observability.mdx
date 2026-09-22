@@ -224,6 +224,10 @@ Details worth knowing:
   dropped.
 - **Streaming.** Bodies of streamed (`stream: true`) responses are not captured
   yet; those requests still appear in request telemetry.
+- **Traces to training data.** A time window of traces can be imported into a
+  [dataset stream](/training/dataset-streams#import-request-traces) as `chat`
+  or `prompt` rows (`veri datasets import-traces`), snapshotted, and trained
+  on — production traffic feeding the next fine-tune.
 
 ## Export metrics to Prometheus
 

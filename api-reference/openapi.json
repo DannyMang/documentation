@@ -721,6 +721,65 @@
         ]
       }
     },
+    "/v1/datasets/{dataset_id}/import-traces": {
+      "post": {
+        "tags": [
+          "Datasets"
+        ],
+        "summary": "Import a window of request traces as dataset rows",
+        "operationId": "import_traces",
+        "parameters": [
+          {
+            "name": "dataset_id",
+            "in": "path",
+            "description": "Dataset id or name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TraceImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TraceImportResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "bad window/format/limit, or traces disabled"
+          },
+          "404": {
+            "description": "dataset or deployment not found"
+          },
+          "409": {
+            "description": "export_window_overlap: overlaps a previous import"
+          },
+          "502": {
+            "description": "trace store failed mid-fetch; nothing appended"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/datasets/{dataset_id}/rows": {
       "post": {
         "tags": [
@@ -11136,6 +11195,135 @@
             "format": "int64"
           },
           "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "TraceImportRequest": {
+        "type": "object",
+        "required": [
+          "deployment",
+          "from",
+          "to"
+        ],
+        "properties": {
+          "deployment": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "to": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "model_version_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "format": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RowFormat",
+                "description": "Row format to write; defaults to the dataset's locked format.\nv1 accepts `chat` and `prompt` only."
+              }
+            ]
+          },
+          "limit": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "minimum": 0
+          },
+          "snapshot": {
+            "type": "boolean"
+          },
+          "force": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "TraceImportResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "id",
+          "dataset_id",
+          "deployment_id",
+          "from",
+          "to",
+          "format",
+          "traces_scanned",
+          "rows_appended",
+          "skipped",
+          "head_row"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "dataset_id": {
+            "type": "string"
+          },
+          "deployment_id": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "to": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "format": {
+            "$ref": "#/components/schemas/RowFormat"
+          },
+          "traces_scanned": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "rows_appended": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "skipped": {
+            "description": "Per-reason counts of traces that were fetched but not written,\ne.g. {\"no_choices\": 3, \"filtered_version\": 28}."
+          },
+          "first_row": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "last_row": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "head_row": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "snapshot_id": {
             "type": [
               "string",
               "null"
