@@ -183,6 +183,9 @@ claude mcp add --transport http veri-readonly https://api.veri.studio/readonly/m
 | `veri_billing_burn_rate` | Get the current spend rate. |
 | `veri_billing_overview` / `veri_get_billing_overview` | Get balance, training and deployment burn, runway, active resources, and recent transactions. |
 | `veri_get_cost_summary` | Get the supported historical cost breakdown for up to 30 days. |
+| `veri_list_evaluators` | List evaluators (LLM judge, code, human) with their latest version's method and output type. |
+| `veri_get_experiment` | Get an experiment's status, per-evaluator results, verdict, and diff against its baseline. |
+| `veri_get_model_gate` | Get a model lineage's promotion gate: its config, production's latest matching experiment, and judge-vs-human agreement warnings. |
 
 ### Write tools (available unless read-only)
 
@@ -194,6 +197,7 @@ claude mcp add --transport http veri-readonly https://api.veri.studio/readonly/m
 | `veri_stop_deployment` | Stop a running deployment. |
 | `veri_register_model` | Register a completed job's checkpoint as a reusable custom model. |
 | `veri_push_model_to_hf` | Push a library model to the connected Hugging Face account. |
+| `veri_run_experiment` | Start an experiment on existing deployments (no new GPUs). Returns at once; poll `veri_get_experiment` for the result. |
 
 ### Delete tools (available unless read-only)
 
@@ -212,6 +216,9 @@ any unattended agent.
 
 Lifecycle webhooks, Prometheus metrics export, and per-replica drain have no MCP tools
 today. Reach them over REST; see the [API reference](/api-reference/introduction).
+Creating evaluators and running local code evaluators happen in the `veri` CLI
+(`veri evaluators create`, `veri experiments run --local`): an experiment that pins a
+local code evaluator waits in `awaiting_local` until those scores arrive.
 
 ## Test deployment observability with MCP
 
