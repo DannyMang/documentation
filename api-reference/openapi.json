@@ -467,7 +467,7 @@
           "Datasets"
         ],
         "summary": "Create dataset",
-        "description": "Two bodies share this route. `multipart/form-data` (`name` + `file`) uploads a one-shot JSONL, which becomes a stream with one snapshot (`snap-1`). `application/json` `{name, format, auto_snapshot_rows?}` creates an EMPTY append-only stream with a locked row format (`prompt` | `preference` | `completion` | `chat`); append rows with POST /v1/datasets/{id}/rows.",
+        "description": "Two bodies share this route. `multipart/form-data` (`name` + `file`) uploads a one-shot JSONL, which becomes a stream with one snapshot (`snap-1`). `application/json` `{name, format, auto_snapshot_rows?}` creates an EMPTY append-only stream with a locked row format (`prompt` | `preference` | `completion` | `chat` | `eval`); append rows with POST /v1/datasets/{id}/rows.",
         "operationId": "create",
         "requestBody": {
           "description": "JSON `{name, format}` for an empty stream, or a multipart JSONL file upload",
@@ -6188,7 +6188,7 @@
               "string",
               "null"
             ],
-            "description": "Locked row format (prompt | preference | completion | chat). Null on\na legacy dataset until its first append locks it."
+            "description": "Locked row format (prompt | preference | completion | chat | eval). Null on\na legacy dataset until its first append locks it."
           },
           "head_row": {
             "type": "integer",
@@ -9108,7 +9108,7 @@
                     "string",
                     "null"
                   ],
-                  "description": "Locked row format (prompt | preference | completion | chat). Null on\na legacy dataset until its first append locks it."
+                  "description": "Locked row format (prompt | preference | completion | chat | eval). Null on\na legacy dataset until its first append locks it."
                 },
                 "head_row": {
                   "type": "integer",
@@ -10748,7 +10748,8 @@
           "prompt",
           "preference",
           "completion",
-          "chat"
+          "chat",
+          "eval"
         ]
       },
       "RunVisibility": {
