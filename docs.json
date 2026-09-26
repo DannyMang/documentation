@@ -94,6 +94,17 @@
             ]
           },
           {
+            "group": "Evaluations",
+            "icon": "scale",
+            "pages": [
+              "evals",
+              "evals/evaluators",
+              "evals/experiments",
+              "evals/human-review",
+              "evals/promotion-gate"
+            ]
+          },
+          {
             "group": "CLI",
             "icon": "terminal",
             "pages": [

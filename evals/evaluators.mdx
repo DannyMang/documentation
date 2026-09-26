@@ -1,0 +1,177 @@
+---
+title: "Evaluators"
+sidebarTitle: "Evaluators"
+description: "Define LLM-judge, code, and human evaluators: method, scope, output type, variable bindings, versions, and scores."
+keywords: ["evaluators", "LLM judge", "LLM as a judge", "code evaluator", "human evaluator", "bindings", "scores", "thread"]
+---
+
+An evaluator is a named rule that scores a model output. Every evaluator has three independent choices:
+
+| Choice | Values |
+| --- | --- |
+| **Method** | `llm_judge`: a deployment in your workspace grades the output against your prompt. `code`: your `evaluate(args)` function returns the score. `human`: a reviewer scores it in an [annotation queue](/evals/human-review). |
+| **Scope** | `single_turn` (default): one input and one output. `thread`: a whole conversation. |
+| **Output type** | `boolean`, `categorical` (one of your labels), or `numeric` (a number in a range). |
+
+Names are 1-64 lowercase letters, digits, `.`, `_` or `-`, unique per workspace, and usable in place of the `evl_...` id everywhere.
+
+## Output types and pass rules
+
+The output config says what a score may be and, optionally, when it **passes**. Experiment verdicts and gate thresholds count passes. An evaluator without a pass rule is informational in an experiment's verdict (its mean or label counts are reported); the gate's non-regression rule still compares a numeric evaluator's mean with production's.
+
+| Output type | Config | Passes when |
+| --- | --- | --- |
+| `boolean` | `{"pass_when": true}` (the default) | The value equals `pass_when`. Use `false` for "contains PII?"-style checks. |
+| `categorical` | `{"labels": ["good", "ok", "bad"], "pass_labels": ["good", "ok"]}` | The label is in `pass_labels`. No pass rule without it. |
+| `numeric` | `{"min": 1, "max": 5, "pass_threshold": 4, "higher_is_better": true}` | The value is at or beyond `pass_threshold` in the better direction. No pass rule without a threshold. |
+
+## Variables and bindings
+
+Evaluators read five built-in variables from the item being scored:
+
+| Variable | Contents |
+| --- | --- |
+| `input` | The request: a string or a message list. |
+| `output` | The answer: the assistant's text, or the whole message when it carries tool calls. |
+| `expected` | The reference answer, when the dataset row has one. |
+| `metadata` | The row's `metadata` object. |
+| `transcript` | The conversation as a message list, when the item has one (always for thread items). |
+
+**Bindings** map a variable to a JSONPath inside the item, so an evaluator can read a nested field or define a new variable for its prompt:
+
+```json
+{"question": "$.input[0].content", "gold": "$.metadata.gold_answer"}
+```
+
+The path grammar is `$` followed by `.name`, `['name']`, or `[index]`. Wildcards, slices, and filters are rejected: a binding selects exactly one value. An experiment can layer its own bindings over every evaluator's.
+
+Set `requires_reference: true` when the evaluator compares against `expected`: items without an expected value are then recorded as `skipped` instead of being scored.
+
+## LLM judge
+
+```bash
+veri evaluators create helpful \
+  --method llm_judge --output-type numeric \
+  --output-config '{"min": 1, "max": 5, "pass_threshold": 4}' \
+  --judge-deployment dep_ab12cd34 \
+  --prompt-file helpful.txt
+```
+
+The prompt is a template: `{{input}}`, `{{output}}`, and any other variable name (built-in or bound) are replaced with the item's values. Strings are inserted as-is and other JSON values as compact JSON. A placeholder that names no variable is an error at scoring time; a known variable with no value renders empty and is reported.
+
+How the judge runs:
+
+- The judge is a deployment in your workspace (`--judge-deployment`; `--judge-model` picks a model or adapter on it). An experiment pins the judge's served model when it starts.
+- Veri adds a fixed system instruction (grade strictly on the evidence shown), asks for a JSON verdict `{"reasoning", "score"}` with structured outputs at temperature 0, and validates the reply against your output type.
+- A reply that does not parse or is out of range becomes an **error** score, never a pass.
+
+## Code evaluators
+
+A code evaluator is one function that receives `{input, output, expected, metadata, transcript}` (after bindings) and returns `{"score": ..., "reasoning": ...}`. The score is a boolean, a finite number, or a label string; `reasoning` is optional.
+
+<CodeGroup>
+```python exact.py
+def evaluate(args):
+    same = args["output"].strip() == args["expected"].strip()
+    return {"score": same, "reasoning": "exact match" if same else "differs"}
+```
+
+```javascript short.mjs
+export default function evaluate(args) {
+  const ok = typeof args.output === "string" && args.output.length <= 600;
+  return { score: ok, reasoning: ok ? "concise" : "too long" };
+}
+```
+</CodeGroup>
+
+```bash
+veri evaluators create exact --method code --output-type boolean \
+  --source-file exact.py --requires-reference            # runtime: local (default)
+veri evaluators create short --method code --output-type boolean \
+  --source-file short.mjs --runtime cloud
+```
+
+The language comes from the file extension (`.py`, `.js`/`.mjs`, `.ts`/`.mts`) unless you pass `--language`. Where the code runs is the `runtime`:
+
+| Runtime | Languages | Where |
+| --- | --- | --- |
+| `local` (default) | Python, JavaScript, TypeScript | On your machine: `veri experiments run --local` or `client.experiments.run_local()`. Python runs in an isolated subprocess; JavaScript and TypeScript run with Node.js (TypeScript needs Node 22.6 or newer). |
+| `cloud` | JavaScript, TypeScript | In Veri's sandbox (Cloudflare Dynamic Workers): no network access, no environment or secrets, no package installs. Runs inside the experiment with nothing to do on your side. |
+
+Both runtimes enforce the same contract: a 5 second wall clock, source up to 256 KB, arguments up to 5 MB, a result up to 256 KB, labels up to 256 characters, and reasoning truncated to 8 KB. Use the standard library only: a local evaluator that imports a package you have installed would score differently (or fail) anywhere it is missing.
+
+A local evaluator's score must carry the SHA-256 of the evaluator version's source; the SDK computes it, and a score from different code is refused (`409 source_mismatch`). Python code evaluators are local-only: Python in the cloud sandbox would not match local results.
+
+## Human evaluators
+
+```bash
+veri evaluators create tone --method human --output-type categorical \
+  --output-config '{"labels": ["good", "needs work"], "pass_labels": ["good"]}' \
+  --instructions "Polite, specific, and no promises we cannot keep."
+```
+
+Reviewers score human evaluators in [annotation queues](/evals/human-review). Experiments and the promotion gate take only `llm_judge` and `code` evaluators.
+
+## Spec files
+
+Keep evaluators in version control as JSON (or YAML, with PyYAML installed) and create them with `--file`. `method_config.source_file` is read relative to the spec file:
+
+```json evaluator.json
+{
+  "name": "short",
+  "method": "code",
+  "output_type": "boolean",
+  "method_config": {"runtime": "cloud", "source_file": "short.mjs"}
+}
+```
+
+```bash
+veri evaluators create --file evaluator.json
+```
+
+## Versions
+
+Every edit is a new immutable version; nothing that pinned an earlier version changes meaning. Send only what changes, and method flags are merged into the latest version's config:
+
+```bash
+veri evaluators version helpful --prompt-file helpful-v2.txt   # keeps the judge
+veri evaluators get helpful --version 1                        # an older version
+veri evaluators archive helpful                                # no new versions; scores kept
+```
+
+Pin a version as `helpful@2` in experiments, gates, and queues; a bare name means the latest.
+
+## Scores
+
+A score is one evaluator result on one target. Scores are immutable: a second score for the same evaluator version and target is refused with `409 score_exists`.
+
+| Target | Identified by | Scope |
+| --- | --- | --- |
+| `trace` | `request_id` | `single_turn` evaluators |
+| `thread` | `deployment_id` + `thread_id` (+ `target_revision`, the last request covered) | `thread` evaluators |
+| `experiment_item` | `experiment_id` + `item_id` | Written by the experiment runner and local code evaluators |
+
+Your own harness can post verdicts on production traffic, and they show up on the trace in the dashboard and in `veri datasets import-traces --score-evaluator`:
+
+```python
+client.scores.create("tone", target_type="trace", request_id="req_...", value="good",
+                     reasoning="friendly and specific")
+page = client.scores.list(deployment_id="dep_ab12cd34", evaluator="tone")
+```
+
+Each score records its `source` (`api`, `sdk`, `human`, or `experiment`), its author, `passed` (the version's pass rule applied to the value), and the `model_version_id` that answered the scored request, when known. `status` is `ok`, `error` (with `error`), or `skipped`.
+
+## Threads
+
+A thread is the requests of one conversation. Send the same `X-Veri-Thread-Id` header (1-128 characters of `A-Z a-z 0-9 . _ : -`) on every request of the conversation; the SDK's `session_id` argument sends the equivalent `X-Veri-Session-Id`, which is accepted as an alias. The thread id is stored on each request and trace, and `thread` evaluators score the whole conversation up to its latest request.
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="Experiments" icon="flask-conical" href="/evals/experiments">
+    Run evaluators over a dataset snapshot against a target.
+  </Card>
+  <Card title="Human review" icon="user-check" href="/evals/human-review">
+    Score human evaluators and calibrate judges.
+  </Card>
+</CardGroup>

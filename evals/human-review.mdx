@@ -1,0 +1,75 @@
+---
+title: "Human review"
+sidebarTitle: "Human review"
+description: "Set up annotation queues for traces, threads, or experiment items, review them in the dashboard, collect corrections, and check how well a judge agrees with humans."
+keywords: ["human review", "annotation queues", "labeling", "human feedback", "corrections", "judge calibration", "LLM judge agreement"]
+---
+
+An annotation queue holds items for people to review against pinned evaluator versions. Reviewers work through the queue in the dashboard; each completed item writes one human score per evaluator and can turn a reviewer's corrected answer into a new dataset row.
+
+Queues are also how you check an LLM judge: put the judge's own evaluator in a queue, and the human scores collected on the same targets become the [agreement check](#judge-and-human-agreement) shown on the promotion gate.
+
+## Create a queue
+
+```bash
+veri annotation-queues create refund-review --target-type trace \
+  --evaluator tone --evaluator helpful \
+  --instructions-file rubric.md
+```
+
+| Option | Meaning |
+| --- | --- |
+| `--target-type` | What the queue reviews: `trace` (one request), `thread` (a conversation), or `experiment_item`. |
+| `--evaluator` | Evaluators to score, optionally pinned as `name@N`. Any method: human rubrics, or an `llm_judge`/`code` evaluator to collect human labels on it. All share one scope: `single_turn` for trace queues, `thread` for thread queues, either for experiment-item queues. |
+| `--instructions` / `--instructions-file` | Markdown shown to reviewers with every item. |
+| `--reservation-minutes` | How long a reviewer holds an item before it returns to the queue: 1-1440, default 15. |
+
+`veri annotation-queues list` shows every queue with its pending, reserved, completed, and skipped counts.
+
+## Add items
+
+Add explicit targets:
+
+```bash
+veri annotation-queues add refund-review --request-id req_9b1f2c --request-id req_77ad01
+veri annotation-queues add convo-review --thread dep_ab12cd34:thread-8812
+veri annotation-queues add exp-review --experiment-item exp_5c1e9a0b77f2:3.1
+```
+
+Or add the targets of matching scores, for example every trace your judge harness scored as failing on one deployment:
+
+```bash
+veri annotation-queues add refund-review --from-evaluator helpful --failed \
+  --deployment dep_ab12cd34 --limit 200
+```
+
+`--passed`, `--failed`, `--min-score`, and `--max-score` filter by the score; `--experiment` limits the selection to one experiment's items. Targets already in the queue are counted, not added twice.
+
+## Review
+
+Reviewers open the queue in the dashboard, take the next item, see the conversation with the queue's instructions and each evaluator's allowed values, and then complete, skip, or release it. Taking an item reserves it for that reviewer until the reservation expires, so two people never review the same item at once.
+
+Completing an item:
+
+- writes one score per pinned evaluator, with `source: human` and the reviewer as author;
+- records an optional note and a **correction** (the answer the model should have given);
+- with a dataset chosen, appends the correction to that stream as an `eval` row (the item's `input` or thread `turns`, the correction as `expected`, and the queue and reviewer in `metadata`), ready for the next experiment or training snapshot. The stream's format must be `eval` (or not yet set).
+
+Human scores on experiment items are calibration data: they never change an experiment's results, verdict, or the gate's evidence.
+
+Building your own review tool? The same flow is in the API and SDK: `client.annotation_queues.next(queue)` reserves and returns the next item with its context (or `None` when the queue is empty), then `complete(queue, item_id, {"tone": "good"}, correction=..., append_to_dataset="golden")`, `skip`, or `release`. Subscribe to the `annotation.completed` [webhook](/webhooks) to react to reviews.
+
+## Judge and human agreement
+
+For each `llm_judge` evaluator pinned by a lineage's [promotion gate](/evals/promotion-gate), Veri compares the judge's verdicts with human scores on the same targets. `veri models gate <model>` shows the agreement, with a warning when humans and the judge disagree too often (below 80% agreement over at least 10 shared targets). The warning never blocks a promotion; it tells you the judge's verdicts may not be a trustworthy gate until you fix its prompt.
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="Evaluators" icon="scale" href="/evals/evaluators">
+    Write human rubrics and judges.
+  </Card>
+  <Card title="Dataset streams" icon="database" href="/training/dataset-streams">
+    Where corrections land, ready to snapshot.
+  </Card>
+</CardGroup>

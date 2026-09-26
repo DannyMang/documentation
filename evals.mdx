@@ -1,0 +1,92 @@
+---
+title: "Evaluations"
+sidebarTitle: "Overview"
+description: "Score model outputs with your own evaluators, run experiments on your deployments, review with humans, and gate promotions on the result."
+keywords: ["evals", "evaluations", "evaluators", "LLM judge", "experiments", "promotion gate", "human review", "annotation"]
+---
+
+Evaluations close Veri's self-improvement loop: serve a model, capture its traffic, turn traffic into data, train, and only promote the new version when it measurably holds up. You write the evaluators (a judge prompt, a code function, or a human rubric); Veri runs them against your own deployments, stores every score, and can refuse a `production` promotion that does not meet your bar.
+
+Target and judge calls are ordinary requests to your own deployments, through the same serving path your users hit. They cost what those deployments cost; there is no second inference stack.
+
+## The pieces
+
+| Piece | What it is |
+| --- | --- |
+| [Evaluator](/evals/evaluators) | A named, versioned scoring rule: `llm_judge`, `code`, or `human`, scoring one turn or a whole thread, producing a boolean, a label, or a number. |
+| Score | One evaluator result on one target: a trace, a thread, or an experiment item. Immutable. |
+| [Experiment](/evals/experiments) | A pinned dataset snapshot run through a target (a deployment or a model version) and scored by pinned evaluator versions, with a diff against a baseline run. |
+| [Promotion gate](/evals/promotion-gate) | A per-lineage rule: moving `production` needs a passing experiment of that exact version. |
+| [Annotation queue](/evals/human-review) | Human review of traces, threads, or experiment items; completed reviews become scores and, optionally, corrected dataset rows. |
+
+## The loop
+
+<Steps>
+<Step title="Capture traffic">
+Deploy with [request traces](/deployments/observability#request-traces) on. Send an `X-Veri-Thread-Id` header on every request of a conversation so its turns group into a thread.
+</Step>
+<Step title="Turn traffic into data">
+[Import a window of traces](/training/dataset-streams#import-request-traces) into a dataset stream, optionally only the ones scored as failing (by reviewers or your own harness), and cut a snapshot.
+</Step>
+<Step title="Train and register">
+Train on the snapshot and [register the job](/deployments/model-versions) as the lineage's next version.
+</Step>
+<Step title="Evaluate">
+Run the gate's experiment against the new version: `veri models evaluate acme-bot@v7 --wait`.
+</Step>
+<Step title="Promote">
+`veri models promote acme-bot v7 -m "..."`. With the gate on, the move succeeds only if the evidence meets every rule; otherwise it is refused with the reasons.
+</Step>
+</Steps>
+
+## Try it in five commands
+
+A golden set, a code evaluator that runs on your machine, and an experiment against a serving deployment:
+
+```bash
+veri datasets create golden --format eval
+veri datasets append golden golden.jsonl        # {"input": "...", "expected": "..."} per line
+veri evaluators create exact --method code --output-type boolean \
+  --source-file exact.py --requires-reference
+veri experiments run --dataset golden --target deployment:dep_ab12cd34 \
+  --evaluator exact --local
+```
+
+`exact.py` defines one function:
+
+```python
+def evaluate(args):
+    same = args["output"].strip() == args["expected"].strip()
+    return {"score": same, "reasoning": "exact match" if same else "differs"}
+```
+
+`veri experiments run` waits, prints a per-evaluator table, and exits `1` when the run fails, which makes it a CI check.
+
+## Limitations
+
+What evaluations do not do today:
+
+- **No span or tool-span targets.** Evaluators score a whole request (a trace), a whole conversation (a thread), or an experiment item. Individual tool calls or steps inside a request are not scoring targets.
+- **No pairwise or composite evaluators.** Each evaluator scores one output on its own; there is no A-vs-B judge and no evaluator built from other evaluators. Compare versions with an experiment's baseline diff instead.
+- **Only Veri-served models.** Experiment targets and LLM judges are deployments in your workspace. The exceptions: `target: none` scores the outputs already recorded in your dataset, and local code evaluators run on your machine.
+- **No templates.** Veri ships no built-in evaluators, rubrics, or benchmark suites; you write every prompt and function.
+- **Text only.** No multimodal inputs or outputs.
+- **Cloud code evaluators are JavaScript or TypeScript only.** Python code evaluators run locally through the SDK or CLI.
+- **No online monitors yet.** Evaluators do not run automatically on sampled live traffic; score traffic through experiments, the scores API, or annotation queues.
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="Evaluators" icon="scale" href="/evals/evaluators">
+    Judge prompts, code functions, human rubrics, and how variables bind.
+  </Card>
+  <Card title="Experiments" icon="flask-conical" href="/evals/experiments">
+    Datasets, targets, thread replay, the local flow, and baseline diffs.
+  </Card>
+  <Card title="Promotion gate" icon="shield-check" href="/evals/promotion-gate">
+    Require passing evidence before `production` moves.
+  </Card>
+  <Card title="Human review" icon="user-check" href="/evals/human-review">
+    Annotation queues, corrections, and judge calibration.
+  </Card>
+</CardGroup>

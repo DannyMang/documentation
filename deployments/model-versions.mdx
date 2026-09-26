@@ -78,6 +78,18 @@ The version argument accepts `v6` or `6`. The alias move and its audit row commi
 
 **What promotion changes in serving.** A multi-adapter fleet that serves this lineage follows the `production` alias: promoting flips its adapter to the new version without a redeploy, and the next request is answered by the new weights. A deployment created from one specific library model (`--from-model`) is deliberately fixed: it keeps serving the version it was created from until you redeploy it.
 
+## Gate promotions on evals
+
+Turn on a [promotion gate](/evals/promotion-gate) and moving `production` requires evidence: a completed experiment of exactly that version, on a pinned dataset snapshot, scored by pinned evaluator versions, that meets your thresholds and does not regress from production.
+
+```bash
+veri models gate acme-bot --snapshot ds_9f2c81ab@snap-4 --evaluator helpful --threshold helpful=0.9
+veri models evaluate acme-bot@v7 --wait        # creates the evidence
+veri models promote acme-bot v7 --reason "passes the refund suite"
+```
+
+A version without passing evidence is refused (`409 eval_gate_failed`) with every failed rule, its hint, and the items that newly fail against production; the CLI prints them and exits `1`. Rollback, `staging` and custom aliases, and a new lineage's first version are never gated.
+
 ## Roll back
 
 ```bash
@@ -137,6 +149,9 @@ Every request served by a registered version carries its `model_version_id` in t
 ## Where to go next
 
 <CardGroup cols={2}>
+  <Card title="Promotion gate" icon="shield-check" href="/evals/promotion-gate">
+    Require a passing experiment before `production` moves.
+  </Card>
   <Card title="Dataset streams" icon="database" href="/training/dataset-streams">
     Pin each version to the exact snapshot it trained on.
   </Card>

@@ -23,6 +23,7 @@ The `veri datasets` group covers every dataset operation: upload local JSONL, co
 | `tombstone <name> <row>` | Remove a row from snapshots cut from now on (`--reason` required). |
 | `snapshot <name> [--note]` | Cut an immutable snapshot at the current head. |
 | `diff <name> <a> [<b>]` | Rows added, superseded, and tombstoned between two snapshots (default `b` is the live head). |
+| `import-traces <name>` | Import a window of a deployment's request traces as rows (`--score-evaluator` with `--passed`/`--failed`/`--min-score`/`--max-score` keeps only scored traces). See [Import request traces](/training/dataset-streams#import-request-traces). |
 
 ## Upload a local JSONL
 

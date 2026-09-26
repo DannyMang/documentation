@@ -1,0 +1,144 @@
+---
+title: "Promotion gate"
+sidebarTitle: "Promotion gate"
+description: "Require a passing experiment before a model version moves to production: gate rules, the evaluate endpoint, refusals, and judge agreement."
+keywords: ["promotion gate", "eval gate", "production", "promote", "model versions", "regression", "thresholds", "CI/CD"]
+---
+
+A promotion gate makes a lineage's `production` alias move only on evidence. While the gate is on, [promoting](/deployments/model-versions#promote) a version to `production` needs a completed [experiment](/evals/experiments) of exactly that version, on the gate's dataset snapshot, scored by exactly the gate's evaluator versions, that meets every rule below. Otherwise the move is refused with every reason at once.
+
+The gate is opt-in per lineage and guards only `production`:
+
+- **Rollback is never gated**, so you can always get back to the previous version.
+- Moves of `staging` or custom aliases are not gated.
+- A new lineage's first version becomes `production` without a check.
+
+## Configure the gate
+
+<CodeGroup>
+```bash CLI
+veri models gate acme-bot \
+  --snapshot ds_9f2c81ab@snap-4 \
+  --evaluator helpful --evaluator exact \
+  --threshold helpful=0.9 --threshold exact=1 \
+  --max-error-rate 0.02
+```
+
+```python SDK
+client.models.update_gate(
+    "acme-bot",
+    enabled=True,
+    dataset_snapshot_id="ds_9f2c81ab@snap-4",
+    evaluators=["helpful", "exact"],
+    thresholds={"helpful": 0.9, "exact": 1.0},
+    max_error_rate=0.02,
+)
+```
+</CodeGroup>
+
+Configuring from the CLI turns the gate on; `veri models gate acme-bot --off` turns it off and keeps the config, and `veri models gate acme-bot` shows it.
+
+| Setting | Flag | Default | Meaning |
+| --- | --- | --- | --- |
+| Dataset snapshot | `--snapshot` | required | The pinned snapshot (`ds_...@snap-N`) the evidence must run on. |
+| Evaluators | `--evaluator` | required | `llm_judge` or `code` evaluators, pinned as `name` (the latest version when you configure) or `name@N`. |
+| Thresholds | `--threshold NAME=RATE` | 1.0 | Minimum pass rate per evaluator with a pass rule. Errors and skips count as not passed. |
+| Trials | `--trials` | 1 | The evidence ran at least this many trials per row. |
+| Error rate | `--max-error-rate` | 0 | Maximum errored items per evaluator, as a fraction. |
+| Valid items | `--min-valid-items` | 1 | Minimum `ok` scores per evaluator. |
+| Non-regression | `--non-regression` / `--no-regression` | on | No evaluator may be worse than the current production version's run. |
+| Tolerance | `--tolerance` | 0 | How much worse still counts as no regression (pass-rate points, or that fraction of a numeric range). |
+
+## Create the evidence
+
+```bash
+veri models evaluate acme-bot@v7 --wait
+```
+
+```python
+exp = client.models.evaluate("acme-bot", "v7")
+done = client.experiments.wait(exp["id"])
+```
+
+This creates the experiment the gate requires (the gate's snapshot, exactly its evaluator pins and trials) against version 7, and sets the current production version's latest matching run as the baseline, so the result carries a diff. It works whether or not the gate is on, so you can gather evidence before turning it on. Add `--local` if the gate pins a local code evaluator.
+
+The version must be served by a live deployment: deploy its library model (`veri deployments create --from-model mdl_...`), or attach it to a fleet that serves the lineage. Otherwise the call returns `409 version_not_servable`. With no gate config it returns `409 gate_not_configured`.
+
+Then promote:
+
+```bash
+veri models promote acme-bot v7 -m "passes the refund suite"
+```
+
+```text
+acme-bot: production v6 -> v7 (passes the refund suite)
+Promotion gate passed (evidence: exp_2d7e1b90c4aa).
+```
+
+The move's response carries `gate`: `{passed, experiment_id, baseline_experiment_id, evaluators}`.
+
+## Rules
+
+Every rule is checked, and every failure is reported:
+
+| Rule | Fails when |
+| --- | --- |
+| `no_experiment` | No completed experiment of this version matches the gate (its snapshot, evaluator versions, and at least its trials, with no extra bindings). The newest non-matching run is named as a near miss, with why. |
+| `threshold` | An evaluator's pass rate is below its threshold. |
+| `error_rate` | An evaluator errored on more than `max_error_rate` of the items. |
+| `min_valid_items` | An evaluator has fewer `ok` scores than `min_valid_items`. |
+| `critical_failures` | Any row marked `metadata.critical: true` failed an evaluator. |
+| `no_baseline` | Non-regression is on, but the production version has no completed run on the gate snapshot with the gate's evaluator versions. Run `veri models evaluate` on the production version first. |
+| `regression` | An evaluator's pass rate (or, for a numeric evaluator without a pass rule, its mean) is worse than production's run beyond the tolerance. |
+
+## Refusals
+
+A refused promotion returns `409` with code `eval_gate_failed`:
+
+```json
+{
+  "error": {
+    "code": "eval_gate_failed",
+    "message": "acme-bot@v7 can't move to production: the promotion gate failed 2 rule(s): ...",
+    "failed_rules": [
+      {"rule": "threshold", "evaluator_id": "evl_4f0c2a91d3b7",
+       "message": "'helpful' pass rate 0.860 is below its threshold 0.900"},
+      {"rule": "regression", "evaluator_id": "evl_4f0c2a91d3b7",
+       "message": "'helpful' pass rate 0.860 regressed from production's 0.910 (tolerance 0.000)"}
+    ],
+    "experiment_id": "exp_2d7e1b90c4aa",
+    "baseline_experiment_id": "exp_8a31c07e5f12",
+    "evaluators": [{"name": "helpful", "pass_rate": 0.86, "threshold": 0.9, "baseline_pass_rate": 0.91}],
+    "newly_failing": {"evl_4f0c2a91d3b7": ["12.1", "40.1"]}
+  }
+}
+```
+
+`failed_rules` entries may also carry a `hint` and, for `no_experiment`, `near_miss_experiment_id` and `near_miss_reason`. `newly_failing` lists the items that pass on production and fail on the candidate, per evaluator. The CLI prints the same refusal readably and exits `1`:
+
+```text
+Error: acme-bot@v7 can't move to production: the promotion gate failed 2 rule(s): ...
+Promotion gate refused the move: 2 rule(s) failed.
+  - threshold: 'helpful' pass rate 0.860 is below its threshold 0.900
+  - regression: 'helpful' pass rate 0.860 regressed from production's 0.910 (tolerance 0.000)
+  evidence: exp_2d7e1b90c4aa
+  baseline: exp_8a31c07e5f12
+  newly failing vs production (evl_4f0c2a91d3b7): 12.1, 40.1
+```
+
+In the SDK the refusal raises `VeriRequestError` with `code == "eval_gate_failed"` and the fields above in `details`; `veri_sdk.client.format_gate_failure(error)` renders the text.
+
+## Judge agreement
+
+`veri models gate acme-bot` (and `client.models.get_gate`) also reports, for each pinned `llm_judge` evaluator, how often the judge agrees with human scores on the same targets, collected through [human review](/evals/human-review). Below 80% agreement over at least 10 shared targets it shows a warning, including on a refusal. The warning never blocks a promotion.
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="Model versions" icon="git-branch" href="/deployments/model-versions">
+    Register, promote, roll back, and pin versions.
+  </Card>
+  <Card title="Experiments" icon="flask-conical" href="/evals/experiments">
+    How the evidence runs, and how baseline diffs compare.
+  </Card>
+</CardGroup>

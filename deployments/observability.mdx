@@ -222,8 +222,17 @@ Details worth knowing:
 - **Never in the request path.** Capture is asynchronous and drop-tolerant: if the
   trace store is unavailable, requests are unaffected and the affected traces are
   dropped.
-- **Streaming.** Bodies of streamed (`stream: true`) responses are not captured
-  yet; those requests still appear in request telemetry.
+- **Streaming.** Streamed (`stream: true`) responses are captured once the stream
+  completes: content, reasoning, tool calls, and finish reason are assembled into
+  one response. A stream that is cut off, errors, or exceeds 1 MiB is not
+  captured; the request still appears in request telemetry.
+- **Threads.** Send the same `X-Veri-Thread-Id` header (1-128 characters of
+  `A-Z a-z 0-9 . _ : -`) on every request of a conversation to group its traces
+  into a thread; the SDK's `session_id` sends the equivalent `X-Veri-Session-Id`.
+  The thread id is stored on the request and in trace metadata, and thread
+  [evaluators](/evals/evaluators#threads) score the whole conversation.
+- **Scores.** Each trace carries its evaluator [scores](/evals/evaluators#scores)
+  (from your own harness, experiments, or human review) under `scores`.
 - **Traces to training data.** A time window of traces can be imported into a
   [dataset stream](/training/dataset-streams#import-request-traces) as `chat`
   or `prompt` rows (`veri datasets import-traces`), snapshotted, and trained

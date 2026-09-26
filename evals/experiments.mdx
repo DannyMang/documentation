@@ -1,0 +1,129 @@
+---
+title: "Experiments"
+sidebarTitle: "Experiments"
+description: "Run a pinned dataset snapshot through a deployment or model version, score it with pinned evaluators, replay threads, run local evaluators, and diff against a baseline."
+keywords: ["experiments", "offline evals", "eval dataset", "golden set", "thread replay", "baseline diff", "CI", "regression"]
+---
+
+An experiment answers "how does this target do on this data, by these rules?" It pins everything that decides what the answer means when it starts: the dataset snapshot, each evaluator version (and each judge's served model), and the target. Rerunning with the same pins is comparable run over run; that is what the [baseline diff](#baseline-diff) and the [promotion gate](/evals/promotion-gate) rely on.
+
+```bash
+veri experiments run --dataset golden@snap-3 --target acme-bot@v7 \
+  --evaluator helpful --evaluator exact --local
+```
+
+## Datasets and the `eval` row format
+
+Experiments read a [dataset stream](/training/dataset-streams) snapshot: `golden@snap-3`, or a stream name (which pins `@latest`, cutting a snapshot if rows arrived since the last one). Create a stream for eval rows with `veri datasets create golden --format eval`. An `eval` row is one of two shapes:
+
+<CodeGroup>
+```json Single turn
+{"input": "Where is my order #1234?",
+ "expected": "Asks for the account email before looking up the order.",
+ "metadata": {"tags": ["orders"], "critical": true}}
+```
+
+```json Thread replay
+{"turns": ["Hi, my order is late.", "It's #1234.", "Can you refund the shipping?"],
+ "expected": "Offers a shipping refund only after confirming the order.",
+ "metadata": {"split": "holdout"}}
+```
+</CodeGroup>
+
+- `input` is a string (sent as one user message) or a message list. An optional `output` records an answer to score without calling a target (see `target: none`).
+- `turns` is a list of strings (user messages) or message objects; every user turn gets a reply from the target. `expected` may be a list with one entry per user turn.
+- `metadata` is free-form. `metadata.critical: true` marks a row that must pass: any failure on it is listed under `critical_failures` and fails the promotion gate.
+
+Other stream formats run too: a `prompt` row is the input; a `completion` row is the input plus `expected`; a `chat` row ending in an assistant turn is the conversation before it as input, and that turn as the recorded output. `preference` rows are rejected.
+
+## Targets
+
+| Target | CLI | What runs |
+| --- | --- | --- |
+| A deployment | `--target deployment:dep_...` (`--target-model` for a model or adapter name on it) | Every item calls that deployment. |
+| A model version | `--target acme-bot@v7` or `--target model_version:mv...` | The exact weights of that version: a deployment serving its library model, or a fleet adapter holding it. `409 version_not_servable` when nothing serves it; deploy it first. |
+| None | `--target none` | No calls: each row's recorded `output` (or a chat row's last assistant turn) is scored. Use it to score outputs produced elsewhere. |
+
+Targets are deployments in your workspace. `--temperature` and `--max-tokens` set the target's sampling; `--trials N` (1-10) runs each row N times.
+
+## Thread replay
+
+A `turns` row replays a conversation: the target answers the first user turn, its reply joins the history, the next user turn is sent with that history, and so on. All calls of one replay carry the thread id `exp-<experiment>-<row>-<trial>`, so they group like any other thread in your request log.
+
+- A `thread` evaluator scores the whole transcript once per replay.
+- A `single_turn` evaluator scores every turn separately (item ids `<row>.<trial>.t<turn>`), each with that turn's user message as `input`, its reply as `output`, and the conversation so far as `transcript`.
+
+## Run it
+
+<CodeGroup>
+```bash CLI
+veri experiments run --dataset golden --target deployment:dep_ab12cd34 \
+  --evaluator helpful --evaluator exact@2 --baseline exp_5c1e9a0b77f2
+```
+
+```python SDK
+exp = client.experiments.create(
+    "nightly",
+    dataset="golden",
+    target={"kind": "deployment", "deployment_id": "dep_ab12cd34"},
+    evaluators=["helpful", "exact@2"],
+    baseline_experiment_id="exp_5c1e9a0b77f2",
+)
+done = client.experiments.wait(exp["id"], local=True)
+print(done["status"], done["passed"])
+```
+</CodeGroup>
+
+`veri experiments run` creates the experiment, waits, prints a table per evaluator (and the baseline diff), and sets its exit code for CI:
+
+| Exit code | When |
+| --- | --- |
+| `0` | Completed and passed, or completed with no evaluator that has a pass rule. |
+| `1` | Failed, canceled, timed out (`--timeout`), or an evaluator with a pass rule did not pass every item. |
+
+`--json` prints the finished experiment instead of the table; `--no-wait` only creates it (as does `veri experiments create`). Follow a run with `veri experiments get <id>`, list its items with `veri experiments items <id>`, and stop it with `veri experiments cancel <id>`.
+
+## Local code evaluators
+
+Evaluators with `runtime: local` run on your machine, not in Veri. The experiment calls the target and runs every cloud evaluator itself, then waits in status `awaiting_local` until the local scores arrive. Supply them while it runs:
+
+```bash
+veri experiments run ... --local          # waits and scores as items finish
+```
+
+```python
+client.experiments.run_local("exp_...")   # one pass over everything owed so far
+```
+
+The runner fetches the items that still owe a local score (`GET /v1/experiments/{id}/items?pending_local=true`), runs each evaluator on the pinned version's source, and posts each result with the source's SHA-256. An evaluator that raises, times out, or returns a value its output type rejects is recorded as an error score, so the experiment still completes. It completes when the last owed score lands.
+
+## Results
+
+When an experiment completes, `aggregates.evaluators` holds one entry per pinned evaluator: `n` (items), `ok`, `errors`, `skipped`, `pass_rate` (passes over all items, so errors and skips count against it), `mean` (numeric outputs), `label_counts` (categorical), and `critical_failures`.
+
+`passed` is the experiment's verdict: `true` when every evaluator with a pass rule passed every item with no errors, `false` otherwise, and `null` when no evaluator has a pass rule. The promotion gate applies its own thresholds instead of this all-or-nothing verdict.
+
+Each item carries its input, output, transcript, latency, token counts, the request ids it made, and its scores. Subscribe to the `experiment.completed` [webhook](/webhooks) instead of polling.
+
+## Baseline diff
+
+Set a baseline (`--baseline exp_...` at create) and the completed experiment carries a diff; compare any two runs later with `veri experiments diff <experiment> <baseline>`. Per evaluator it lists the items that newly fail, newly pass, and still fail, plus the pass-rate, mean, and error deltas.
+
+Two runs are comparable only on the same dataset snapshot with identical evaluator versions, judge models, and bindings. Otherwise the diff says `comparable: false` with the reason, rather than comparing different questions.
+
+## Limits
+
+- Two live (queued, running, or awaiting-local) experiments per workspace; a third is refused with `429 CONCURRENT_EXPERIMENT_LIMIT`. Wait for one or cancel it.
+- Up to 20,000 scores per experiment (rows x trials x evaluators) and 16 evaluators.
+- A target that is stopped is refused at create; one that scales to zero is woken.
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="Promotion gate" icon="shield-check" href="/evals/promotion-gate">
+    Make an experiment the evidence a production promotion needs.
+  </Card>
+  <Card title="Human review" icon="user-check" href="/evals/human-review">
+    Queue failing items for reviewers and collect corrections.
+  </Card>
+</CardGroup>

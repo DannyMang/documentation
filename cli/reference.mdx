@@ -200,6 +200,25 @@ veri wandb set --project my-experiments
 veri wandb status
 ```
 
+## Evals commands {#evals}
+
+[Evaluations](/evals): evaluators, experiments, human review queues, and the promotion gate.
+
+| Command | Purpose |
+| --- | --- |
+| `evaluators create NAME` | Create an evaluator from flags (`--method`, `--output-type`, `--prompt`, `--judge-deployment`, `--source-file`, `--runtime`, `--binding`) or `--file spec.json`. |
+| `evaluators version NAME` | Add the next immutable version; method flags merge into the latest config. |
+| `evaluators list` / `get NAME [--version N]` / `archive NAME` | Inspect and retire evaluators. |
+| `experiments run` | Create an experiment (`--dataset`, `--target`, `--evaluator`), wait, print per-evaluator results, and exit `1` unless it completed and passed. `--local` runs local code evaluators; `--json` prints the result. |
+| `experiments create` / `get` / `list` / `items` / `cancel` / `diff` | Manage experiments without waiting; compare a run with a baseline. |
+| `annotation-queues create` / `list` / `add` | Set up human review queues and add traces, threads, experiment items, or the targets of matching scores. |
+| `models gate NAME` | Show, configure (`--snapshot`, `--evaluator`, `--threshold NAME=RATE`, ...), or turn off (`--off`) a lineage's promotion gate. |
+| `models evaluate NAME@vN [--wait]` | Create the experiment the gate needs for a version. |
+
+```bash
+veri experiments run --dataset golden --target acme-bot@v7 --evaluator helpful --local
+```
+
 ## Shell completion
 
 Typer ships completion for free:
