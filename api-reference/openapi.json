@@ -8462,7 +8462,8 @@
         "type": "object",
         "required": [
           "object",
-          "user_id"
+          "user_id",
+          "workspace"
         ],
         "properties": {
           "object": {
@@ -8490,7 +8491,11 @@
               "string",
               "null"
             ],
-            "description": "The active workspace when the caller is scoped to a team workspace\n(workspaces design); null for personal scope. The field predates\nworkspaces (reserved as \"org_id\"), so the name stays for SDK\ncompatibility."
+            "description": "The active workspace when the caller is scoped to a team workspace\n(workspaces design); null for personal scope. The field predates\nworkspaces (reserved as \"org_id\"), so the name stays for SDK\ncompatibility. Prefer `workspace`."
+          },
+          "workspace": {
+            "$ref": "#/components/schemas/WorkspaceInfo",
+            "description": "The active workspace (VS-470 R13): the billing entity every call and\ncharge is scoped to. Personal: id == user id, kind \"personal\"."
           }
         }
       },
@@ -10619,6 +10624,13 @@
         "properties": {
           "code": {
             "type": "string"
+          },
+          "workspace_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The workspace to credit (VS-470 R6): its id (`ws_...`), its Clerk\norganization id (`org_...`), or your user id for your personal\nworkspace. You must be a member. Omitted = the request's active\nworkspace. The code is still redeemable once per person, whichever\nworkspace is named."
           }
         }
       },
@@ -12211,6 +12223,26 @@
           },
           "message": {
             "type": "string"
+          }
+        }
+      },
+      "WorkspaceInfo": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "kind"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "description": "\"personal\" | \"team\""
           }
         }
       },

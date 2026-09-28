@@ -5,7 +5,7 @@ description: "Deployment billing states, per-replica metering, and scale to zero
 keywords: ["billing", "serving", "idle", "scale to zero", "replicas"]
 ---
 
-Deployments consume GPU credit while their replicas are running. Billing is metered **per replica**: each GPU box charges from its launch (warmup included) until it's terminated, so a deployment that scales from 1 to 3 replicas and back pays for exactly the box-minutes that ran.
+Deployments consume the workspace's GPU credit while their replicas are running (how balances, funding, and the $0 rule work: [Billing](/billing)). Billing is metered **per replica**: each GPU box charges from its launch (warmup included) until it's terminated, so a deployment that scales from 1 to 3 replicas and back pays for exactly the box-minutes that ran.
 
 ## Billing cadence
 

@@ -1,0 +1,107 @@
+---
+title: "Billing"
+sidebarTitle: "Billing"
+description: "How Veri bills: prepaid credits per workspace, who can add funds, auto-reload, budget alerts, what happens at $0, and how team workspaces pay."
+keywords: ["billing", "credits", "workspace billing", "team billing", "add funds", "auto-reload", "budget alert", "spend alert", "balance", "credit code", "free tier"]
+---
+
+Veri is prepaid. You add credit to a balance, and every resource you run draws it down as it runs. The **workspace** is the billing entity: your personal workspace has its own balance, and each team workspace has its own separate balance. Nothing you run inside a team is ever charged to your personal balance, and nothing you run personally touches a team's.
+
+## What draws down the balance
+
+| Resource | Metered how | Settled when |
+| --- | --- | --- |
+| Training jobs | GPU-hours from instance boot to completion, at the per-GPU rate | On completion |
+| Deployments | Per replica, per minute, from box launch to termination | Every minute while serving, then a final settlement at stop |
+| Volumes | Average GiB stored over the calendar month, above a **512 GiB free tier per workspace** | Monthly |
+| Request traces | Traces captured over the calendar month (see [Observability](/deployments/observability)) | Monthly |
+
+Every charge records which member launched the resource. In a team, each monthly statement on the billing page breaks spend down by member, and `veri billing transactions` shows the member on each debit.
+
+See [Deployment billing](/deployments/cost) for deployment billing states and scale-to-zero behaviour.
+
+## Personal and team workspaces
+
+Switch between your personal workspace and your teams from the sidebar. The billing page, the balance in the sidebar, and every CLI or API call follow the **active workspace**.
+
+| Action | Personal workspace | Team workspace |
+| --- | --- | --- |
+| Run jobs, deployments, volumes | You | Any member |
+| View balance, burn rate, statements | You | Any member |
+| Add funds (card checkout) | You | Any member |
+| Redeem a credit code | You | Any member (see [Credit codes](#credit-codes)) |
+| Saved cards, billing address | You | Owners only |
+| Budget alerts, auto-reload | You | Owners only |
+| Delete the workspace | Not possible | Owners only |
+
+A team owner is a member with the admin role in the team.
+
+<Note>
+  A team's balance is linked to the team itself, not to the person who created it. When a member is removed, work they launched keeps running and keeps billing the team; an owner can stop it. If the last member leaves, everything still running is stopped.
+</Note>
+
+## Adding funds
+
+Open **Settings > Billing** in the workspace you want to fund and choose an amount (minimum $5). Payment goes through Stripe Checkout; the credit lands on the active workspace's balance as soon as the payment completes.
+
+To avoid running dry, an owner can turn on **auto-reload**: when the balance drops below a threshold you set, Veri charges the saved default card for a fixed amount and adds it to the balance.
+
+- Both the threshold and the reload amount are between $5 and $1,000.
+- A saved card is required. Save one under **Payment method** first.
+- Veri checks balances every few minutes and reloads at most once per hour per workspace. Pick a reload amount larger than an hour of your usual burn so a single reload covers you.
+- If the charge fails (declined card, no card), the billing page shows the reason and the owners receive an email. Nothing is reloaded until the card is fixed.
+
+## Budget alerts
+
+An owner can set a monthly spend threshold under **Spend alert**. Veri emails when spend for the calendar month crosses 75% and again at 100% of the threshold, once each per month. For a team, every owner receives the email. Alerts are informational: they never stop work. To stop work at a limit, stop the resource or rely on the $0 rule below.
+
+## What happens at $0
+
+Veri does not extend overdraft. Each workspace is enforced on its own balance:
+
+1. While work runs, Veri counts the cost accrued since the last settlement against the balance, so a long job cannot outrun its credit before the next settlement.
+2. When the effective balance drops below $0, every running training job and deployment in **that workspace** is terminated and its final window is settled. Work in your other workspaces is not affected.
+3. Terminated resources show a reason of `insufficient_credits`. Add funds, then launch again.
+
+Check headroom before a long run:
+
+```bash
+veri billing balance
+curl -s https://api.veri.studio/v1/billing/burn_rate -H "Authorization: Bearer $VERI_API_KEY"
+```
+
+The burn-rate response includes `hours_remaining` at the current spend rate.
+
+## Submitting work without a billing account
+
+Every workspace gets a billing account when it is created. If a workspace has none (for example, a team created seconds ago that Stripe has not indexed yet), creating a job or deployment returns `402 Payment Required` with the message `No billing account is linked to this workspace yet`. Open the billing page for that workspace once, or wait a minute and retry. Running work is never stopped for this reason.
+
+## Credit codes
+
+Redeem a promotional or support credit code from **Settings > Billing**. The form shows which workspace the credit will land in; switch workspaces first if it is the wrong one. Through the API, pass the target explicitly:
+
+```bash
+curl -s https://api.veri.studio/v1/credits/redeem \
+  -H "Authorization: Bearer $VERI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"code": "VERI-XXXX-XXXX-XXXX-XXXX", "workspace_id": "<workspace id>"}'
+```
+
+You must be a member of the target workspace. A code can be redeemed once per person, whichever workspace you choose. Omitting `workspace_id` credits the active workspace.
+
+## Statements and history
+
+`GET /v1/billing/transactions` (or `veri billing transactions`) lists every credit and debit on the active workspace's balance, newest first. Each debit carries the resource id and the launching member in its metadata. The billing page groups the same history into monthly statements, with a per-member breakdown for teams, and offers a PDF for each month.
+
+## Volumes free tier
+
+Storage is averaged over the month across every volume in the workspace. The first 512 GiB-months are free; usage above that is billed at $0.085 per GiB-month on the first day of the next month. A team shares one allowance; a personal workspace has its own.
+
+## Deleting a team workspace
+
+An owner can delete a team from **Settings > Workspace**. Deletion is refused while any job or deployment is running, while a final settlement is still pending, or while the balance is negative. Stop the work and clear the balance first. Leftover positive credit on a deleted team is not refunded automatically; contact support before deleting if you want it moved.
+
+## Reference
+
+- `GET /v1/billing/balance`, `GET /v1/billing/transactions`, `GET /v1/billing/burn_rate`, `POST /v1/credits/redeem`: see the [API reference](/api-reference/introduction).
+- CLI: `veri billing balance`, `veri billing transactions`, `veri whoami` (shows the active workspace). See the [CLI reference](/cli/reference#billing).
