@@ -171,7 +171,7 @@ claude mcp add --transport http veri-readonly https://api.veri.studio/readonly/m
 | `veri_get_deployment_metrics_timeseries` | Get metric buckets over a time range. |
 | `veri_query_deployment_metrics` | Query up to 500 server-aggregated metric buckets for a time range (seven days by default). |
 | `veri_list_deployment_requests` | List compact request telemetry, optionally restricted to failures or a time range. |
-| `veri_chat_deployment` | Send a chat request to a running deployment. |
+| `veri_chat_deployment` | Send a chat request to a serving deployment. On the read-only endpoint it never wakes a parked (`scaled_to_zero`) deployment and returns `{status: "scaled_to_zero", choices: [], error: ...}` instead; with writes enabled, chatting to a parked deployment wakes it (GPU boot, billing starts) and can take many minutes. |
 | `veri_list_models` | List custom models in your registry. |
 | `veri_get_hf_export` | Poll the status of a Hugging Face export. |
 | `veri_list_datasets` | List datasets available for training. |
@@ -194,7 +194,7 @@ claude mcp add --transport http veri-readonly https://api.veri.studio/readonly/m
 | `veri_create_training_job` | Submit a managed training run. Returns the job and a pre-submit cost estimate. |
 | `veri_create_deployment` | Create an inference deployment from a training job or a HuggingFace model. |
 | `veri_cancel_training_job` | Cancel a queued or running job. |
-| `veri_stop_deployment` | Stop a running deployment. |
+| `veri_stop_deployment` | Stop a running deployment. Permanent: a stopped deployment cannot be resumed or woken. |
 | `veri_register_model` | Register a completed job's checkpoint as a reusable custom model. |
 | `veri_push_model_to_hf` | Push a library model to the connected Hugging Face account. |
 | `veri_run_experiment` | Start an experiment on existing deployments (no new GPUs). Returns at once; poll `veri_get_experiment` for the result. |

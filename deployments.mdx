@@ -43,7 +43,7 @@ You set these at create time, whether from the [SDK](/deployments/examples) (`cl
 | `min_replicas` | No | `replicas` | Lower replica bound. Set below `max_replicas` to enable autoscaling; set to `0` to enable scale to zero. |
 | `max_replicas` | No | `replicas` | Upper replica bound (1-8). |
 | `concurrency_target` | No | `8` | In-flight requests per replica the autoscaler aims for. Lower it for latency-sensitive traffic, raise it for batch throughput. |
-| `scale_to_zero_window_seconds` | No | `3600` | Idle seconds before a `min_replicas: 0` deployment parks. Minimum `300`. |
+| `scale_to_zero_window_seconds` | No | `3600` | Idle seconds before a `min_replicas: 0` deployment parks, counted from when the deployment starts serving or from its last request (not from create or wake). Minimum `300`. |
 | `idle_delete_after_days` | No | off | Auto-stop a deployment that has been parked at zero with no traffic for this many days. |
 | `cache` | No | `false` | `source: huggingface` only: also [save the model to your library](/deployments/custom-models#cache-a-hugging-face-model-while-deploying-it) for faster future starts. Best-effort; never affects this deployment. |
 | `vllm_image` | No | platform vLLM | Explicit vLLM serving image (e.g. `vllm/vllm-openai:v0.25.1`) for architectures newer than the platform's vLLM. See [Serving newer architectures](#serving-newer-architectures). |
@@ -79,7 +79,7 @@ stateDiagram-v2
     failed --> [*]
 ```
 
-Deployments consume GPU credit **only while replicas are running** — billing is metered per replica, from each GPU box's launch (warmup included) to its termination. `scaled_to_zero` charges nothing. Once `stopped`, billing stops; the deployment row stays for history.
+Deployments consume GPU credit **only while replicas are running**: billing is metered per replica, from each GPU box's launch (warmup included) to its termination. `scaled_to_zero` charges nothing. Once `stopped`, billing stops; the deployment row stays for history. `stop` is permanent, not a pause: a stopped deployment cannot be woken or resumed (bring it back by creating a new one). Scale to zero (`min_replicas: 0`) is the pause path.
 
 <Warning>
   A deployment with `min_replicas` of 1 or more (the default) **never stops billing on its own** — you asked for an always-warm floor. Either call `stop` when you're done, or create with `min_replicas: 0` so it parks itself after the idle window and wakes on the next request.

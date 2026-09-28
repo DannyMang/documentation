@@ -47,7 +47,7 @@ print(response.usage)
 
 ## Streaming
 
-Streaming works: set `stream=true` and vLLM's SSE events are forwarded through unchanged, so `for chunk in oai.chat.completions.create(..., stream=True)` behaves exactly as it does against OpenAI. Usage accounting is preserved (`stream_options.include_usage` is injected upstream so the final chunk carries token counts).
+Streaming works: set `stream=true` and vLLM's SSE events are forwarded through unchanged, so `for chunk in oai.chat.completions.create(..., stream=True)` behaves exactly as it does against OpenAI. Veri meters token usage for every stream server-side. Your client receives the final usage-only chunk (empty `choices`, populated `usage`) only when it asks for it with `stream_options: {"include_usage": true}`, matching OpenAI's behaviour; without it the stream ends after the last content chunk, so loops that index `choices[0]` keep working.
 
 ## Everything else is a passthrough
 
@@ -73,7 +73,7 @@ Caveats:
 }
 ```
 
-The `model` field in the request is **echoed back** in the response — it's not validated against the deployment's actual model. Pass whatever string you want.
+On a single-model deployment the `model` field accepts any string: the proxy rewrites it to the deployment's served name (its `name`) before forwarding, so the response's `model` is the served name rather than whatever you sent. On a multi-adapter fleet (see [Model versions](/deployments/model-versions)) `model` selects the adapter to route to, and an unknown name is rejected with the list of valid names.
 
 ## Response shape
 
@@ -103,6 +103,10 @@ The `model` field in the request is **echoed back** in the response — it's not
 ## Scaled-to-zero deployments
 
 If the deployment [scaled to zero](/cli/deployments#scale-to-zero), the first request triggers a wake and returns `503` with a `Retry-After` header and error code `deployment_waking` while the GPU boots (a few minutes). The OpenAI client's built-in retries give up well before that, so either retry on `503` yourself until the cold start completes, or pre-warm with `veri deployments wake <id>` before sending traffic. The Veri SDK's `chat()` handles this retry loop for you.
+
+## Upstream failures
+
+Transient upstream failures use the same shape. If the model server is unreachable, answers `5xx` or `429`, or no replica is serving, the proxy returns `503` with a `Retry-After` header and error code `upstream_unavailable`. Treat it like `deployment_waking`: retry after `Retry-After` seconds rather than failing the request.
 
 ## LangChain example
 

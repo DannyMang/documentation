@@ -23,7 +23,7 @@ In a terminal, it asks whether to cache the model in Veri storage for faster sta
 | --- | --- |
 | `--name` | Endpoint name. Default: derived from the repo name (`qwen3-4b`). |
 | `--gpu-type` | GPU shape. Default `A100-80GB`. |
-| `--gpu-count` | Default `1`. |
+| `--gpu-count` | GPUs per replica. Default `1`. |
 | `--engine` | `vllm` (default) or `max`. |
 | `--replicas` | GPU-box replicas behind the endpoint. Default `1`. |
 | `--cache` / `--no-cache` | Cache the model in your library (or don't) without prompting. |
@@ -45,7 +45,7 @@ Outside a terminal (scripts, CI) the prompt is skipped and caching stays off unl
 | `get <id>` | Show one deployment. |
 | `update <id>` | Change replica bounds / scaling settings on a live deployment. |
 | `wake <id>` | Pre-warm a scaled-to-zero deployment. |
-| `stop <id>` | Stop for good. Billing stops. |
+| `stop <id>` | Stop for good (terminal: cannot be resumed). Billing stops. |
 | `delete <id>` | Permanently remove a stopped deployment and its request history. |
 | `chat <id>` | Send a one-shot message for smoke testing. |
 | `bench <id>` | Load-test the endpoint; report TTFB/TTFT/ITL/TPS/e2e at p50/p90/p99. |
@@ -63,6 +63,12 @@ veri run configs/deploy.toml
 ```
 
 The config must declare `kind = "deploy"`. See the [config schema](/cli/run#configs-deploy-toml).
+
+Flags passed alongside a config override the file's values the same way `--set` does (the flag wins). `--from-hf <repo>` and `--from-model <model-id>` replace `deployment.model` and pin `deployment.source` (`huggingface` / `custom_model`); `--gpu-count N` replaces `resources.gpu_count` (GPUs per replica, default `1`); `--name`, `--gpu-type`, and the replica and scaling flags below work the same way.
+
+```bash
+veri deployments create configs/deploy.toml --from-hf Qwen/Qwen3-4B --gpu-count 2
+```
 
 ## Create inline
 
@@ -98,7 +104,7 @@ veri deployments create \
 | `--from-hf <repo>` | Deploy a HuggingFace repo. |
 | `--name` | Display name. |
 | `--gpu-type` | Required in inline form. |
-| `--gpu-count` | Default `1`. |
+| `--gpu-count` | GPUs per replica. Default `1`. |
 | `--replicas` | GPU-box replicas behind one endpoint (1-8). Default `1`. Shorthand for equal `--min-replicas`/`--max-replicas`. |
 | `--min-replicas` | Lower replica bound. Below `--max-replicas` enables autoscaling; `0` enables scale to zero. |
 | `--max-replicas` | Upper replica bound (1-8). |
@@ -162,17 +168,17 @@ The deployment reports `serving` once at least one replica is up. `list` and `ge
 
 ### Autoscaling
 
-With `min-replicas` below `max-replicas`, the fleet targets `--concurrency-target` in-flight requests per replica (default 8). Scale-up is fast (within about a minute of sustained load); scale-down is deliberately slow (about 15 minutes of sustained low load per step) because a wrong scale-down costs a multi-minute GPU boot. Lower the target for latency-sensitive chat; raise it for batch throughput.
+With `min-replicas` below `max-replicas`, the fleet targets `--concurrency-target` in-flight requests per replica (default 8). Scale-up is fast (within about a minute of sustained load); scale-down is deliberately slow (about 15 minutes of sustained low load per step) because a wrong scale-down costs a multi-minute GPU boot. Lower the target for latency-sensitive chat; raise it for batch throughput. When scaling down, replicas that are still loading (not yet serving) are removed first; a serving replica is only drained once there is no loading replica left to cancel.
 
 ### Scale to zero
 
-With `--min-replicas 0`, a deployment idle past `--scale-to-zero-window` (default 1 hour) parks: replicas terminate, billing stops, status becomes `scaled_to_zero`. The next chat request wakes it. While the GPU boots (a few minutes), the server answers that request with `503`, a `Retry-After` header, and error code `deployment_waking`. The SDK and CLI absorb this for you: `veri deployments chat` prints a "waking from zero" note and waits for the answer, and the Python SDK's `chat()` retries in the background until the deployment is up (see [chat and waking](/deployments/api#post-v1deploymentsidchatcompletions) for the knobs). Only raw HTTP clients need to handle the `503` themselves. To hide the cold start from your users, pre-warm on a predictive signal instead:
+With `--min-replicas 0`, a deployment idle past `--scale-to-zero-window` (default 1 hour) parks: replicas terminate, billing stops, status becomes `scaled_to_zero`. The idle window counts from when the deployment starts serving or from its last request (not from create or wake), and a park waits for in-flight requests to finish and for a fresh engine-metrics sample before terminating anything. The next chat request wakes it. While the GPU boots (a few minutes), the server answers that request with `503`, a `Retry-After` header, and error code `deployment_waking`. The SDK and CLI absorb this for you: `veri deployments chat` prints a "waking from zero" note and waits for the answer, and the Python SDK's `chat()` retries in the background until the deployment is up (see [chat and waking](/deployments/api#post-v1deploymentsidchatcompletions) for the knobs). Only raw HTTP clients need to handle the `503` themselves. To hide the cold start from your users, pre-warm on a predictive signal instead:
 
 ```bash
 veri deployments wake dep_abc     # 202; no-op if already up
 ```
 
-Then poll `veri deployments get dep_abc` until it's `serving`. Optionally set `--idle-delete-after N` to auto-stop a deployment that stays parked with no traffic for N days.
+Then poll `veri deployments get dep_abc` until it's `serving`. A wake (explicit or request-triggered) is subject to the workspace active-replica limit, like a create: with no headroom it returns `429` with code `ACTIVE_DEPLOYMENT_LIMIT` and the deployment stays parked, so stop or scale down something else first. Optionally set `--idle-delete-after N` to auto-stop a deployment that stays parked with no traffic for N days.
 
 ### Change scaling on a live deployment
 
@@ -201,7 +207,7 @@ Reuse the same `--session-id` for every turn of a conversation to keep it on its
 veri deployments stop dep_abc
 ```
 
-`stop` ends billing and is final — a stopped deployment can't wake; bring it back by creating a new one. For a deployment you'll come back to, prefer `--min-replicas 0` and let it park instead.
+`stop` ends billing and is final: a stopped deployment can't wake or resume; bring it back by creating a new one. Running `stop` again on an already stopped (or failed) deployment is a no-op that returns the deployment unchanged. `stop` is not a pause. For a deployment you'll come back to, prefer `--min-replicas 0` and let it park instead.
 
 Once a deployment is stopped (or failed), `veri deployments delete <id>` removes it and its request history for good. Deletion waits for the final billing settlement, so if you delete within a minute of stopping you may be asked to retry shortly.
 

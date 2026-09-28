@@ -59,8 +59,9 @@ a 2-replica deployment consumes the whole replica budget.
 - In-flight jobs = `queued` + `provisioning` + `configuring` + `running`. Terminal jobs never count.
 - Active replicas = `queued` + `provisioning` + `serving` + `unhealthy` + `waking`. A
   `scaled_to_zero` deployment does NOT count, but it starts counting the moment it wakes.
-- Enforced only at CREATE. Scaling an existing deployment up with `veri deployments update`
-  is not capped.
+- Enforced at create, at `veri deployments update` when it raises the replica count, and at
+  wake (explicit `veri deployments wake` or a chat request to a `scaled_to_zero` deployment):
+  a wake with no headroom returns the same 429 and the deployment stays parked.
 
 Hitting a cap returns **HTTP 429 with a `code`** — `CONCURRENT_JOB_LIMIT` or
 `ACTIVE_DEPLOYMENT_LIMIT`:
@@ -262,6 +263,9 @@ expensive shape for small models.
 - BILLING: a deployment with min_replicas ≥ 1 bills per-minute until YOU stop it. Use `--min-replicas 0` (scale-to-zero) or `veri deployments stop <id>` when done. Always list deployments after a work session and stop strays.
 - `veri deployments stop` is IMMEDIATE, not graceful: every box is terminated and in-flight
   requests are cut. To retire one replica without dropping requests, drain it (below).
+- `stop` is also PERMANENT: a stopped deployment cannot be resumed or woken (create a new one).
+  It is not a pause; scale-to-zero (`--min-replicas 0`) is. Stopping an already stopped or
+  failed deployment is a no-op that returns the row unchanged.
 
 ### OpenAI-compatible endpoint
 
@@ -272,9 +276,9 @@ oai = OpenAI(base_url=f"https://api.veri.studio/v1/deployments/{dep_id}",
 resp = oai.chat.completions.create(model="<deployment-name>", messages=[...], stream=True)
 ```
 
-- Streaming works (SSE passthrough). All other params (`top_p`, `stop`, `seed`, `response_format`, `tools`, ...) pass through to vLLM untouched; the `model` field is echoed, not validated.
+- Streaming works (SSE passthrough); the final usage-only chunk arrives only if the client sends `stream_options: {"include_usage": true}`. All other params (`top_p`, `stop`, `seed`, `response_format`, `tools`, ...) pass through to vLLM untouched. On a single-model deployment `model` accepts any string and is rewritten to the deployment's served name; on a multi-adapter fleet it selects the adapter.
 - Tool calling requires the deployment's vLLM to be launched with tool parsing (`--vllm-arg=--enable-auto-tool-choice --vllm-arg=--tool-call-parser --vllm-arg=hermes`).
-- A scaled-to-zero deployment returns 503 + `Retry-After` (`deployment_waking`) on first request; retry until warm or pre-warm with `veri deployments wake <id>`.
+- A scaled-to-zero deployment returns 503 + `Retry-After` (`deployment_waking`) on first request; retry until warm or pre-warm with `veri deployments wake <id>`. The wake itself can be refused with 429 `ACTIVE_DEPLOYMENT_LIMIT` (see Account limits). Upstream failures (model server unreachable, 5xx/429 from it, or no serving replica) are 503 + `Retry-After` with code `upstream_unavailable`: retry those too.
 - Chat completions only — no embeddings endpoint.
 
 Diagnostics: `veri deployments chat|metrics|requests|bench <id>`.
@@ -376,7 +380,7 @@ Docs: https://docs.veri.studio/volumes · https://docs.veri.studio/deployments/c
 
 Base `https://api.veri.studio`, header `Authorization: Bearer vk_...`. Public spec: `GET /openapi.json`. Main resources: `/v1/me` (identity), `/v1/training_jobs` (+ `/logs`, `/events`, `/metrics`, `/cancel`, `/model`, `/trajectories`), `/v1/deployments` (+ `/chat/completions`, `/stop`, `/wake`, `/replicas`, `/replicas/{id}/drain`), `/v1/datasets`, `/v1/volumes`, `/v1/models` (+ `/{id}/push-to-hf`, poll `/v1/hf_exports/{id}`), `/v1/webhooks` (+ `/secret`, `/test`, `/deliveries`), `/v1/metrics/export`, `/v1/settings/integrations/{wandb,huggingface}`, `/v1/billing/*`, `/v1/gpu/catalog`, `/v1/gpu/availability`, `/v1/regions`. DELETE exists for training jobs, datasets, deployments, models, volumes (and volume files). Errors: 400 invalid/gated, 401 bad key, 402 insufficient credit, 404 not found/not owned, 409 still referenced/wrong state, 422 schema, 429 concurrency cap (has `code`) or rate limit (plain text). Pagination: `limit` + `after` cursor, `has_more` in response.
 
-MCP alternative: hosted server at `https://api.veri.studio/mcp` (read-only: `/readonly/mcp`), or local `veri mcp serve` (needs `veri-sdk[mcp]`). Docs: https://docs.veri.studio/api-reference/introduction · https://docs.veri.studio/cli/mcp
+MCP alternative: hosted server at `https://api.veri.studio/mcp` (read-only: `/readonly/mcp`), or local `veri mcp serve` (needs `veri-sdk[mcp]`). On the read-only endpoint the chat tool never wakes a parked deployment: it returns `{status: "scaled_to_zero", choices: [], error: ...}` instead. With writes enabled, chatting to a parked deployment wakes it (GPU boot, billing starts) and can take many minutes; the stop tool is permanent. Docs: https://docs.veri.studio/api-reference/introduction · https://docs.veri.studio/cli/mcp
 
 ## Ground rules for agents
 

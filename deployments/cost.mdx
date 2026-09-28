@@ -9,7 +9,7 @@ Deployments consume GPU credit while their replicas are running. Billing is mete
 
 ## Billing cadence
 
-Charges accrue per minute while any replica is up. When you call `stop` — or a `min_replicas: 0` deployment parks itself — Veri settles each replica up to the moment its GPU was freed.
+Charges accrue per minute while any replica is up. When you call `stop` (or a `min_replicas: 0` deployment parks itself), Veri settles each replica up to the moment its GPU was freed. Each replica's cost is computed exactly over its lifetime (the final partial minute is prorated) and rounded once at settlement, not rounded minute by minute.
 
 ## Billing states
 
@@ -19,10 +19,12 @@ Charges accrue per minute while any replica is up. When you call `stop` — or a
 | `provisioning` | Replica warmup is billed retroactively once the deployment serves |
 | `serving` | **Yes** (per running replica, draining replicas included) |
 | `unhealthy` | **Yes** (transient state during health failure) |
-| `scaled_to_zero` | No |
+| `scaled_to_zero` | No (parked time is never charged or counted) |
 | `waking` | No (the new boxes bill once they launch) |
 | `stopped` | No |
 | `failed` | No |
+
+Balance enforcement follows the same rule: when a parked deployment wakes, its spend counts from the new boot. Time spent parked is never charged and never counted against your balance.
 
 ## Avoiding idle bills
 
@@ -30,7 +32,7 @@ A deployment with `min_replicas` of 1 or more (the default) keeps its warm floor
 
 Options, from most to least automatic:
 
-1. **Create with `min_replicas: 0`** — the deployment parks itself (`scaled_to_zero`, $0) after its idle window (`scale_to_zero_window_seconds`, default 1 hour) and wakes on the next request. Expect a multi-minute cold start on the first request after parking.
+1. **Create with `min_replicas: 0`** — the deployment parks itself (`scaled_to_zero`, $0) after its idle window (`scale_to_zero_window_seconds`, default 1 hour, counted from when it starts serving or from its last request) and wakes on the next request. Expect a multi-minute cold start on the first request after parking.
 2. **Add `idle_delete_after_days`** — a parked deployment with no traffic for that many days is auto-stopped for good.
 3. **Wrap deployments in try/finally** — guarantees `stop` even if your code errors:
    ```python

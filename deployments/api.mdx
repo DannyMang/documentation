@@ -18,7 +18,7 @@ Reference for `/v1/deployments/*`. All endpoints require Bearer token auth (`Aut
 | `GET` | `/v1/deployments/{id}/replicas` | List the deployment's replicas |
 | `POST` | `/v1/deployments/{id}/replicas/{replica_id}/drain` | Retire one replica (scale in, or recycle with `replace=true`) |
 | `POST` | `/v1/deployments/{id}/wake` | Pre-warm a `scaled_to_zero` deployment (202, idempotent) |
-| `POST` | `/v1/deployments/{id}/stop` | Transition to `stopped` |
+| `POST` | `/v1/deployments/{id}/stop` | Transition to `stopped` (permanent, idempotent) |
 | `POST` | `/v1/deployments/{id}/chat/completions` | OpenAI-compatible chat |
 | `GET` | `/v1/deployments/{id}/requests` | Request log |
 | `GET` | `/v1/deployments/{id}/metrics` | Aggregated metrics |
@@ -129,7 +129,7 @@ While autoscaling is armed (`min_replicas < max_replicas`) the autoscaler may sc
 
 ## POST /v1/deployments/{id}/wake
 
-Pre-warm a `scaled_to_zero` deployment. Returns `202` with the deployment; idempotent (a no-op if it's already up or booting). A chat request to a parked deployment also wakes it: raw HTTP clients receive `503` with a `Retry-After` header and error code `deployment_waking` while the GPU boots, while the Python SDK's `chat()` retries through the wake automatically (see [the chat endpoint](#post-v1deploymentsidchatcompletions)). Fire `wake` early on a predictive signal to hide the cold start entirely.
+Pre-warm a `scaled_to_zero` deployment. Returns `202` with the deployment; idempotent (a no-op if it's already up or booting). A chat request to a parked deployment also wakes it: raw HTTP clients receive `503` with a `Retry-After` header and error code `deployment_waking` while the GPU boots, while the Python SDK's `chat()` retries through the wake automatically (see [the chat endpoint](#post-v1deploymentsidchatcompletions)). Fire `wake` early on a predictive signal to hide the cold start entirely. Like a create, a wake (explicit or request-triggered) is checked against the workspace active-replica limit: with no headroom it returns `429` with code `ACTIVE_DEPLOYMENT_LIMIT` and the deployment stays `scaled_to_zero` until you free capacity.
 
 ```python
 client.deployments.wake(deployment_id)
@@ -137,7 +137,7 @@ client.deployments.wake(deployment_id)
 
 ## POST /v1/deployments/{id}/stop
 
-Transition to `stopped`. A final billing tick settles the partial-hour spend. Returns the updated deployment.
+Transition to `stopped`. This is permanent, not a pause: a stopped deployment cannot be woken or resumed (use `min_replicas: 0` to park on idle instead). A final billing tick settles the last partial minute of each replica. Returns the updated deployment. Idempotent: calling it on an already `stopped` or `failed` deployment returns the row unchanged.
 
 ```python
 final = client.deployments.stop(deployment_id)
@@ -197,6 +197,21 @@ response = client.deployments.chat(
     wake_timeout_s=900,                 # 0 = fail fast
 )
 ```
+
+### Upstream unavailable
+
+The same `503` + `Retry-After` shape covers transient upstream failures: the model server is unreachable, answers `5xx` or `429`, or no replica is serving. The error code is `upstream_unavailable`:
+
+```json
+{
+  "error": {
+    "code": "upstream_unavailable",
+    "message": "..."
+  }
+}
+```
+
+Retry after `Retry-After` seconds, as for `deployment_waking`. Both codes mean "try again shortly", not "the request was invalid".
 
 ## GET /v1/deployments/{id}/requests
 
@@ -262,6 +277,8 @@ queued → provisioning → serving → stopped
 ```
 
 `unhealthy` is a transient state when health checks fail; it returns to `serving` if the pod recovers.
+
+`scaled_to_zero` means parked with wake-on-request: no replicas run, and a chat request or `POST /wake` moves it on. `waking` is an in-flight status between `scaled_to_zero` and `serving` while the replacement box boots. `stopped` and `failed` are terminal.
 
 Billing applies during `serving` and `unhealthy` only.
 

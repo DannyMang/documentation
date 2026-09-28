@@ -72,7 +72,7 @@ curl -N "https://api.veri.studio/v1/deployments/$DEPLOYMENT_ID/chat/completions"
   }'
 ```
 
-`include_usage` gives Veri authoritative token counts for the stream. Veri requests it automatically when traffic passes through the deployment proxy, but setting it explicitly makes the test self-documenting.
+Veri meters the stream's token counts server-side whether or not you set `include_usage`. Setting it means your client also receives the final usage-only chunk (empty `choices`, populated `usage`), which makes the test self-documenting.
 
 ### 3. Inspect the dashboard
 

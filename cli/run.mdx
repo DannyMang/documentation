@@ -112,6 +112,8 @@ These flags are sugar over `--set` on `veri jobs create`:
 | `--dataset X` | `--set dataset.id=X` |
 | `--reward X` | `--set reward.file=X` |
 
+`veri deployments create <config>` expands its flags the same way (`--name`, `--gpu-type`, `--gpu-count`, `--from-hf`, `--from-model`, and the replica and scaling flags); see [Create from a config](/cli/deployments#create-from-a-config).
+
 ## Config schemas
 
 ### `veri.toml` (project root)
@@ -175,12 +177,19 @@ source = "training_job"     # training_job | huggingface
 
 [resources]
 gpu_type = "A100-80GB"
-gpu_count = 1
+gpu_count = 1               # GPUs per replica
 
 [autoscaling]
-min_replicas = 1
-max_replicas = 1
+min_replicas = 1            # 0 enables scale to zero
+max_replicas = 1            # 1-8; above min_replicas enables autoscaling
+# concurrency_target = 8
+# scale_to_zero_window_seconds = 3600   # minimum 300
+# idle_delete_after_days = 7
 ```
+
+<Note>
+  `[autoscaling]` accepts exactly `min_replicas`, `max_replicas`, `concurrency_target`, `scale_to_zero_window_seconds`, and `idle_delete_after_days`; any other key (for example `target_qps`) is rejected. The same five keys are also accepted under `[resources]`, which is where the `veri deployments create` scaling flags (`--min-replicas`, `--max-replicas`, and friends) land. Setting a key in both tables with different values is an error: set it in one place.
+</Note>
 
 ## `--dry-run` before submitting
 
