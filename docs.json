@@ -131,6 +131,13 @@
             "pages": [
               "webhooks"
             ]
+          },
+          {
+            "group": "Billing",
+            "icon": "credit-card",
+            "pages": [
+              "billing"
+            ]
           }
         ]
       },
