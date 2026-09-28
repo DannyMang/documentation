@@ -1571,6 +1571,9 @@
           },
           "422": {
             "description": "Request body failed validation"
+          },
+          "503": {
+            "description": "Deployment waking, no serving replica yet, or the serving replica failed to answer; retry after Retry-After (error.code deployment_waking | upstream_unavailable)"
           }
         },
         "security": [
@@ -7399,7 +7402,7 @@
           },
           "total_requests": {
             "type": "integer",
-            "format": "int32"
+            "format": "int64"
           },
           "error": {
             "type": [
@@ -9668,7 +9671,7 @@
                 },
                 "total_requests": {
                   "type": "integer",
-                  "format": "int32"
+                  "format": "int64"
                 },
                 "error": {
                   "type": [
