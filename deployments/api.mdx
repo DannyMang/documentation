@@ -64,6 +64,7 @@ Create a deployment from a base HF model or a completed training job.
   "provider": "aws",
   "total_requests": 0,
   "error": null,
+  "failure_code": null,
   "started_at": null,
   "stopped_at": null,
   "created_at": "2026-05-12T...",
@@ -72,6 +73,8 @@ Create a deployment from a base HF model or a completed training job.
 ```
 
 `endpoint_url` populates when status reaches `serving`.
+
+When a deployment fails, `error` holds the human-readable message and `failure_code` a stable, machine-readable reason you can branch on, for example `watchdog_timeout`, `capacity_unavailable`, `oom`, or `model_source_unsupported`. Both are `null` while nothing has failed, and both clear when a parked deployment wakes.
 
 ## GET /v1/deployments
 

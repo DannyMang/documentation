@@ -7410,6 +7410,13 @@
               "null"
             ]
           },
+          "failure_code": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Machine-readable reason for the last failure, e.g. `watchdog_timeout`,\n`capacity_unavailable`, or the serving agent's `oom` /\n`model_source_unsupported`. Null when no failure is recorded; cleared\nwith `error` on park and wake."
+          },
           "started_at": {
             "type": [
               "string",
@@ -9683,6 +9690,13 @@
                     "string",
                     "null"
                   ]
+                },
+                "failure_code": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Machine-readable reason for the last failure, e.g. `watchdog_timeout`,\n`capacity_unavailable`, or the serving agent's `oom` /\n`model_source_unsupported`. Null when no failure is recorded; cleared\nwith `error` on park and wake."
                 },
                 "started_at": {
                   "type": [
