@@ -24,7 +24,7 @@ In a terminal, it asks whether to cache the model in Veri storage for faster sta
 | `--name` | Endpoint name. Default: derived from the repo name (`qwen3-4b`). |
 | `--gpu-type` | GPU shape. Default `A100-80GB`. |
 | `--gpu-count` | GPUs per replica. Default `1`. |
-| `--engine` | `vllm` (default) or `max`. |
+| `--engine` | `vllm` (the default and only serving engine). |
 | `--replicas` | GPU-box replicas behind the endpoint. Default `1`. |
 | `--cache` / `--no-cache` | Cache the model in your library (or don't) without prompting. |
 | `--yes` / `-y` | Skip the prompt. No caching unless `--cache` is passed. |
@@ -255,11 +255,11 @@ veri deployments get dep_abc                        # one deployment, with its s
 
 | Flag | Purpose |
 | --- | --- |
-| `--status` | Filter by status: `queued`, `provisioning`, `serving`, `unhealthy`, `scaled_to_zero`, `waking`, `stopped`, or `failed`. |
+| `--status` | Filter by status: `queued`, `provisioning`, `serving`, `scaled_to_zero`, `waking`, `stopped`, or `failed`. |
 | `--limit` | Maximum number to return. Default `20`. |
 | `--after <id>` | Pagination cursor: return deployments created after this ID. |
 
-A deployment bills while either `serving` or `unhealthy`, so to catch everything holding a GPU, list both (or list without `--status` and scan the `status` column).
+A deployment can hold a GPU while `provisioning`, `serving`, or `waking`, so to catch everything holding one, list without `--status` and scan the `status` column.
 
 ## Exit codes
 

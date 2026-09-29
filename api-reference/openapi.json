@@ -6395,7 +6395,7 @@
               "string",
               "null"
             ],
-            "description": "Inference engine: \"vllm\" (default) or \"max\" (Modular MAX). Omitted => vllm."
+            "description": "Inference engine. Only \"vllm\" (the default) is supported; any other\nvalue is rejected with a 400. Omitted => vllm."
           },
           "num_replicas": {
             "type": [
@@ -7447,7 +7447,6 @@
           "queued",
           "provisioning",
           "serving",
-          "unhealthy",
           "stopped",
           "failed",
           "scaled_to_zero",

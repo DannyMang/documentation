@@ -18,7 +18,7 @@ DigitalOcean serving is wired but currently feature-gated: a `provider="digitalo
 Two shapes worth noting:
 
 - **L40S-48GB** — the genuine cheap single-GPU shape that still fits a 7B-13B bf16 model, which the 24 GB L4/A10G cannot.
-- **MI300X-192GB** — the same 192 GB AMD card [Hot Aisle serves today](/deployments/providers/hotaisle); on DigitalOcean it arrives with per-second billing.
+- **MI300X-192GB**: a 192 GB AMD card, enough to serve a 70B model in bf16 on one GPU; on DigitalOcean it arrives with per-second billing.
 
 Watch `veri gpu list` — the `(soon)` marker on the serving column disappears when the gate lifts.
 
@@ -28,7 +28,7 @@ Watch `veri gpu list` — the `(soon)` marker on the serving column disappears w
   <Card title="All serving providers" icon="server" href="/deployments/providers">
     Compare shapes, status, and the live CLI catalog.
   </Card>
-  <Card title="Hot Aisle (AMD)" icon="microchip" href="/deployments/providers/hotaisle">
-    MI300X serving that's available today.
+  <Card title="AWS" icon="aws" href="/deployments/providers/aws">
+    The default serving provider.
   </Card>
 </CardGroup>

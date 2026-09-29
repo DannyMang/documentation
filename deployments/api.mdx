@@ -78,7 +78,7 @@ When a deployment fails, `error` holds the human-readable message and `failure_c
 
 ## GET /v1/deployments
 
-List your deployments. Filter by `status` (`queued` / `provisioning` / `serving` / `unhealthy` / `scaled_to_zero` / `waking` / `stopped` / `failed`).
+List your deployments. Filter by `status` (`queued` / `provisioning` / `serving` / `scaled_to_zero` / `waking` / `stopped` / `failed`).
 
 ```bash
 curl "https://api.veri.studio/v1/deployments?status=serving" \
@@ -275,15 +275,11 @@ Aggregated counters across all requests:
 queued → provisioning → serving → stopped
                     ↘                    ↘
                      failed             failed
-                                ↕
-                            unhealthy
 ```
-
-`unhealthy` is a transient state when health checks fail; it returns to `serving` if the pod recovers.
 
 `scaled_to_zero` means parked with wake-on-request: no replicas run, and a chat request or `POST /wake` moves it on. `waking` is an in-flight status between `scaled_to_zero` and `serving` while the replacement box boots. `stopped` and `failed` are terminal.
 
-Billing applies during `serving` and `unhealthy` only.
+Billing applies while replicas run, i.e. during `serving` (replica warmup is billed once the deployment serves). `scaled_to_zero`, `waking`, `stopped`, and `failed` are not billed.
 
 ## Worker-only endpoints
 

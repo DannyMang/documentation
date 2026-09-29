@@ -18,7 +18,6 @@ Charges accrue per minute while any replica is up. When you call `stop` (or a `m
 | `queued` | No |
 | `provisioning` | Replica warmup is billed retroactively once the deployment serves |
 | `serving` | **Yes** (per running replica, draining replicas included) |
-| `unhealthy` | **Yes** (transient state during health failure) |
 | `scaled_to_zero` | No (parked time is never charged or counted) |
 | `waking` | No (the new boxes bill once they launch) |
 | `stopped` | No |
