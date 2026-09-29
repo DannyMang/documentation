@@ -29,7 +29,6 @@ Request, latency, token, cost, and engine telemetry (queue depth, KV-cache usage
 | Provider | Serving GPUs | Request + engine telemetry | GPU hardware snapshot | Backend |
 | --- | --- | --- | --- | --- |
 | `aws` | A100-80GB, H100-80GB, L4-24GB | Yes | Yes | NVML (vLLM's vendored binding on the host) |
-| `hotaisle` | MI300X-192GB (ROCm) | Yes | Yes | `amdsmi` bindings, `rocm-smi --json` fallback |
 | `gcp` | A100, H100 | Yes | Not yet | Engine runs in docker; the agent cannot reach NVML from outside the container |
 | `digitalocean` | H100-80GB, L40S-48GB | Yes | Not yet | Same docker visibility gap |
 
@@ -259,7 +258,7 @@ Per-deployment metrics carry `deployment_id` and `model` labels:
 | `veri_deployment_replicas_desired` | gauge | Desired replica count. |
 | `veri_deployment_replicas_ready` | gauge | Replicas currently serving traffic. |
 
-Per-replica metrics add `replica_id`, `gpu_type`, and `region` labels. Only live replicas (queued, provisioning, serving, unhealthy, or draining) are exported:
+Per-replica metrics add `replica_id`, `gpu_type`, and `region` labels. Only live replicas (queued, provisioning, serving, or draining) are exported:
 
 | Metric | Type | Meaning |
 | --- | --- | --- |

@@ -57,7 +57,7 @@ deployment replicas**. Both are counted weighted, so a 4-node job consumes 4 job
 a 2-replica deployment consumes the whole replica budget.
 
 - In-flight jobs = `queued` + `provisioning` + `configuring` + `running`. Terminal jobs never count.
-- Active replicas = `queued` + `provisioning` + `serving` + `unhealthy` + `waking`. A
+- Active replicas = `queued` + `provisioning` + `serving` + `waking`. A
   `scaled_to_zero` deployment does NOT count, but it starts counting the moment it wakes.
 - Enforced at create, at `veri deployments update` when it raises the replica count, and at
   wake (explicit `veri deployments wake` or a chat request to a `scaled_to_zero` deployment):
@@ -255,8 +255,8 @@ ALWAYS pass `--gpu-type` explicitly and right-size it (`veri gpu list` for price
 handles ≤4B models). The default is `A100-80GB`, which on AWS is a whole 8-GPU node — an
 expensive shape for small models.
 
-- Engine: `vllm` only (`max` returns 400). Extra vLLM flags: repeat `--vllm-arg=<token>` or `deployment.vllm_extra_args` list in the config.
-- Serving providers live: `aws` (default), `gcp` (single-GPU A100). Gated off (400): `hotaisle`, `digitalocean`.
+- Engine: `vllm` only (any other value returns 400). Extra vLLM flags: repeat `--vllm-arg=<token>` or `deployment.vllm_extra_args` list in the config.
+- Serving providers live: `aws` (default), `gcp` (single-GPU A100). Gated off (400): `digitalocean`. `hotaisle` is training-only (serving returns 400).
 - Defaults: gpu_count 1, replicas 1, concurrency_target 8, scale_to_zero_window 3600s (min 300).
 - Mutable on a live deployment: replica bounds, concurrency target, idle windows. Model/GPU/provider/engine are immutable.
 - Replica budget is 2 by default (see Account limits), so `--max-replicas` above 2 is not servable.
@@ -287,7 +287,7 @@ Diagnostics: `veri deployments chat|metrics|requests|bench <id>`.
 
 `GET /v1/deployments/{id}/replicas` lists every replica with live per-box telemetry:
 `status`, `requests_running`, `requests_waiting`, `kv_cache_usage`, GPU utilization/memory,
-`last_heartbeat_at`. Replica statuses: `queued`, `provisioning`, `serving`, `unhealthy`,
+`last_heartbeat_at`. Replica statuses: `queued`, `provisioning`, `loading`, `serving`,
 `draining`, `stopped`, `failed`.
 
 `POST /v1/deployments/{id}/replicas/{replica_id}/drain` retires ONE replica gracefully: it

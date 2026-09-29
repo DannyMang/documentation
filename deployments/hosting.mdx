@@ -24,10 +24,6 @@ Rough sizing for **inference only** (training needs more headroom):
 
 Each provider sells fixed node shapes — asking for a shape a provider doesn't sell returns a 400 at create, before anything boots. The full matrix (with status and per-provider guides) lives on the [Serving providers](/deployments/providers) page; the live version, including current prices, is `veri gpu list`.
 
-<Tip>
-  The AMD MI300X ([Hot Aisle](/deployments/providers/hotaisle)) carries 192 GB of VRAM on a single GPU — enough to serve a 70B model in bf16 on one card, where NVIDIA equivalents need a multi-GPU node.
-</Tip>
-
 <Note>
   AWS has no single-GPU A100/H100 instance — the smallest SKU is the whole 8-GPU node, and you pay for all of it. For a single A100/H100, pick a provider with a genuine 1-GPU shape ([GCP](/deployments/providers/gcp)).
 </Note>
