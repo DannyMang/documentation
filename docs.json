@@ -349,6 +349,10 @@
   },
   "redirects": [
     {
+      "source": "/training/providers/hotaisle",
+      "destination": "/training/providers"
+    },
+    {
       "source": "/skill",
       "destination": "/agent-skill"
     },

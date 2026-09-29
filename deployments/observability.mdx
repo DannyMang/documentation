@@ -29,7 +29,7 @@ Request, latency, token, cost, and engine telemetry (queue depth, KV-cache usage
 | Provider | Serving GPUs | Request + engine telemetry | GPU hardware snapshot | Backend |
 | --- | --- | --- | --- | --- |
 | `aws` | A100-80GB, H100-80GB, L4-24GB | Yes | Yes | NVML (vLLM's vendored binding on the host) |
-| `gcp` | A100, H100 | Yes | Not yet | Engine runs in docker; the agent cannot reach NVML from outside the container |
+| `gcp` | A100-80GB | Yes | Not yet | Engine runs in docker; the agent cannot reach NVML from outside the container |
 | `digitalocean` | H100-80GB, L40S-48GB | Yes | Not yet | Same docker visibility gap |
 
 Two design contracts worth knowing: the snapshot is **fail-soft** (a box where no GPU library works simply omits the readings — GPU telemetry can never break the heartbeat that liveness monitoring depends on), and it is **vendor-neutral in shape** — NVIDIA and AMD boxes emit the identical schema, so dashboards and Prometheus queries never branch on vendor.

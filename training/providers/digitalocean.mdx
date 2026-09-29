@@ -32,7 +32,7 @@ job = client.training_jobs.create(
 ## Notes
 
 <Note>
-  DigitalOcean also lists AMD MI300X droplets, but they are not yet enabled on Veri — a `provider="digitalocean"` submit with `gpu_type="MI300X-192GB"` returns a 400 listing the offered shapes. For AMD MI300X training today, use `provider="hotaisle"`.
+  DigitalOcean also lists AMD MI300X droplets, but they are not yet enabled on Veri: a `provider="digitalocean"` submit with `gpu_type="MI300X-192GB"` returns a 400 listing the offered shapes. AMD MI300X training is not yet available on any provider.
 </Note>
 
 <Warning>

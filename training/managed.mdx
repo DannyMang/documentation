@@ -201,16 +201,16 @@ Pass `region="us-west-2"` to `client.training_jobs.create`, the `@veri.train` de
 
 ### Choosing a GPU provider
 
-Veri supports multiple GPU providers — AWS (NVIDIA, default), Hot Aisle (AMD MI300X), and Vast.ai (NVIDIA marketplace). Pass `provider` at submit time to choose where your job runs:
+Veri supports multiple GPU providers: AWS (NVIDIA, default), Vast.ai (NVIDIA marketplace), and DigitalOcean (H100 droplets). Pass `provider` at submit time to choose where your job runs:
 
 ```python
 job = client.training_jobs.create(
     base_model="Qwen/Qwen2.5-0.5B-Instruct",
     dataset_id=dataset.id,
     reward_source=open("math_reward.py").read(),
-    gpu_type="MI300X-192GB",
+    gpu_type="H100-80GB",
     gpu_count=1,
-    provider="hotaisle",
+    provider="digitalocean",
 )
 ```
 

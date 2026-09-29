@@ -1,18 +1,17 @@
 ---
 title: "GPU providers"
 sidebarTitle: "Overview"
-description: "Choose where your training job runs: AWS (NVIDIA), Hot Aisle (AMD MI300X), Vast.ai (NVIDIA marketplace spillover), or DigitalOcean (H100 droplets)."
-keywords: ["providers", "AWS", "Hot Aisle", "AMD", "MI300X", "Vast.ai", "DigitalOcean", "H100", "GPU", "cloud"]
+description: "Choose where your training job runs: AWS (NVIDIA), Vast.ai (NVIDIA marketplace spillover), or DigitalOcean (H100 droplets)."
+keywords: ["providers", "AWS", "Vast.ai", "DigitalOcean", "H100", "GPU", "cloud"]
 ---
 
-Veri runs training jobs on four GPU providers. You pick one at job submit time with the `provider` field. Each provider offers different GPU types at different price points — AWS is the default, Vast.ai is the NVIDIA marketplace spillover, DigitalOcean offers single-GPU H100 droplets with per-second billing, and Hot Aisle (AMD MI300X) is coming soon.
+Veri runs training jobs on three GPU providers. You pick one at job submit time with the `provider` field. Each provider offers different GPU types at different price points: AWS is the default, Vast.ai is the NVIDIA marketplace spillover, and DigitalOcean offers single-GPU H100 droplets with per-second billing.
 
 ## Providers at a glance
 
 | Provider | GPUs offered | Architecture | Billing | Status |
 | --- | --- | --- | --- | --- |
 | [`aws`](/training/providers/aws) (default) | L4, A10G, A100 80GB, H100 80GB | NVIDIA (Ampere/Hopper) | Per-second, on-demand or spot | Available |
-| [`hotaisle`](/training/providers/hotaisle) | MI300X 192GB | AMD (CDNA3 / ROCm) | Per-hour, on-demand | Coming soon |
 | [`vast`](/training/providers/vast) | A100 80GB, H100 80GB | NVIDIA (marketplace) | Per-second, marketplace pricing | Available |
 | [`digitalocean`](/training/providers/digitalocean) | H100 80GB | NVIDIA (Hopper) | Per-second, on-demand | Available |
 
@@ -32,11 +31,11 @@ job = client.training_jobs.create(
     base_model="Qwen/Qwen2.5-0.5B-Instruct",
     dataset_id=dataset.id,
     reward_source=open("reward.py").read(),
-    output_name="qwen-0.5b-amd",
+    output_name="qwen-0.5b-do",
     method="grpo",
-    gpu_type="MI300X-192GB",
+    gpu_type="H100-80GB",
     gpu_count=1,
-    provider="hotaisle",
+    provider="digitalocean",
     hyperparameters={
         "learning_rate": 1e-6,
         "max_steps": 50,
@@ -47,15 +46,15 @@ job = client.training_jobs.create(
 From the CLI:
 
 ```bash
-veri train --provider hotaisle --gpu-type MI300X-192GB --gpu-count 1
+veri train --provider digitalocean --gpu-type H100-80GB --gpu-count 1
 ```
 
 Or in a TOML config:
 
 ```toml
 kind = "train"
-provider = "hotaisle"
-gpu_type = "MI300X-192GB"
+provider = "digitalocean"
+gpu_type = "H100-80GB"
 gpu_count = 1
 ```
 
@@ -67,10 +66,9 @@ Capacity is per-provider and per-region. Check what's available right now before
 
 ```bash
 veri gpu list                    # all providers, all regions
-veri gpu list --provider hotaisle  # Hot Aisle only
 veri gpu list --provider vast     # Vast.ai only
 veri gpu list --provider digitalocean  # DigitalOcean only
-veri gpu list --gpu-type MI300X-192GB  # filter by GPU type
+veri gpu list --gpu-type H100-80GB  # filter by GPU type
 ```
 
 The `available` column shows live capacity: a real-time count of GPUs that can be launched immediately. `0` means the shape is offered but currently out of stock — retry later.
@@ -83,16 +81,13 @@ Each provider has its own rate card. Check current pricing with:
 veri gpu list --format json   # includes usd_per_hour per GPU type
 ```
 
-Rates are per-GPU-hour. You are billed from when the GPU is provisioned (`provisioning` state) until the job terminates and the instance is reaped. A job that never secures a GPU (e.g. `CAPACITY_UNAVAILABLE`) is not billed.
+Rates are per-GPU-hour. You are billed from the moment the instance boots (during `provisioning`, before the first training step) until the job terminates and the instance is reaped. This applies to failed jobs too: GPU time actually used is billed. A job that never secures a GPU (e.g. `CAPACITY_UNAVAILABLE`) rents nothing and is not billed.
 
 ## Provider guides
 
 <CardGroup cols={2}>
   <Card title="AWS (default)" icon="aws" href="/training/providers/aws">
     L4, A10G, and whole-node A100/H100 — the reliable NVIDIA default.
-  </Card>
-  <Card title="Hot Aisle (AMD MI300X)" icon="microchip" href="/training/providers/hotaisle">
-    192 GB HBM3 per card, the ROCm stack, and MI300X performance tuning.
   </Card>
   <Card title="Vast.ai" icon="store" href="/training/providers/vast">
     Marketplace A100/H100 spillover at fluctuating prices.

@@ -20,7 +20,7 @@ This page lists the versions in each so you can match your own dependencies to w
 
 Managed jobs (`grpo`, `sft_text`, `dpo`) run on a fixed, validated stack. You do not change these versions: they are the runtime for the managed methods, and Veri owns the training loop. This section is for reference only (for example, to know which `transformers` a managed job runs). If you need to control the stack, use a [custom script](/training/custom-script).
 
-The exact versions differ by provider, because each provider delivers the stack a different way. The table below is the **AWS** runtime, baked into the GPU AMI (which supplies the NVIDIA driver, CUDA runtime, and PyTorch, with Veri layering the training stack on top). Vast, DigitalOcean, and Hot Aisle carry their own equivalent stacks, summarized in the note after the table.
+The exact versions differ by provider, because each provider delivers the stack a different way. The table below is the **AWS** runtime, baked into the GPU AMI (which supplies the NVIDIA driver, CUDA runtime, and PyTorch, with Veri layering the training stack on top). Vast and DigitalOcean carry their own equivalent stacks, summarized in the note after the table.
 
 | Component | Version | Notes |
 | --- | --- | --- |
@@ -45,7 +45,6 @@ The exact versions differ by provider, because each provider delivers the stack 
 
   - **Vast** runs from a Docker image built on `vastai/pytorch:2.9.1-cu128` (Python 3.10, torch 2.9.1 on CUDA 12.8). Same core pins (vLLM 0.15.1, transformers 4.56.2, trl 1.7.1, torchao 0.17.0), and it pins some packages the AWS image leaves floating (for example bitsandbytes 0.49.2, xformers 0.0.33.post2, triton 3.7.0).
   - **DigitalOcean** and other generic GPU providers have no prebaked image, so the stack is installed at cold start. Their versions track the current install script rather than a baked snapshot.
-  - **Hot Aisle (AMD MI300X)** runs a separate ROCm image, not the CUDA stack above. Its PyTorch and kernels are ROCm builds.
 </Note>
 
 ## L3 custom-script base images
@@ -104,8 +103,7 @@ SGLang is held at 0.5.2 (the torch-2.8 / CUDA-12.8 era). Newer SGLang releases f
 
 ## Hardware constraints
 
-- **NVIDIA CUDA only for custom scripts.** The base-image catalog is CUDA-tier. Submitting a custom script with an AMD `gpu_type` (for example `MI300X-192GB`) returns a 400.
-- **AMD MI300X via managed training.** To run on AMD MI300X, use a managed method (`grpo`, `sft_text`, `dpo`) with `provider="hotaisle"`. See [custom training scripts](/training/custom-script) for the current NVIDIA and AMD split.
+- **NVIDIA CUDA only.** The base-image catalog is CUDA-tier. Submitting a custom script with an AMD `gpu_type` (for example `MI300X-192GB`) returns a 400. AMD support is planned.
 
 ## Layering your own dependencies
 

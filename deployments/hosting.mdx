@@ -25,7 +25,7 @@ Rough sizing for **inference only** (training needs more headroom):
 Each provider sells fixed node shapes — asking for a shape a provider doesn't sell returns a 400 at create, before anything boots. The full matrix (with status and per-provider guides) lives on the [Serving providers](/deployments/providers) page; the live version, including current prices, is `veri gpu list`.
 
 <Note>
-  AWS has no single-GPU A100/H100 instance — the smallest SKU is the whole 8-GPU node, and you pay for all of it. For a single A100/H100, pick a provider with a genuine 1-GPU shape ([GCP](/deployments/providers/gcp)).
+  AWS has no single-GPU A100/H100 instance: the smallest SKU is the whole 8-GPU node, and you pay for all of it. Its genuine single-GPU shapes are `L4-24GB` and `A10G-24GB`. Single-A100 serving on [GCP](/deployments/providers/gcp) is wired but feature-gated (coming soon).
 </Note>
 
 ## Cold start

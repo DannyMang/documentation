@@ -1,17 +1,19 @@
 ---
 title: "GCP"
-sidebarTitle: "GCP"
-description: "Genuine single-GPU A100 VMs on Google Cloud — the way to rent one big NVIDIA card instead of a whole AWS node."
+sidebarTitle: "GCP (coming soon)"
+description: "Genuine single-GPU A100 VMs on Google Cloud, the way to rent one big NVIDIA card instead of a whole AWS node. Wired but feature-gated; creates return a 400 until the gate lifts."
 keywords: ["GCP", "Google Cloud", "serving", "deployments", "A100"]
 ---
 
-GCP offers genuine single-GPU A100 VMs — the main reason to pick it over AWS, where the big cards only come as whole 8-GPU nodes.
+GCP offers genuine single-GPU A100 VMs, the main reason to pick it over AWS, where the big cards only come as whole 8-GPU nodes.
+
+GCP serving is wired but currently feature-gated: a `provider="gcp"` create returns a "coming soon" 400 until the gate lifts.
 
 ## Serving shapes
 
-| `gpu_type` | Memory | GPUs per node |
-| --- | --- | --- |
-| `A100-80GB` | 80 GB | 1 |
+| `gpu_type` | Memory | GPUs per node | Status |
+| --- | --- | --- | --- |
+| `A100-80GB` | 80 GB | 1 | Coming soon |
 
 Single H100 VMs on GCP are Spot-only (preemptible), so they are not offered for serving. To serve on H100, use AWS.
 
