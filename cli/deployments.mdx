@@ -178,7 +178,7 @@ With `--min-replicas 0`, a deployment idle past `--scale-to-zero-window` (defaul
 veri deployments wake dep_abc     # 202; no-op if already up
 ```
 
-Then poll `veri deployments get dep_abc` until it's `serving`. A wake (explicit or request-triggered) is subject to the workspace active-replica limit, like a create: with no headroom it returns `429` with code `ACTIVE_DEPLOYMENT_LIMIT` and the deployment stays parked, so stop or scale down something else first. Optionally set `--idle-delete-after N` to auto-stop a deployment that stays parked with no traffic for N days.
+Then poll `veri deployments get dep_abc` until it's `serving`. A wake (explicit or request-triggered) relaunches `min_replicas` boxes (at least one; the autoscaler grows the fleet again if traffic returns) and is subject to the workspace active-replica limit, like a create: with no headroom it returns `429` with code `ACTIVE_DEPLOYMENT_LIMIT` and the deployment stays parked, so stop or scale down something else first. Optionally set `--idle-delete-after N` to auto-stop a deployment that stays parked with no traffic for N days.
 
 ### Change scaling on a live deployment
 
