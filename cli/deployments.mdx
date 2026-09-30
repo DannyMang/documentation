@@ -137,7 +137,7 @@ The CLI calls the OpenAI-compatible endpoint with a single user message and prin
 | `--max-tokens` | Cap on response tokens. |
 | `--session-id` | Pin this conversation to one replica for cache-warm affinity (sets the `X-Veri-Session-Id` header). Only affects multi-replica deployments. Experimental. |
 
-For programmatic chat, point any OpenAI-compatible client at the deployment's `endpoint_url` (visible in `veri deployments get`).
+For programmatic chat, use `https://api.veri.studio/v1/deployments/{id}` as the OpenAI-compatible `base_url` with your Veri API key. The deployment's `endpoint_url` (visible in `veri deployments get`) is that same platform URL with `/chat/completions` already appended, for direct HTTP calls.
 
 ## Replicas, autoscaling, and scale to zero
 

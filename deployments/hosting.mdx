@@ -43,7 +43,7 @@ These are operational expectations, not contractual. The slowest part is usually
 
 ## Endpoint URL stability
 
-Once a deployment reaches `serving`, its `endpoint_url` doesn't change. Save it to your config — it stays valid until you `stop` the deployment.
+Once a deployment reaches `serving`, its `endpoint_url` is the platform URL `https://api.veri.studio/v1/deployments/{id}/chat/completions`, authenticated with your Veri API key. It never changes, including across scale-to-zero parks and wakes: save it to your config, it stays valid until you `stop` the deployment.
 
 ## OOM at load
 

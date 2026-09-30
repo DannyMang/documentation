@@ -7280,7 +7280,8 @@
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "description": "The URL to call once the deployment serves. Managed deployments\n(aws, gcp, digitalocean) get the platform chat URL\n`{api}/v1/deployments/{id}/chat/completions`, authenticated with your\nVeri API key; BYOC (huggingface) deployments carry the endpoint URL\nunder your own HF account. Null until the deployment is serving."
           },
           "gpu": {
             "oneOf": [
@@ -9553,7 +9554,8 @@
                   "type": [
                     "string",
                     "null"
-                  ]
+                  ],
+                  "description": "The URL to call once the deployment serves. Managed deployments\n(aws, gcp, digitalocean) get the platform chat URL\n`{api}/v1/deployments/{id}/chat/completions`, authenticated with your\nVeri API key; BYOC (huggingface) deployments carry the endpoint URL\nunder your own HF account. Null until the deployment is serving."
                 },
                 "gpu": {
                   "oneOf": [

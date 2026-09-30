@@ -72,7 +72,7 @@ Create a deployment from a base HF model or a completed training job.
 }
 ```
 
-`endpoint_url` populates when status reaches `serving`.
+`endpoint_url` populates when status reaches `serving`: for managed deployments it is `https://api.veri.studio/v1/deployments/{id}/chat/completions` (call it with your Veri API key); for BYOC `huggingface` deployments it is the endpoint under your own Hugging Face account.
 
 When a deployment fails, `error` holds the human-readable message and `failure_code` a stable, machine-readable reason you can branch on, for example `watchdog_timeout`, `capacity_unavailable`, `oom`, or `model_source_unsupported`. Both are `null` while nothing has failed, and both clear when a parked deployment wakes.
 

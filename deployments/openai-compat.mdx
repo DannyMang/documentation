@@ -8,7 +8,7 @@ keywords: ["OpenAI compatible", "LangChain", "LlamaIndex", "interop", "chat comp
 A Veri deployment exposes the OpenAI Chat Completions API at `https://api.veri.studio/v1/deployments/{deployment_id}`. Anything that already speaks OpenAI works — point `base_url` at the deployment and pass your Veri API key.
 
 <Note>
-  Use the full URL `https://api.veri.studio/v1/deployments/{dep.id}` as `base_url`. The OpenAI client appends `/chat/completions` for you. The `dep.endpoint_url` field on the SDK response is a relative path that already includes `/chat/completions` — it's for direct curl-style calls, not for the OpenAI SDK's `base_url`.
+  Use the full URL `https://api.veri.studio/v1/deployments/{dep.id}` as `base_url`. The OpenAI client appends `/chat/completions` for you. The `dep.endpoint_url` field on the SDK response is the absolute chat URL (it already ends in `/chat/completions`), authenticated with your Veri API key: use it for direct curl-style calls, not as the OpenAI SDK's `base_url`. BYOC (`huggingface`) deployments report the endpoint URL under your own Hugging Face account instead.
 </Note>
 
 ## What works
