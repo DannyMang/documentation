@@ -2092,7 +2092,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/v1/deployments/{deployment_id}/traces/{trace_id}": {
@@ -2134,7 +2139,12 @@
           "404": {
             "description": "No such trace in this workspace"
           }
-        }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/v1/deployments/{deployment_id}/wake": {
@@ -6982,13 +6992,6 @@
             ],
             "format": "int32"
           },
-          "instance_type": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Provider instance shape (e.g. an EC2 instance type); None when the\nlaunch path does not resolve it in the control plane."
-          },
           "cost_per_box_hour_usd": {
             "type": [
               "number",
@@ -9223,13 +9226,6 @@
                     "null"
                   ],
                   "format": "int32"
-                },
-                "instance_type": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "description": "Provider instance shape (e.g. an EC2 instance type); None when the\nlaunch path does not resolve it in the control plane."
                 },
                 "cost_per_box_hour_usd": {
                   "type": [
