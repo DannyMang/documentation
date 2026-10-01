@@ -171,7 +171,7 @@ claude mcp add --transport http veri-readonly https://api.veri.studio/readonly/m
 | `veri_get_deployment_metrics_timeseries` | Get metric buckets over a time range. |
 | `veri_query_deployment_metrics` | Query up to 500 server-aggregated metric buckets for a time range (seven days by default). |
 | `veri_list_deployment_requests` | List compact request telemetry, optionally restricted to failures or a time range. |
-| `veri_chat_deployment` | Send a chat request to a serving deployment. On the read-only endpoint it never wakes a parked (`scaled_to_zero`) deployment and returns `{status: "scaled_to_zero", choices: [], error: ...}` instead; with writes enabled, chatting to a parked deployment wakes it (GPU boot, billing starts) and can take many minutes. |
+| `veri_chat_deployment` | Send a chat request to a serving deployment. On the read-only endpoint it never wakes a parked (`scaled_to_zero`) deployment and returns `{status: "scaled_to_zero", choices: [], error: ...}` instead; with writes enabled, chatting to a parked deployment sends the request once, which wakes it (GPU boot, billing starts), and returns `{status: "waking", choices: [], error: "...retry in about Ns..."}` immediately instead of waiting; call the tool again after the hinted delay. |
 | `veri_list_models` | List custom models in your registry. |
 | `veri_get_hf_export` | Poll the status of a Hugging Face export. |
 | `veri_list_datasets` | List datasets available for training. |

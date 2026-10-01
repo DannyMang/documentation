@@ -190,14 +190,16 @@ A chat request to a `scaled_to_zero` deployment triggers its wake and answers `5
 }
 ```
 
-Raw HTTP clients should retry after `Retry-After` seconds. The Python SDK retries for you: `chat()` sleeps and re-sends until the deployment serves the request or `wake_timeout_s` (default `900`) elapses, calling `on_waking(message)` on each `503` so you can surface progress. Set `wake_timeout_s=0` to fail fast with the `503` instead.
+Raw HTTP clients should retry after `Retry-After` seconds. The Python SDK retries for you: `chat()` sleeps and re-sends until the deployment serves the request or `wake_timeout_s` (default `1320`, which outlasts the server's 20-minute boot ceiling) elapses, calling `on_waking(message)` on each `503` so you can surface progress. Set `wake_timeout_s=0` to fail fast with the `503` instead.
 
 ```python
 response = client.deployments.chat(
     deployment_id,
     messages=[{"role": "user", "content": "Hi"}],
     on_waking=lambda msg: print(msg),   # optional progress hook
-    wake_timeout_s=900,                 # 0 = fail fast
+    wake_timeout_s=1320,                # 0 = fail fast
+    upstream_retries=3,                 # bounded retry on upstream_unavailable (0 = never)
+    timeout_s=120,                      # HTTP timeout for this call (long non-streaming answers)
 )
 ```
 
@@ -214,7 +216,7 @@ The same `503` + `Retry-After` shape covers transient upstream failures: the mod
 }
 ```
 
-Retry after `Retry-After` seconds, as for `deployment_waking`. Both codes mean "try again shortly", not "the request was invalid".
+Retry after `Retry-After` seconds, as for `deployment_waking`. Both codes mean "try again shortly", not "the request was invalid". The Python SDK's `chat()` retries `upstream_unavailable` for you too, but with a small fixed budget (`upstream_retries`, default 3, each after `Retry-After`) since a replica blip resolves in seconds while a wake takes minutes; after the budget the `503` surfaces as `VeriServerError` with `code == "upstream_unavailable"`.
 
 ## GET /v1/deployments/{id}/requests
 
@@ -298,7 +300,7 @@ recent = dep.requests(limit=20)
 dep.stop()
 ```
 
-These all hit the endpoints above. `wait()` returns once the status settles: `serving`, `failed`, `stopped`, or `scaled_to_zero` (a parked deployment won't move again without traffic, so waiting on it would just burn the timeout). `dep.chat()` retries through a wake with the default 15-minute budget; call `client.deployments.chat()` directly to tune `wake_timeout_s` or `on_waking`.
+These all hit the endpoints above. `wait()` returns once the status settles: `serving`, `failed`, `stopped`, or `scaled_to_zero` (a parked deployment won't move again without traffic, so waiting on it would just burn the timeout). `dep.chat()` retries through a wake with the default 22-minute budget and accepts `upstream_retries` and `timeout_s`; call `client.deployments.chat()` directly to tune `wake_timeout_s` or `on_waking`.
 
 ## Related
 
