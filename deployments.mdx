@@ -50,7 +50,7 @@ You set these at create time, whether from the [SDK](/deployments/examples) (`cl
 | `trace_bodies` | No | `false` | Capture this deployment's request/response bodies as browsable [traces](/deployments/observability#request-traces). Enabling stores end-user prompt/completion content. First 5,000 traces per workspace each month are free, then metered per 1k from credits. |
 | `trace_retention` | No | `base` | Trace retention class: `base` (14 days) or `extended` (400 days, extended rate). Requires `trace_bodies: true`. |
 
-`min_replicas`, `max_replicas`, `concurrency_target`, `scale_to_zero_window_seconds`, and `idle_delete_after_days` can also be changed later on a live deployment — see [Scaling](/cli/deployments#replicas-autoscaling-and-scale-to-zero). Model, GPU, and provider are immutable: changing those means a new deployment.
+`min_replicas`, `max_replicas`, `concurrency_target`, `scale_to_zero_window_seconds`, and `idle_delete_after_days` can also be changed later on a live deployment: see [Scaling](/cli/deployments#replicas-autoscaling-and-scale-to-zero). Model, GPU, and provider are immutable: changing those means a new deployment. Raising `min_replicas` to 1 or more on a parked (`scaled_to_zero`) deployment wakes it immediately, subject to the workspace active-replica limit (`429` if it is full, and nothing changes). Scaling changes made during the first boot apply once the deployment is serving. See [what an update does in each status](/deployments/api#patch-v1deploymentsid).
 
 At call time, `chat` also accepts a session key for cache-warm routing across replicas.
 
@@ -67,7 +67,7 @@ stateDiagram-v2
     provisioning --> serving : replica ready, endpoint reachable
     provisioning --> failed : GPU lease failed / image pull error
     serving --> scaled_to_zero : idle past window (min_replicas 0 only)
-    scaled_to_zero --> waking : request arrives or POST /wake
+    scaled_to_zero --> waking : request, POST /wake, or min_replicas raised to 1+
     waking --> provisioning : reconciler re-provisions
     serving --> stopped : user called stop
     scaled_to_zero --> stopped : user called stop / idle_delete_after_days

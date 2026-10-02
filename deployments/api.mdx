@@ -99,6 +99,18 @@ Returns the updated deployment immediately with the new *desired* state; the con
 
 Turning scale-to-zero on (`min_replicas` to `0`), or changing `scale_to_zero_window_seconds`, starts a fresh idle window, so a deployment that has already been idle does not park right after the update.
 
+When the update takes effect depends on the deployment's status:
+
+| Status | Effect of the update |
+| --- | --- |
+| `serving` | Applies on the next reconcile pass (a few seconds): the fleet scales toward the new bounds, the autoscaler uses the new `concurrency_target`, the idle check uses the new window. |
+| `scaled_to_zero` | If the update leaves `min_replicas` at 1 or more, the deployment **wakes immediately**, exactly like `POST /wake` (even during a wake-failure backoff), and boots the new floor; the response already shows `status: "waking"`. Any other change is saved and applies from the next wake; `idle_delete_after_days` applies to the parked deployment right away. |
+| `queued` | Nothing has launched yet, so the deployment boots with the new settings. |
+| `provisioning` (first boot) | Saved now, applied **once the deployment is serving**: the response shows the new desired `num_replicas` next to `ready_replicas: 0`, and extra replicas launch only after the first one serves, so a broken configuration does not boot several GPUs before it fails. |
+| `waking` | No second wake. The new floor applies to the wake in progress, or as soon as it serves. |
+
+Waking on update is checked against the workspace active-replica limit before anything is saved: if the new floor does not fit, the update returns `429` with code `ACTIVE_DEPLOYMENT_LIMIT` and the deployment stays parked with its previous settings. An update that raises `num_replicas` on a running deployment is checked the same way.
+
 ```python
 dep = client.deployments.update(deployment_id, min_replicas=1, max_replicas=4)
 ```

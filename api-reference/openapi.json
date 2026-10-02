@@ -1238,7 +1238,7 @@
         },
         "responses": {
           "200": {
-            "description": "The updated deployment (desired state; the reconciler converges the replica fleet asynchronously)",
+            "description": "The updated deployment (desired state; the reconciler converges the replica fleet asynchronously). A scaled_to_zero deployment left with min_replicas >= 1 is woken by the update (status waking, booting the new floor); during a first boot (provisioning) the new scaling settings apply once it is serving",
             "content": {
               "application/json": {
                 "schema": {
@@ -1255,6 +1255,9 @@
           },
           "422": {
             "description": "Request body failed validation (immutable or unknown field)"
+          },
+          "429": {
+            "description": "ACTIVE_DEPLOYMENT_LIMIT: raising the replica count, or waking a parked deployment at its new floor, would exceed the workspace active-replica limit; nothing is saved"
           }
         },
         "security": [
@@ -7459,7 +7462,7 @@
       },
       "DeploymentUpdate": {
         "type": "object",
-        "description": "PATCH /v1/deployments/{id} — the mutable-field whitelist. Everything else on\na deployment (model, source, gpu, engine, provider) is immutable, matching\nevery surveyed platform (Fireworks/Baseten/K8s): changing those is a new\ndeployment. deny_unknown_fields makes an attempt to PATCH an immutable field\na validation error instead of a silent no-op.\n\nDesired-state semantics: the PATCH validates + persists the new bounds and\nreturns immediately (desired + observed); the reconciler's scaling pass\nconverges the replica fleet asynchronously.",
+        "description": "PATCH /v1/deployments/{id} — the mutable-field whitelist. Everything else on\na deployment (model, source, gpu, engine, provider) is immutable, matching\nevery surveyed platform (Fireworks/Baseten/K8s): changing those is a new\ndeployment. deny_unknown_fields makes an attempt to PATCH an immutable field\na validation error instead of a silent no-op.\n\nDesired-state semantics: the PATCH validates + persists the new bounds and\nreturns immediately (desired + observed); the reconciler's scaling pass\nconverges the replica fleet asynchronously. A scaled_to_zero deployment\nleft with min_replicas >= 1 is woken by the PATCH itself (cap-checked);\nduring a first boot the new bounds apply once the deployment serves.",
         "properties": {
           "num_replicas": {
             "type": [

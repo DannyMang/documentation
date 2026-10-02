@@ -178,7 +178,7 @@ With `--min-replicas 0`, a deployment idle past `--scale-to-zero-window` (defaul
 veri deployments wake dep_abc     # 202; no-op if already up
 ```
 
-Then poll `veri deployments get dep_abc` until it's `serving`. A wake (explicit or request-triggered) relaunches `min_replicas` boxes (at least one; the autoscaler grows the fleet again if traffic returns) and is subject to the workspace active-replica limit, like a create: with no headroom it returns `429` with code `ACTIVE_DEPLOYMENT_LIMIT` and the deployment stays parked, so stop or scale down something else first. Optionally set `--idle-delete-after N` to auto-stop a deployment that stays parked with no traffic for N days.
+Then poll `veri deployments get dep_abc` until it's `serving`. Raising the floor also wakes it: `veri deployments update dep_abc --min-replicas 1` on a parked deployment wakes it immediately. A wake (explicit, request-triggered, or from raising `--min-replicas`) relaunches `min_replicas` boxes (at least one; the autoscaler grows the fleet again if traffic returns) and is subject to the workspace active-replica limit, like a create: with no headroom it returns `429` with code `ACTIVE_DEPLOYMENT_LIMIT` and the deployment stays parked, so stop or scale down something else first. Optionally set `--idle-delete-after N` to auto-stop a deployment that stays parked with no traffic for N days.
 
 ### Change scaling on a live deployment
 
@@ -186,9 +186,14 @@ Then poll `veri deployments get dep_abc` until it's `serving`. A wake (explicit 
 veri deployments update dep_abc --replicas 4                    # fixed fleet of 4
 veri deployments update dep_abc --min-replicas 1 --max-replicas 6
 veri deployments update dep_abc --concurrency-target 4
+veri deployments update dep_abc --min-replicas 1                 # parked: wakes it now
 ```
 
 `update` returns immediately with the new desired state; the fleet converges in the background (watch the `replicas` column approach `desired/desired`). Model, GPU, and provider are immutable — recreate the deployment to change those.
+
+- **Parked (`scaled_to_zero`):** raising `--min-replicas` to 1 or more wakes the deployment immediately and boots the new floor, like `veri deployments wake`. It is checked against the workspace active-replica limit first: if the new floor does not fit, `update` fails with `429` (`ACTIVE_DEPLOYMENT_LIMIT`) and nothing changes. Other settings are saved and apply from the next wake.
+- **First boot (`provisioning`):** scaling changes apply once the deployment is serving; extra replicas launch after the first one serves. `update` prints a note saying so.
+- **`waking`:** no second wake; the new settings apply to the boot in progress, or once it serves.
 
 ### Session affinity
 
