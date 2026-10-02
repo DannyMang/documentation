@@ -1828,7 +1828,7 @@
           "Deployments"
         ],
         "summary": "Drain a replica",
-        "description": "Retire one replica of a serving deployment. Default mode shrinks the fleet by one (the drained box is not replaced); pass replace=true to recycle the box in place — the reconciler launches a replacement so capacity is unchanged. A replica already taking traffic finishes its in-flight requests before the box is terminated (bounded by the drain timeout); a replica still booting is cancelled outright.",
+        "description": "Retire one replica of a serving deployment. Default mode shrinks the fleet by one: the replica starts draining at once and is not replaced. replace=true swaps the replica without losing capacity, on any replica including the last one serving: a replacement is launched first, this replica keeps serving (replace_requested_at set) until the replacement serves, then it drains. Both boxes are billed during the overlap. If the replacement fails (crashes, misses its provisioning deadline, or finds no capacity) this replica keeps serving and GET .../replicas shows why in replace_error; it is not retried automatically. A draining replica finishes its in-flight requests before its box is terminated (bounded by the drain timeout); a replica still booting (queued/provisioning) is cancelled outright in either mode.",
         "operationId": "drain_replica",
         "parameters": [
           {
@@ -1852,7 +1852,7 @@
           {
             "name": "replace",
             "in": "query",
-            "description": "Recycle mode: retire this replica WITHOUT shrinking the fleet. The\ndesired count is untouched, so the reconciler launches a replacement\nbox (a draining replica no longer counts as live).",
+            "description": "Swap mode: retire this replica WITHOUT shrinking the fleet or losing\ncapacity. A replacement is launched first; this replica keeps serving\nuntil the replacement serves, then drains. Both boxes bill during the\noverlap.",
             "required": false,
             "schema": {
               "type": "boolean"
@@ -1861,7 +1861,7 @@
         ],
         "responses": {
           "202": {
-            "description": "Drain accepted; the replica is draining (or stopped, when it was still booting and was cancelled outright)",
+            "description": "Drain accepted. Default mode: the replica is draining (or stopped, when it was still booting and was cancelled outright). replace=true on a serving replica: it is still serving with replace_requested_at set, and drains once its replacement serves",
             "content": {
               "application/json": {
                 "schema": {
@@ -1874,7 +1874,10 @@
             "description": "Deployment or replica not found, or not owned by the caller"
           },
           "409": {
-            "description": "Deployment is not serving, the replica is already draining/stopped/failed, or the drain would shrink the fleet below its floor / drop the last serving replica (use replace=true)"
+            "description": "The deployment is not serving; the replica is loading, draining, stopped or failed; in default mode the drain would shrink the fleet below max(min_replicas, 1) or remove the last serving replica (use replace=true); or a replace is already in progress on this deployment"
+          },
+          "429": {
+            "description": "replace=true needs room for one extra replica under the workspace's active deployment replica limit (ACTIVE_DEPLOYMENT_LIMIT): drain without replace, or free capacity"
           }
         },
         "security": [
@@ -7087,6 +7090,28 @@
               "$ref": "#/components/schemas/GpuDeviceMetrics"
             },
             "description": "Per-GPU readings behind the aggregates above."
+          },
+          "replace_requested_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Set while a `drain?replace=true` is in flight for this replica: it keeps\nserving traffic until its replacement serves, then drains. Null when no\nreplace is in flight."
+          },
+          "replaces_replica_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "On a replacement box launched by `drain?replace=true`: the replica it\nreplaces. Cleared once it takes over; kept when it failed."
+          },
+          "replace_error": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Why the last `drain?replace=true` of this replica failed (the\nreplacement crashed, did not become ready within its provisioning\ndeadline, or could not launch). The replica kept serving; it is not\nretried automatically, so call the drain with replace=true again."
           }
         }
       },
@@ -9323,6 +9348,28 @@
                     "$ref": "#/components/schemas/GpuDeviceMetrics"
                   },
                   "description": "Per-GPU readings behind the aggregates above."
+                },
+                "replace_requested_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time",
+                  "description": "Set while a `drain?replace=true` is in flight for this replica: it keeps\nserving traffic until its replacement serves, then drains. Null when no\nreplace is in flight."
+                },
+                "replaces_replica_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "On a replacement box launched by `drain?replace=true`: the replica it\nreplaces. Cleared once it takes over; kept when it failed."
+                },
+                "replace_error": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Why the last `drain?replace=true` of this replica failed (the\nreplacement crashed, did not become ready within its provisioning\ndeadline, or could not launch). The replica kept serving; it is not\nretried automatically, so call the drain with replace=true again."
                 }
               }
             }
