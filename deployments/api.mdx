@@ -16,7 +16,7 @@ Reference for `/v1/deployments/*`. All endpoints require Bearer token auth (`Aut
 | `GET` | `/v1/deployments/{id}` | Get one |
 | `PATCH` | `/v1/deployments/{id}` | Update scaling settings (replica bounds, concurrency target, idle windows) |
 | `GET` | `/v1/deployments/{id}/replicas` | List the deployment's replicas |
-| `POST` | `/v1/deployments/{id}/replicas/{replica_id}/drain` | Retire one replica (scale in, or recycle with `replace=true`) |
+| `POST` | `/v1/deployments/{id}/replicas/{replica_id}/drain` | Retire one replica (scale in, or swap it with `replace=true`: launch first, drain second) |
 | `POST` | `/v1/deployments/{id}/wake` | Pre-warm a `scaled_to_zero` deployment (202, idempotent) |
 | `POST` | `/v1/deployments/{id}/stop` | Transition to `stopped` (permanent, idempotent) |
 | `POST` | `/v1/deployments/{id}/chat/completions` | OpenAI-compatible chat |
@@ -126,21 +126,35 @@ curl "https://api.veri.studio/v1/deployments/dep_abc/replicas" \
 
 ## POST /v1/deployments/{id}/replicas/{replica_id}/drain
 
-Retire one specific replica of a `serving` deployment. Returns `202` with the replica, now `draining` (or `stopped` when it was still booting and was cancelled outright). A replica already taking traffic finishes its in-flight requests before the box is terminated, bounded by the drain timeout.
+Retire one specific replica of a `serving` deployment. A replica taking traffic finishes its in-flight requests before its box is terminated (at least 60 seconds after its drain starts, at most 10 minutes). A replica still booting (`queued` or `provisioning`) has no traffic to protect and is cancelled outright in either mode.
 
 Two modes:
 
 | Mode | Effect |
 | --- | --- |
-| Default (scale in) | You pick the victim; the fleet's desired count shrinks by one and the drained box is not replaced. |
-| `?replace=true` (recycle) | The desired count is unchanged; the control plane launches a replacement box, so capacity is preserved. Use this to rotate out a misbehaving replica. |
+| Default (scale in) | You pick the victim. It starts draining at once, the fleet's desired count shrinks by one, and the drained box is not replaced. Returns `202` with the replica `draining` (or `stopped` when it was still booting). |
+| `?replace=true` (swap) | Launch first, drain second. The desired count is unchanged: a replacement box is launched while this replica keeps serving traffic, and this replica starts draining only once the replacement is `serving`. Works on any replica, including the last one serving traffic, so capacity never drops. Returns `202` with the replica still `serving` and `replace_requested_at` set (or `stopped` when it was still booting). Use this to rotate out a misbehaving replica. |
 
 ```bash
 curl -X POST "https://api.veri.studio/v1/deployments/dep_abc/replicas/rep_123/drain?replace=true" \
   -H "Authorization: Bearer vk_..."
 ```
 
-**Guards** (`409`): the deployment must be `serving`; the replica must not already be draining, stopped, or failed; and in default mode the drain may not shrink the fleet below `max(min_replicas, 1)` or retire the last replica actually serving traffic (use `replace=true` for those).
+**Following a replace.** In `GET /v1/deployments/{id}/replicas` the old replica shows `replace_requested_at`, and the replacement shows `replaces_replica_id` (the old replica's id) while it boots. When the replacement serves, the old replica becomes `draining` and both fields clear. Both boxes are billed during the overlap: the replacement's boot (typically 5 to 12 minutes) plus the old replica's drain. While a replace is in progress the fleet does not scale down; scale-up still happens.
+
+**If the replacement fails** (it crashes, it does not become ready within its provisioning deadline, or no capacity is available to launch it), the old replica keeps serving, the replace is cleared, and the reason is stored in `replace_error` on the old replica. It is not retried automatically: call the drain with `replace=true` again. A failed replacement does not count toward the deployment's self-heal (replacement) attempts, and it is billed only for the time it ran.
+
+**Errors:**
+
+| Status | When |
+| --- | --- |
+| `409` | The deployment is not `serving`. |
+| `409` | The replica is `loading` (its model is still loading; retry once it is `serving`), or it is already `draining`, `stopped` or `failed`. |
+| `409` | Default mode only: the drain would shrink the fleet below `max(min_replicas, 1)`, or the replica is the last one serving traffic. Use `replace=true`, or lower `min_replicas` first. |
+| `409` | `replace=true` while another replace on the same deployment is still in progress (one at a time per deployment). |
+| `429` | `replace=true` needs room for one extra replica under the workspace's active deployment replica limit (`ACTIVE_DEPLOYMENT_LIMIT`). Drain without `replace=true`, or free capacity (stop or scale down another deployment), then retry. |
+
+Drains of the same deployment are applied one at a time, so two concurrent default-mode drains cannot together remove the last replica serving traffic or go below the floor.
 
 While autoscaling is armed (`min_replicas < max_replicas`) the autoscaler may scale back up after a default-mode drain if load warrants it; that is expected. Lower `max_replicas` to hold a smaller fleet.
 

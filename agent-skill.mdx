@@ -291,10 +291,16 @@ Diagnostics: `veri deployments chat|metrics|requests|bench <id>`.
 
 `POST /v1/deployments/{id}/replicas/{replica_id}/drain` retires ONE replica gracefully: it
 stops receiving new requests immediately, then terminates once in-flight requests finish
-(minimum 60s, hard timeout 600s). Returns 202. Add `?replace=true` to recycle the box
-without shrinking the fleet — required when it is the last serving replica, or when
-draining would breach `min_replicas` (both are 409 otherwise). A draining replica is still
-billed until it terminates, so a drain can cost up to 10 extra minutes of box time.
+(minimum 60s, hard timeout 600s). Returns 202. Default mode shrinks the fleet by one; it is
+409 on the last serving replica or when it would breach `min_replicas`. Add `?replace=true`
+to swap the box without losing capacity: a replacement launches FIRST while this replica
+keeps serving (`replace_requested_at` set), and this replica drains only once the
+replacement serves. Both boxes bill during the overlap (one boot). If the replacement fails,
+the old replica keeps serving and `replace_error` says why (no automatic retry). One replace
+per deployment at a time (409 otherwise); 429 `ACTIVE_DEPLOYMENT_LIMIT` when the workspace
+has no room for the extra box. A `loading` replica cannot be drained (409). A draining
+replica is still billed until it terminates, so a drain can cost up to 10 extra minutes of
+box time.
 
 Docs: https://docs.veri.studio/deployments (params + sizing) · https://docs.veri.studio/deployments/openai-compat (interop) · https://docs.veri.studio/deployments/cost (billing states) · https://docs.veri.studio/cli/deployments (scaling)
 

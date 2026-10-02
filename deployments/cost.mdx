@@ -23,6 +23,8 @@ Charges accrue per minute while any replica is up. When you call `stop` (or a `m
 | `stopped` | No |
 | `failed` | No further charges. Any box that launched is settled up to the moment its GPU was freed; a deployment that never launched a box costs nothing |
 
+A replica swap (`drain?replace=true`) runs one extra box for its overlap: the replacement bills from its launch while the old replica keeps serving, and the old replica bills until its drain ends. A replacement that fails is billed only for the time it ran.
+
 Balance enforcement follows the same rule: when a parked deployment wakes, its spend counts from the new boot. Time spent parked is never charged and never counted against your balance.
 
 ## Avoiding idle bills
