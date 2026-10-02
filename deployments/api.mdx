@@ -97,6 +97,8 @@ Partial update of the scaling settings on a live deployment. Mutable fields: `nu
 
 Returns the updated deployment immediately with the new *desired* state; the control plane converges the replica fleet in the background. Compare `ready_replicas` (observed) against `num_replicas` (desired) to watch convergence.
 
+Turning scale-to-zero on (`min_replicas` to `0`), or changing `scale_to_zero_window_seconds`, starts a fresh idle window, so a deployment that has already been idle does not park right after the update.
+
 ```python
 dep = client.deployments.update(deployment_id, min_replicas=1, max_replicas=4)
 ```
