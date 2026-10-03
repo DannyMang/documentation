@@ -7553,7 +7553,7 @@
       },
       "DeploymentUpdate": {
         "type": "object",
-        "description": "PATCH /v1/deployments/{id} — the mutable-field whitelist. Everything else on\na deployment (model, source, gpu, engine, provider) is immutable, matching\nevery surveyed platform (Fireworks/Baseten/K8s): changing those is a new\ndeployment. deny_unknown_fields makes an attempt to PATCH an immutable field\na validation error instead of a silent no-op.\n\nDesired-state semantics: the PATCH validates + persists the new bounds and\nreturns immediately (desired + observed); the reconciler's scaling pass\nconverges the replica fleet asynchronously. A scaled_to_zero deployment\nleft with min_replicas >= 1 is woken by the PATCH itself (cap-checked);\nduring a first boot the new bounds apply once the deployment serves.",
+        "description": "PATCH /v1/deployments/{id} — the mutable-field whitelist. Everything else on\na deployment (model, source, gpu, engine, provider) is immutable, matching\nevery surveyed platform (Fireworks/Baseten/K8s): changing those is a new\ndeployment. deny_unknown_fields makes an attempt to PATCH an immutable field\na validation error instead of a silent no-op.\n\nDesired-state semantics: the PATCH validates + persists the new bounds and\nreturns immediately (desired + observed); the reconciler's scaling pass\nconverges the replica fleet asynchronously. A scaled_to_zero deployment\nleft with min_replicas >= 1 is woken by the PATCH itself (cap-checked);\nduring a first boot the new bounds apply once the deployment serves.\nAn omitted field keeps its stored value; only scale_to_zero_window_seconds\nand idle_delete_after_days read an explicit null as \"clear\".",
         "properties": {
           "num_replicas": {
             "type": [
@@ -7588,14 +7588,16 @@
               "integer",
               "null"
             ],
-            "format": "int32"
+            "format": "int32",
+            "description": "Idle seconds before a min_replicas = 0 deployment parks (minimum 300).\nOmit to keep the current value; null clears it back to the default\n(3600). Changing or clearing it while scale-to-zero is on starts a\nfresh idle window."
           },
           "idle_delete_after_days": {
             "type": [
               "integer",
               "null"
             ],
-            "format": "int32"
+            "format": "int32",
+            "description": "Days a deployment may stay parked with no traffic before it is\nauto-stopped (minimum 1). Omit to keep the current value; null clears\nit (never auto-stop)."
           },
           "self_heal_attempts": {
             "type": [

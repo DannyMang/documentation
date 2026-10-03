@@ -181,6 +181,8 @@ veri deployments wake dep_abc     # 202; no-op if already up
 
 Then poll `veri deployments get dep_abc` until it's `serving`. Raising the floor also wakes it: `veri deployments update dep_abc --min-replicas 1` on a parked deployment wakes it immediately. A wake (explicit, request-triggered, or from raising `--min-replicas`) relaunches `min_replicas` boxes (at least one; the autoscaler grows the fleet again if traffic returns) and is subject to the workspace active-replica limit, like a create: with no headroom it returns `429` with code `ACTIVE_DEPLOYMENT_LIMIT` and the deployment stays parked, so stop or scale down something else first. Optionally set `--idle-delete-after N` to auto-stop a deployment that stays parked with no traffic for N days.
 
+A wake that fails (for example no GPU capacity) puts the deployment back to `scaled_to_zero` with the reason in its `error`, and the next wake waits out a backoff (1 minute, doubling up to 1 hour). With `--min-replicas 0` the next request after the backoff retries it; with `--min-replicas 1` or more Veri retries the wake itself once the backoff has passed, so the floor comes back without traffic (and as soon as there is room if the workspace active-replica limit is full). `veri deployments wake` retries immediately.
+
 ### Change scaling on a live deployment
 
 ```bash
@@ -189,9 +191,11 @@ veri deployments update dep_abc --min-replicas 1 --max-replicas 6
 veri deployments update dep_abc --concurrency-target 4
 veri deployments update dep_abc --min-replicas 1                 # parked: wakes it now
 veri deployments update dep_abc --self-heal-attempts 5           # replace a lost last box up to 5 times
+veri deployments update dep_abc --clear-scale-to-zero-window     # idle window back to the default (3600s)
+veri deployments update dep_abc --clear-idle-delete-after        # never auto-stop while parked
 ```
 
-`update` returns immediately with the new desired state; the fleet converges in the background (watch the `replicas` column approach `desired/desired`). Model, GPU, and provider are immutable — recreate the deployment to change those.
+`update` returns immediately with the new desired state; the fleet converges in the background (watch the `replicas` column approach `desired/desired`). Model, GPU, and provider are immutable: recreate the deployment to change those. A flag you leave out keeps its current setting; `--clear-scale-to-zero-window` and `--clear-idle-delete-after` put those two settings back to their defaults (each cannot be combined with its value flag). Clearing the window on a `--min-replicas 0` deployment starts a fresh idle window, like changing it.
 
 - **Parked (`scaled_to_zero`):** raising `--min-replicas` to 1 or more wakes the deployment immediately and boots the new floor, like `veri deployments wake`. It is checked against the workspace active-replica limit first: if the new floor does not fit, `update` fails with `429` (`ACTIVE_DEPLOYMENT_LIMIT`) and nothing changes. Other settings are saved and apply from the next wake.
 - **First boot (`provisioning`):** scaling changes apply once the deployment is serving; extra replicas launch after the first one serves. `update` prints a note saying so.
