@@ -7462,6 +7462,27 @@
             ],
             "description": "Machine-readable reason for the last failure, e.g. `watchdog_timeout`,\n`CAPACITY_UNAVAILABLE`, `replica_lost` (the last GPU box was lost\nafter serving: while 'provisioning' Veri is replacing it, with\n'failed' or 'scaled_to_zero' self_heal_attempts was used up or 0), or\nthe serving agent's `oom` / `model_source_unsupported`. Null when no\nfailure is recorded; cleared with `error` on park and wake."
           },
+          "last_wake_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When the most recent wake of this scale-to-zero deployment started: a\nchat request to the parked deployment, `POST /wake`, or a PATCH that\nleft a parked deployment with `min_replicas` >= 1. Kept after the\nwake serves or the deployment parks again. Null if it never woke."
+          },
+          "wake_failure_count": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Consecutive failed wake boots since the deployment last reached\nserving (0 when the last boot served). A failed wake re-parks the\ndeployment (`scaled_to_zero`, still wakeable) and adds 1; reaching\nserving resets it to 0. Starting a new wake does not reset it."
+          },
+          "next_wake_not_before": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "After a failed wake: the earliest time a chat request triggers the\nnext wake (backoff of 60s doubling per consecutive failure, up to 1h).\n`POST /wake` and a PATCH that raises `min_replicas` to 1 or more\nbypass it. Null until a wake fails; cleared when a wake reaches\nserving. A time in the past means the backoff has elapsed."
+          },
           "started_at": {
             "type": [
               "string",
@@ -9770,6 +9791,27 @@
                     "null"
                   ],
                   "description": "Machine-readable reason for the last failure, e.g. `watchdog_timeout`,\n`CAPACITY_UNAVAILABLE`, `replica_lost` (the last GPU box was lost\nafter serving: while 'provisioning' Veri is replacing it, with\n'failed' or 'scaled_to_zero' self_heal_attempts was used up or 0), or\nthe serving agent's `oom` / `model_source_unsupported`. Null when no\nfailure is recorded; cleared with `error` on park and wake."
+                },
+                "last_wake_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time",
+                  "description": "When the most recent wake of this scale-to-zero deployment started: a\nchat request to the parked deployment, `POST /wake`, or a PATCH that\nleft a parked deployment with `min_replicas` >= 1. Kept after the\nwake serves or the deployment parks again. Null if it never woke."
+                },
+                "wake_failure_count": {
+                  "type": "integer",
+                  "format": "int32",
+                  "description": "Consecutive failed wake boots since the deployment last reached\nserving (0 when the last boot served). A failed wake re-parks the\ndeployment (`scaled_to_zero`, still wakeable) and adds 1; reaching\nserving resets it to 0. Starting a new wake does not reset it."
+                },
+                "next_wake_not_before": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time",
+                  "description": "After a failed wake: the earliest time a chat request triggers the\nnext wake (backoff of 60s doubling per consecutive failure, up to 1h).\n`POST /wake` and a PATCH that raises `min_replicas` to 1 or more\nbypass it. Null until a wake fails; cleared when a wake reaches\nserving. A time in the past means the backoff has elapsed."
                 },
                 "started_at": {
                   "type": [

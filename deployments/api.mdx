@@ -67,6 +67,9 @@ Create a deployment from a base HF model or a completed training job.
   "error": null,
   "failure_code": null,
   "self_heal_attempts": 3,
+  "last_wake_at": null,
+  "wake_failure_count": 0,
+  "next_wake_not_before": null,
   "started_at": null,
   "stopped_at": null,
   "created_at": "2026-05-12T...",
@@ -79,6 +82,14 @@ Create a deployment from a base HF model or a completed training job.
 When a deployment fails, `error` holds the human-readable message and `failure_code` a stable, machine-readable reason you can branch on, for example `watchdog_timeout`, `CAPACITY_UNAVAILABLE`, `oom`, `model_source_unsupported`, or `replica_lost`. Both are `null` while nothing has failed, and both clear when a parked deployment wakes.
 
 `replica_lost` means the deployment lost its last GPU box after it had served. While `status` is `provisioning`, Veri is replacing the box ([Self-healing](/deployments#self-healing)) and the code clears once a replacement serves; with `failed` (or `scaled_to_zero` for a `min_replicas: 0` deployment) the `self_heal_attempts` budget was used up or set to `0`.
+
+Three fields report the wake state of a [scale-to-zero](#waking-from-zero) deployment:
+
+| Field | Meaning |
+| --- | --- |
+| `last_wake_at` | When the most recent wake started: a chat request to the parked deployment, `POST /wake`, or a PATCH that left it with `min_replicas` of 1 or more. Kept after the wake serves and after the deployment parks again; `null` if it never woke. |
+| `wake_failure_count` | Failed wake boots in a row since the deployment last reached `serving`. `0` when the last boot served; it resets to `0` when a wake reaches `serving`, not when a new wake starts. |
+| `next_wake_not_before` | Set after a failed wake: the earliest time a chat request starts the next wake. `POST /wake` and a PATCH that raises `min_replicas` to 1 or more do not wait for it. `null` until a wake fails, and cleared when a wake reaches `serving`; a time in the past means the backoff is over. |
 
 ## GET /v1/deployments
 
@@ -234,6 +245,10 @@ response = client.deployments.chat(
     timeout_s=120,                      # HTTP timeout for this call (long non-streaming answers)
 )
 ```
+
+The same `503` `deployment_waking` answers every request while the deployment boots without a serving replica: a first boot (`queued`, `provisioning`), a wake (`waking`, then `provisioning`), and a [self-healing](/deployments#self-healing) replacement of a lost last box (`provisioning` with `failure_code: replica_lost`). The `Retry-After` is `30` seconds.
+
+**If a wake fails** (no GPU capacity, or the box fails or does not become ready within the boot deadline), the deployment parks again (`scaled_to_zero`, still wakeable), `error` holds the cause, `wake_failure_count` goes up by one and `next_wake_not_before` is set. Until that time a chat request does not start another wake: it gets `503` `deployment_waking` with `Retry-After` set to the seconds left and the cause in the message. The wait starts at 60 seconds and doubles with each failed wake in a row, up to 1 hour. `POST /wake`, or a PATCH that raises `min_replicas` to 1 or more, retries at once. Both fields reset when a wake reaches `serving`.
 
 ### Upstream unavailable
 

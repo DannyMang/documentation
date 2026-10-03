@@ -268,6 +268,12 @@ veri deployments get dep_abc                        # one deployment, with its s
 
 A deployment can hold a GPU while `provisioning`, `serving`, or `waking`, so to catch everything holding one, list without `--status` and scan the `status` column.
 
+With `--format json`, `get` also returns the wake state of a scale-to-zero deployment: `last_wake_at`, `wake_failure_count` and `next_wake_not_before` (see [the deployment object](/deployments/api#post-v1deployments)). When wakes have been failing, the table output adds a line under the table:
+
+```text
+Wake: 2 failed wake boots in a row (last wake started 2026-10-03T10:00:00Z); a request wakes it again from 2026-10-03T10:04:00Z, `veri deployments wake dep_abc` retries now.
+```
+
 ## Exit codes
 
 | Code | Meaning |
