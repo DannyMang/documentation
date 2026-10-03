@@ -41,7 +41,7 @@ job = client.training_jobs.create(
         "num_epochs": 1,  # full pass over GSM8K (~7.5K rows)
     },
     gpu_type="H100-80GB",
-    gpu_count=2,
+    gpu_count=8,  # on AWS, H100 comes as a whole 8-GPU node
 )
 
 job.wait(poll_interval=30)
@@ -61,7 +61,7 @@ dep = client.deployments.create(
     model=job.id,
     source="training_job",
     name="qwen-7b-gsm8k",
-    gpu={"gpu_type": "H100-80GB", "gpu_count": 1},
+    gpu={"gpu_type": "L4-24GB", "gpu_count": 1},
 )
 dep.wait()
 ```
@@ -120,7 +120,7 @@ job = client.training_jobs.create(
     output_name="qwen-0.5b-multi-signal",
     method="grpo",
     hyperparameters={"max_steps": 100},
-    gpu_type="A100-80GB",
+    gpu_type="L4-24GB",
     gpu_count=1,
 )
 ```
@@ -149,7 +149,7 @@ job = client.training_jobs.create(
         "gradient_accumulation_steps": 4,
     },
     gpu_type="A100-80GB",   # video gen requires 80GB; A100-40GB rejected
-    gpu_count=1,
+    gpu_count=8,            # on AWS, A100 comes as a whole 8-GPU node
 )
 
 job.wait(poll_interval=60)

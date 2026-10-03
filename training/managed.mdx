@@ -32,7 +32,7 @@ stateDiagram-v2
     [*] --> queued
     queued --> provisioning : reconciler picks up
     provisioning --> running : worker deployed, first step ran
-    provisioning --> failed : capacity_unavailable (no GPU capacity in any zone)
+    provisioning --> failed : CAPACITY_UNAVAILABLE (no GPU capacity in any zone)
     provisioning --> failed : provisioning_error (worker failed to come up)
     running --> completed : reached max_steps or num_epochs
     running --> failed : OOM / dependency / timeout / network

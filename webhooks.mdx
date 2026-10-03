@@ -73,6 +73,7 @@ For `deployment.failed`, the deployment's `failure_code` says why, as a stable v
 | `all_replicas_failed` | Every replica of a deployment that never served failed. |
 | `replica_lost` | The deployment lost its last GPU box after serving and [self-healing](/deployments#self-healing) was used up (`self_heal_attempts` replacements failed) or off (`0`). |
 | `insufficient_credits` | The workspace ran out of credits. |
+| `workspace_empty`, `workspace_deleted` | The workspace lost its last member, or was deleted, so its running work was stopped. |
 | `oom`, `vllm_exited`, ... | The serving engine's own classified failure, reported by the box. |
 
 ## Verifying deliveries

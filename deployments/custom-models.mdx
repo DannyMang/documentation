@@ -55,7 +55,7 @@ dep = client.deployments.create(
     source="huggingface",
     cache=True,
     name="qwen-prod",
-    gpu={"gpu_type": "A100-80GB", "gpu_count": 1},
+    gpu={"gpu_type": "L4-24GB", "gpu_count": 1},
 )
 ```
 
@@ -95,13 +95,13 @@ Once a model is `ready`, deploy it by ID with `source="custom_model"`. Custom mo
 dep = client.deployments.create_from_model(
     "<your-model-id>",
     name="support-prod",
-    gpu={"gpu_type": "A100-80GB", "gpu_count": 1},
+    gpu={"gpu_type": "L4-24GB", "gpu_count": 1},
 )
 ```
 
 ```bash
 veri deployments create --from-model <your-model-id> \
-  --name support-prod --gpu-type A100-80GB --gpu-count 1
+  --name support-prod --gpu-type L4-24GB --gpu-count 1
 ```
 
 The deployment records both the saved model and its source checkpoint, so you can always trace what a running endpoint is serving. Because the checkpoint location is captured when the deployment is created, later renaming or removing the model from your library does not affect a running deployment.

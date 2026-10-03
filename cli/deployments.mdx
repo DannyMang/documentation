@@ -22,7 +22,7 @@ In a terminal, it asks whether to cache the model in Veri storage for faster sta
 | Flag | Purpose |
 | --- | --- |
 | `--name` | Endpoint name. Default: derived from the repo name (`qwen3-4b`). |
-| `--gpu-type` | GPU shape. Default `A100-80GB`. |
+| `--gpu-type` | GPU shape. Default `L4-24GB`. |
 | `--gpu-count` | GPUs per replica. Default `1`. |
 | `--engine` | `vllm` (the default and only serving engine). |
 | `--replicas` | GPU-box replicas behind the endpoint. Default `1`. |
@@ -79,21 +79,21 @@ Two mutually exclusive modes — deploy a training job's output, or deploy a Hug
 veri deployments create \
   --model job_abc \
   --name my-endpoint \
-  --gpu-type A100-80GB \
+  --gpu-type L4-24GB \
   --gpu-count 1
 
 # From a saved model in your library:
 veri deployments create \
   --from-model mdl_abc \
   --name support-prod \
-  --gpu-type A100-80GB \
+  --gpu-type L4-24GB \
   --gpu-count 1
 
 # Directly from HuggingFace (no training):
 veri deployments create \
   --from-hf Qwen/Qwen3-4B \
   --name qwen-prod \
-  --gpu-type A100-80GB \
+  --gpu-type L4-24GB \
   --gpu-count 1
 ```
 
@@ -165,7 +165,7 @@ veri deployments create \
   --scale-to-zero-window 1800
 ```
 
-The deployment reports `serving` once at least one replica is up. `list` and `get` show the fleet as `ready/desired` (for example `2/3` while a scale-up is still provisioning). A replica that dies is replaced automatically; the deployment keeps serving at reduced capacity in the meantime. If the last box dies, the deployment shows `provisioning` (with `failure_code` `replica_lost`) while Veri replaces it, up to `--self-heal-attempts` times; see [Self-healing](/deployments#self-healing).
+The deployment reports `serving` once at least one replica is up. `list` and `get` show the fleet as `ready/desired` (for example `2/3` while a scale-up is still provisioning). When some replicas of a fleet die, the deployment keeps serving on the rest at reduced capacity while Veri launches replacements; replacements back off (the first at once, then 10, 20, 40 and 80 seconds after the previous) and pause after 5 in a row until you `update` the deployment. If the last box dies after the deployment has served, it shows `provisioning` (with `failure_code` `replica_lost`) while Veri replaces it, up to `--self-heal-attempts` times (default 3); once those are used up, a `--min-replicas 0` deployment parks and any other deployment fails. See [Self-healing](/deployments#self-healing).
 
 ### Autoscaling
 
@@ -266,7 +266,7 @@ veri deployments get dep_abc                        # one deployment, with its s
 | `--limit` | Maximum number to return. Default `20`. |
 | `--after <id>` | Pagination cursor: return deployments created after this ID. |
 
-A deployment can hold a GPU while `provisioning`, `serving`, or `waking`, so to catch everything holding one, list without `--status` and scan the `status` column.
+A deployment holds GPU boxes while it is `provisioning` or `serving`. A `queued` or `waking` deployment moves to `provisioning` as soon as its first box launches, and a `scaled_to_zero` one holds none. To catch everything holding or about to hold a GPU, list without `--status` and scan the `status` column.
 
 With `--format json`, `get` also returns the wake state of a scale-to-zero deployment: `last_wake_at`, `wake_failure_count` and `next_wake_not_before` (see [the deployment object](/deployments/api#post-v1deployments)). When wakes have been failing, the table output adds a line under the table:
 

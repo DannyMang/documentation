@@ -172,11 +172,11 @@ kind = "deploy"
 
 [deployment]
 name = "my-endpoint"
-model = "job_abc"           # training job id, or HF repo
-source = "training_job"     # training_job | huggingface
+model = "job_abc"           # training job id, HF repo, or saved model id
+source = "training_job"     # training_job | huggingface | custom_model
 
 [resources]
-gpu_type = "A100-80GB"
+gpu_type = "L4-24GB"
 gpu_count = 1               # GPUs per replica
 
 [autoscaling]
@@ -188,7 +188,7 @@ max_replicas = 1            # 1-8; above min_replicas enables autoscaling
 ```
 
 <Note>
-  `[autoscaling]` accepts exactly `min_replicas`, `max_replicas`, `concurrency_target`, `scale_to_zero_window_seconds`, and `idle_delete_after_days`; any other key (for example `target_qps`) is rejected. The same five keys are also accepted under `[resources]`, which is where the `veri deployments create` scaling flags (`--min-replicas`, `--max-replicas`, and friends) land. Setting a key in both tables with different values is an error: set it in one place.
+  `[autoscaling]` accepts exactly `min_replicas`, `max_replicas`, `concurrency_target`, `scale_to_zero_window_seconds`, `idle_delete_after_days`, and `self_heal_attempts`; any other key (for example `target_qps`) is rejected. The same six keys are also accepted under `[resources]`, which is where the `veri deployments create` scaling flags (`--min-replicas`, `--max-replicas`, and friends) land. Setting a key in both tables with different values is an error: set it in one place.
 </Note>
 
 ## `--dry-run` before submitting

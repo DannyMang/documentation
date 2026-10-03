@@ -1108,8 +1108,8 @@
           "required": true
         },
         "responses": {
-          "200": {
-            "description": "The created deployment",
+          "201": {
+            "description": "The created deployment, status queued; the GPU boxes launch after the request returns",
             "content": {
               "application/json": {
                 "schema": {
@@ -1118,8 +1118,26 @@
               }
             }
           },
+          "400": {
+            "description": "Invalid request: unknown source or engine, an unknown or not yet available provider, a (provider, gpu_type, gpu_count) shape the provider does not sell for serving, invalid replica bounds or scaling values, rejected vllm_extra_args or vllm_image, an unpriced shape, or a training job that is not completed"
+          },
+          "402": {
+            "description": "No billing account is linked to this workspace yet"
+          },
+          "404": {
+            "description": "The training job or saved model was not found in this workspace"
+          },
+          "409": {
+            "description": "The saved model (source custom_model) is not ready yet"
+          },
           "422": {
             "description": "Request body failed validation"
+          },
+          "429": {
+            "description": "ACTIVE_DEPLOYMENT_LIMIT: the new replicas would exceed the workspace's active deployment replica limit"
+          },
+          "503": {
+            "description": "billing_unavailable: the workspace's billing account could not be checked; retry after Retry-After"
           }
         },
         "security": [
@@ -1569,11 +1587,20 @@
               }
             }
           },
+          "400": {
+            "description": "The deployment is stopped or failed, the X-Veri-Thread-Id header is invalid, or the model server rejected the request with a 4xx other than 429"
+          },
           "404": {
             "description": "Not found or not owned by the caller"
           },
+          "413": {
+            "description": "Request body larger than 8 MiB"
+          },
           "422": {
             "description": "Request body failed validation"
+          },
+          "429": {
+            "description": "ACTIVE_DEPLOYMENT_LIMIT: the request would wake a scaled_to_zero deployment but the workspace's active deployment replica limit has no room, or the request rate limit was exceeded"
           },
           "503": {
             "description": "Deployment waking, no serving replica yet, or the serving replica failed to answer; retry after Retry-After (error.code deployment_waking | upstream_unavailable)"
@@ -2187,6 +2214,9 @@
           },
           "404": {
             "description": "Not found or not owned by the caller"
+          },
+          "429": {
+            "description": "ACTIVE_DEPLOYMENT_LIMIT: the workspace's active deployment replica limit has no room for the wake; the deployment stays scaled_to_zero"
           }
         },
         "security": [
@@ -6389,10 +6419,12 @@
         ],
         "properties": {
           "model": {
-            "type": "string"
+            "type": "string",
+            "description": "What to serve: a completed training job id (source training_job), a\nHugging Face repo id (huggingface), or a saved model id (custom_model)."
           },
           "source": {
-            "type": "string"
+            "type": "string",
+            "description": "Where `model` comes from: \"training_job\" (the default),\n\"huggingface\" or \"custom_model\"."
           },
           "name": {
             "type": "string"
@@ -6442,7 +6474,7 @@
               "null"
             ],
             "format": "double",
-            "description": "Per-replica concurrency setpoint the (VS-342) autoscaler targets:\ndesired = ceil(total_ongoing / concurrency_target), clamped to\n[min_replicas, max_replicas]. Stored as target_ongoing_requests.\nOmitted => 8 (throughput-biased; lower it for latency-sensitive chat)."
+            "description": "Per-replica concurrency setpoint the (VS-342) autoscaler targets:\ndesired = ceil(total_ongoing / concurrency_target), clamped to\n[max(min_replicas, 1), max_replicas]. Stored as target_ongoing_requests.\nOmitted => 8 (throughput-biased; lower it for latency-sensitive chat)."
           },
           "scale_to_zero_window_seconds": {
             "type": [
@@ -7317,7 +7349,7 @@
               "string",
               "null"
             ],
-            "description": "The URL to call once the deployment serves. Managed deployments\n(aws, gcp, digitalocean) get the platform chat URL\n`{api}/v1/deployments/{id}/chat/completions`, authenticated with your\nVeri API key; BYOC (huggingface) deployments carry the endpoint URL\nunder your own HF account. Null until the deployment is serving."
+            "description": "The URL to call once the deployment serves. Managed deployments\n(aws, gcp, digitalocean) get the platform chat URL\n`{api}/v1/deployments/{id}/chat/completions`, authenticated with your\nVeri API key; BYOC (huggingface) deployments carry the endpoint URL\nunder your own HF account. Null until the deployment first serves, and\nnull while it is parked (scaled_to_zero) until a wake serves again; it\nstays set after stop or failure."
           },
           "gpu": {
             "oneOf": [
@@ -7460,7 +7492,7 @@
               "string",
               "null"
             ],
-            "description": "Machine-readable reason for the last failure, e.g. `watchdog_timeout`,\n`CAPACITY_UNAVAILABLE`, `replica_lost` (the last GPU box was lost\nafter serving: while 'provisioning' Veri is replacing it, with\n'failed' or 'scaled_to_zero' self_heal_attempts was used up or 0), or\nthe serving agent's `oom` / `model_source_unsupported`. Null when no\nfailure is recorded; cleared with `error` on park and wake."
+            "description": "Machine-readable reason for the last failure, e.g. `watchdog_timeout`,\n`CAPACITY_UNAVAILABLE`, `replica_lost` (the last GPU box was lost\nafter serving: while 'provisioning' Veri is replacing it, with\n'failed' or 'scaled_to_zero' self_heal_attempts was used up or 0), or\nthe serving agent's `oom` / `model_source_unsupported`. Null when no\nfailure is recorded; cleared with `error` on an idle park and on wake.\nA failed wake re-parks with its code (e.g. `wake_boot_failed`)."
           },
           "last_wake_at": {
             "type": [
@@ -9647,7 +9679,7 @@
                     "string",
                     "null"
                   ],
-                  "description": "The URL to call once the deployment serves. Managed deployments\n(aws, gcp, digitalocean) get the platform chat URL\n`{api}/v1/deployments/{id}/chat/completions`, authenticated with your\nVeri API key; BYOC (huggingface) deployments carry the endpoint URL\nunder your own HF account. Null until the deployment is serving."
+                  "description": "The URL to call once the deployment serves. Managed deployments\n(aws, gcp, digitalocean) get the platform chat URL\n`{api}/v1/deployments/{id}/chat/completions`, authenticated with your\nVeri API key; BYOC (huggingface) deployments carry the endpoint URL\nunder your own HF account. Null until the deployment first serves, and\nnull while it is parked (scaled_to_zero) until a wake serves again; it\nstays set after stop or failure."
                 },
                 "gpu": {
                   "oneOf": [
@@ -9790,7 +9822,7 @@
                     "string",
                     "null"
                   ],
-                  "description": "Machine-readable reason for the last failure, e.g. `watchdog_timeout`,\n`CAPACITY_UNAVAILABLE`, `replica_lost` (the last GPU box was lost\nafter serving: while 'provisioning' Veri is replacing it, with\n'failed' or 'scaled_to_zero' self_heal_attempts was used up or 0), or\nthe serving agent's `oom` / `model_source_unsupported`. Null when no\nfailure is recorded; cleared with `error` on park and wake."
+                  "description": "Machine-readable reason for the last failure, e.g. `watchdog_timeout`,\n`CAPACITY_UNAVAILABLE`, `replica_lost` (the last GPU box was lost\nafter serving: while 'provisioning' Veri is replacing it, with\n'failed' or 'scaled_to_zero' self_heal_attempts was used up or 0), or\nthe serving agent's `oom` / `model_source_unsupported`. Null when no\nfailure is recorded; cleared with `error` on an idle park and on wake.\nA failed wake re-parks with its code (e.g. `wake_boot_failed`)."
                 },
                 "last_wake_at": {
                   "type": [

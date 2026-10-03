@@ -11,8 +11,8 @@ AWS is the default serving provider — omit the `provider` field to use it.
 
 | `gpu_type` | Memory | GPUs per node | Good for |
 | --- | --- | --- | --- |
-| `L4-24GB` | 24 GB | 1 | Small models (≤3B), cost-sensitive endpoints |
-| `A10G-24GB` | 24 GB | 1 | Same tier as L4, Ampere |
+| `L4-24GB` | 24 GB | 1 or 4 | Small models (≤4B) on one GPU, larger ones with tensor parallel on 4; cost-sensitive endpoints |
+| `A10G-24GB` | 24 GB | 1 or 4 | Same tier as L4, Ampere |
 | `A100-80GB` | 80 GB | 8 (whole node) | Large models with tensor parallel |
 | `H100-80GB` | 80 GB | 8 (whole node) | Fastest per-request latency, TP up to 8 |
 
