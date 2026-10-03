@@ -30,8 +30,8 @@ Omit `event_types` (or pass `[]`) to subscribe to all event types. Endpoint URLs
 | Event | Fires when |
 | --- | --- |
 | `deployment.serving` | A deployment becomes ready to serve requests. Fires on the initial boot **and again after every wake from scale-to-zero** (and after a recovery that passed through a non-serving state). It does not fire on steady-state heartbeats: an already-serving deployment re-reporting healthy emits nothing. |
-| `deployment.failed` | A deployment fails terminally (boot failure, capacity exhaustion, watchdog reap, all replicas dead). A failed wake attempt is not terminal and does not fire this event; the deployment stays wakeable. |
-| `deployment.scaled_to_zero` | An idle deployment with `min_replicas: 0` is parked. The deployment wakes on the next request. |
+| `deployment.failed` | A deployment fails terminally (boot failure, capacity exhaustion, watchdog reap, all replicas dead, or its last GPU box lost with [self-healing](/deployments#self-healing) used up or off). A failed wake attempt is not terminal and does not fire this event; the deployment stays wakeable. |
+| `deployment.scaled_to_zero` | An idle deployment with `min_replicas: 0` is parked, or a `min_replicas: 0` deployment lost its last GPU box with self-healing used up or off (`failure_code: replica_lost`). The deployment wakes on the next request. |
 | `job.completed` | A training job finishes successfully. |
 | `job.failed` | A training job fails (worker error, provisioning failure, timeout watchdogs, cancellation is not included). |
 | `dataset.rows_appended` | Rows land on a [dataset stream](/training/dataset-streams). One event per append batch, never per row. |
@@ -63,6 +63,17 @@ Deliveries are `POST` requests with `Content-Type: application/json` and a delib
 Job events use `"object": "job"` and carry `"model"` (the base model for managed jobs, `null` for custom-script jobs) instead of `"name"`.
 
 Fetch the full resource (`GET /v1/deployments/{id}`, `GET /v1/training_jobs/{id}`) when you need more than the transition itself.
+
+For `deployment.failed`, the deployment's `failure_code` says why, as a stable value you can branch on:
+
+| `failure_code` | Meaning |
+| --- | --- |
+| `watchdog_timeout` | The first boot never became healthy, or a backstop watchdog reaped a box that stopped reporting. |
+| `CAPACITY_UNAVAILABLE` | No GPU capacity for the shape at launch. |
+| `all_replicas_failed` | Every replica of a deployment that never served failed. |
+| `replica_lost` | The deployment lost its last GPU box after serving and [self-healing](/deployments#self-healing) was used up (`self_heal_attempts` replacements failed) or off (`0`). |
+| `insufficient_credits` | The workspace ran out of credits. |
+| `oom`, `vllm_exited`, ... | The serving engine's own classified failure, reported by the box. |
 
 ## Verifying deliveries
 

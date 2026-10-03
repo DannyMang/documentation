@@ -6460,6 +6460,14 @@
             "format": "int32",
             "description": "VS-313: optional GC — a deployment parked at zero with no traffic for\nthis many days goes terminal (stopped). Omitted => kept forever."
           },
+          "self_heal_attempts": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "How many times Veri replaces the GPU box when the deployment's\nLAST box dies after it has served (crash or host failure), 0..=5.\nReplacements go out 0, 10, 20, 40 and 80s after the previous launch.\nUsed up (or 0): a min_replicas >= 1 deployment goes 'failed' with\nfailure_code `replica_lost`, a min_replicas = 0 one parks. Losing some\nboxes of a multi-replica fleet is not governed by this. Omitted => 3."
+          },
           "cache": {
             "type": [
               "boolean",
@@ -7418,6 +7426,11 @@
             "format": "int32",
             "description": "VS-313: parked-deployment GC in days (None = kept forever)."
           },
+          "self_heal_attempts": {
+            "type": "integer",
+            "format": "int32",
+            "description": "How many times Veri replaces the GPU box when the deployment's\nlast box dies after it has served, 0..=5 (default 3)."
+          },
           "cost_per_hour_usd": {
             "type": [
               "number",
@@ -7447,7 +7460,7 @@
               "string",
               "null"
             ],
-            "description": "Machine-readable reason for the last failure, e.g. `watchdog_timeout`,\n`capacity_unavailable`, or the serving agent's `oom` /\n`model_source_unsupported`. Null when no failure is recorded; cleared\nwith `error` on park and wake."
+            "description": "Machine-readable reason for the last failure, e.g. `watchdog_timeout`,\n`CAPACITY_UNAVAILABLE`, `replica_lost` (the last GPU box was lost\nafter serving: while 'provisioning' Veri is replacing it, with\n'failed' or 'scaled_to_zero' self_heal_attempts was used up or 0), or\nthe serving agent's `oom` / `model_source_unsupported`. Null when no\nfailure is recorded; cleared with `error` on park and wake."
           },
           "started_at": {
             "type": [
@@ -7530,6 +7543,14 @@
               "null"
             ],
             "format": "int32"
+          },
+          "self_heal_attempts": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Replacements of a lost last GPU box, 0..=5. Any PATCH also\nrestarts the replacement budget."
           }
         },
         "additionalProperties": false
@@ -9714,6 +9735,11 @@
                   "format": "int32",
                   "description": "VS-313: parked-deployment GC in days (None = kept forever)."
                 },
+                "self_heal_attempts": {
+                  "type": "integer",
+                  "format": "int32",
+                  "description": "How many times Veri replaces the GPU box when the deployment's\nlast box dies after it has served, 0..=5 (default 3)."
+                },
                 "cost_per_hour_usd": {
                   "type": [
                     "number",
@@ -9743,7 +9769,7 @@
                     "string",
                     "null"
                   ],
-                  "description": "Machine-readable reason for the last failure, e.g. `watchdog_timeout`,\n`capacity_unavailable`, or the serving agent's `oom` /\n`model_source_unsupported`. Null when no failure is recorded; cleared\nwith `error` on park and wake."
+                  "description": "Machine-readable reason for the last failure, e.g. `watchdog_timeout`,\n`CAPACITY_UNAVAILABLE`, `replica_lost` (the last GPU box was lost\nafter serving: while 'provisioning' Veri is replacing it, with\n'failed' or 'scaled_to_zero' self_heal_attempts was used up or 0), or\nthe serving agent's `oom` / `model_source_unsupported`. Null when no\nfailure is recorded; cleared with `error` on park and wake."
                 },
                 "started_at": {
                   "type": [

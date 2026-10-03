@@ -46,6 +46,7 @@ Create a deployment from a base HF model or a completed training job.
 | `name` | yes | Human label; appears in dashboard + as the OpenAI `model` field default |
 | `gpu` | yes | `{"gpu_type": "...", "gpu_count": 1-8}` |
 | `provider` | no | Defaults to `aws` (the only serving provider today) |
+| `self_heal_attempts` | no | `0` to `5`, default `3`: how many times Veri replaces the GPU box when the deployment's last box dies after it has served. See [Self-healing](/deployments#self-healing). |
 
 **Validation:** When `source=training_job`, the job must exist, belong to you, and be `completed`. Otherwise `404` or `400`.
 
@@ -65,6 +66,7 @@ Create a deployment from a base HF model or a completed training job.
   "total_requests": 0,
   "error": null,
   "failure_code": null,
+  "self_heal_attempts": 3,
   "started_at": null,
   "stopped_at": null,
   "created_at": "2026-05-12T...",
@@ -74,7 +76,9 @@ Create a deployment from a base HF model or a completed training job.
 
 `endpoint_url` populates when status reaches `serving`: for managed deployments it is `https://api.veri.studio/v1/deployments/{id}/chat/completions` (call it with your Veri API key); for BYOC `huggingface` deployments it is the endpoint under your own Hugging Face account.
 
-When a deployment fails, `error` holds the human-readable message and `failure_code` a stable, machine-readable reason you can branch on, for example `watchdog_timeout`, `capacity_unavailable`, `oom`, or `model_source_unsupported`. Both are `null` while nothing has failed, and both clear when a parked deployment wakes.
+When a deployment fails, `error` holds the human-readable message and `failure_code` a stable, machine-readable reason you can branch on, for example `watchdog_timeout`, `CAPACITY_UNAVAILABLE`, `oom`, `model_source_unsupported`, or `replica_lost`. Both are `null` while nothing has failed, and both clear when a parked deployment wakes.
+
+`replica_lost` means the deployment lost its last GPU box after it had served. While `status` is `provisioning`, Veri is replacing the box ([Self-healing](/deployments#self-healing)) and the code clears once a replacement serves; with `failed` (or `scaled_to_zero` for a `min_replicas: 0` deployment) the `self_heal_attempts` budget was used up or set to `0`.
 
 ## GET /v1/deployments
 
@@ -93,7 +97,7 @@ Single deployment. Same shape as create response, with timestamps populated as i
 
 ## PATCH /v1/deployments/{id}
 
-Partial update of the scaling settings on a live deployment. Mutable fields: `num_replicas`, `min_replicas`, `max_replicas`, `concurrency_target`, `scale_to_zero_window_seconds`, `idle_delete_after_days`. Anything else (model, gpu, source, engine, provider) is immutable and fails validation.
+Partial update of the scaling settings on a live deployment. Mutable fields: `num_replicas`, `min_replicas`, `max_replicas`, `concurrency_target`, `scale_to_zero_window_seconds`, `idle_delete_after_days`, `self_heal_attempts` (`0` to `5`). Anything else (model, gpu, source, engine, provider) is immutable and fails validation. Any PATCH also restarts the replacement budget of [self-healing](/deployments#self-healing).
 
 Returns the updated deployment immediately with the new *desired* state; the control plane converges the replica fleet in the background. Compare `ready_replicas` (observed) against `num_replicas` (desired) to watch convergence.
 

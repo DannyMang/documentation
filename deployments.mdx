@@ -45,12 +45,13 @@ You set these at create time, whether from the [SDK](/deployments/examples) (`cl
 | `concurrency_target` | No | `8` | In-flight requests per replica the autoscaler aims for. Lower it for latency-sensitive traffic, raise it for batch throughput. |
 | `scale_to_zero_window_seconds` | No | `3600` | Idle seconds before a `min_replicas: 0` deployment parks, counted from when the deployment starts serving or from its last request (not from create or wake). Turning scale-to-zero on, or changing the window, starts a fresh idle window. Minimum `300`. |
 | `idle_delete_after_days` | No | off | Auto-stop a deployment that has been parked at zero with no traffic for this many days. |
+| `self_heal_attempts` | No | `3` | How many times Veri replaces the GPU box when the deployment's last box dies after it has served (crash or host failure), `0` to `5`. See [Self-healing](#self-healing). |
 | `cache` | No | `false` | `source: huggingface` only: also [save the model to your library](/deployments/custom-models#cache-a-hugging-face-model-while-deploying-it) for faster future starts. Best-effort; never affects this deployment. |
 | `vllm_image` | No | platform vLLM | Explicit vLLM serving image (e.g. `vllm/vllm-openai:v0.25.1`) for architectures newer than the platform's vLLM. See [Serving newer architectures](#serving-newer-architectures). |
 | `trace_bodies` | No | `false` | Capture this deployment's request/response bodies as browsable [traces](/deployments/observability#request-traces). Enabling stores end-user prompt/completion content. First 5,000 traces per workspace each month are free, then metered per 1k from credits. |
 | `trace_retention` | No | `base` | Trace retention class: `base` (14 days) or `extended` (400 days, extended rate). Requires `trace_bodies: true`. |
 
-`min_replicas`, `max_replicas`, `concurrency_target`, `scale_to_zero_window_seconds`, and `idle_delete_after_days` can also be changed later on a live deployment: see [Scaling](/cli/deployments#replicas-autoscaling-and-scale-to-zero). Model, GPU, and provider are immutable: changing those means a new deployment. Raising `min_replicas` to 1 or more on a parked (`scaled_to_zero`) deployment wakes it immediately, subject to the workspace active-replica limit (`429` if it is full, and nothing changes). Scaling changes made during the first boot apply once the deployment is serving. See [what an update does in each status](/deployments/api#patch-v1deploymentsid).
+`min_replicas`, `max_replicas`, `concurrency_target`, `scale_to_zero_window_seconds`, `idle_delete_after_days`, and `self_heal_attempts` can also be changed later on a live deployment: see [Scaling](/cli/deployments#replicas-autoscaling-and-scale-to-zero). Model, GPU, and provider are immutable: changing those means a new deployment. Raising `min_replicas` to 1 or more on a parked (`scaled_to_zero`) deployment wakes it immediately, subject to the workspace active-replica limit (`429` if it is full, and nothing changes). Scaling changes made during the first boot apply once the deployment is serving. See [what an update does in each status](/deployments/api#patch-v1deploymentsid).
 
 At call time, `chat` also accepts a session key for cache-warm routing across replicas.
 
@@ -65,13 +66,15 @@ stateDiagram-v2
     [*] --> queued
     queued --> provisioning : reconciler picks up
     provisioning --> serving : replica ready, endpoint reachable
-    provisioning --> failed : GPU lease failed / image pull error
+    provisioning --> failed : GPU lease failed / image pull error / self-healing used up
     serving --> scaled_to_zero : idle past window (min_replicas 0 only)
+    serving --> provisioning : last box lost, self-healing replaces it
+    provisioning --> scaled_to_zero : self-healing used up (min_replicas 0)
     scaled_to_zero --> waking : request, POST /wake, or min_replicas raised to 1+
     waking --> provisioning : reconciler re-provisions
     serving --> stopped : user called stop
     scaled_to_zero --> stopped : user called stop / idle_delete_after_days
-    serving --> failed : replicas lost
+    serving --> failed : last box lost, self-healing off
     stopped --> [*]
     failed --> [*]
 ```
@@ -81,6 +84,17 @@ Deployments consume GPU credit **only while replicas are running**: billing is m
 <Warning>
   A deployment with `min_replicas` of 1 or more (the default) **never stops billing on its own** — you asked for an always-warm floor. Either call `stop` when you're done, or create with `min_replicas: 0` so it parks itself after the idle window and wakes on the next request.
 </Warning>
+
+## Self-healing
+
+When a deployment that has served loses its last GPU box (the box crashes, its host fails, or it stops reporting for about 3 minutes), Veri replaces the box automatically. `self_heal_attempts` (`0` to `5`, default `3`) caps how many replacements Veri launches for one loss:
+
+- While a replacement boots, the deployment shows `provisioning` with `failure_code: replica_lost` and an `error` such as `Replacing a lost GPU box (attempt 1 of 3).` Chat requests get a `503` with `Retry-After` until it serves again. Each replacement box is billed from its launch, like any replica.
+- Replacements follow a fixed ladder: the first goes out at once, the next ones 10, 20, 40 and 80 seconds after the previous launch. A replacement that crashes, that does not become healthy within the boot deadline, or that the cloud rejects counts as one attempt.
+- When a replacement reaches `serving`, `failure_code` and `error` clear and the full budget is available again for the next loss. Any PATCH to the deployment also restarts the budget.
+- When the attempts are used up, or with `self_heal_attempts: 0`, a deployment with `min_replicas` of 1 or more goes `failed` with `failure_code: replica_lost` (billing ends; redeploy to bring it back), and a `min_replicas: 0` deployment parks (`scaled_to_zero`, also with `replica_lost`) and wakes on the next request.
+
+`self_heal_attempts` only governs losing the last box. A multi-replica fleet that loses some of its boxes keeps serving on the rest and replaces them on the same ladder whatever the setting, pausing after 5 replacements until you PATCH the deployment. A first boot that fails is not self-healed (it fails with `watchdog_timeout` or the box's own `failure_code`), and a wake that fails re-parks with backoff instead.
 
 ## Calling a deployment
 

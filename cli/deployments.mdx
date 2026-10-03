@@ -111,6 +111,7 @@ veri deployments create \
 | `--concurrency-target` | In-flight requests per replica the autoscaler aims for. Default `8`. |
 | `--scale-to-zero-window` | Idle seconds before a `--min-replicas 0` deployment parks. Default `3600`, minimum `300`. |
 | `--idle-delete-after` | Auto-stop a parked deployment after N idle days. Default: keep it wakeable forever. |
+| `--self-heal-attempts` | How many times Veri replaces the GPU box when the deployment's last box dies after it has served, `0` to `5`. Default `3`. See [Self-healing](/deployments#self-healing). Also available as `resources.self_heal_attempts` in a deploy config. |
 | `--cache` / `--no-cache` | With `--from-hf` only: also save the downloaded model to your [library](/deployments/custom-models) so later deploys of the repo start from Veri storage. |
 | `--vllm-arg` | Extra vLLM CLI token appended verbatim to the engine command; repeat per token (e.g. `--vllm-arg=--kv-cache-dtype --vllm-arg=fp8`). vllm engine only; platform-managed flags (`--model`, `--port`, `--host`, `--api-key`, `--served-model-name`) and `--trust-remote-code` are rejected. Also available as `deployment.vllm_extra_args` (list of strings) in a deploy config. |
 | `--vllm-image` | Explicit vLLM serving image for [architectures newer than the platform vLLM](/deployments#serving-newer-architectures), e.g. `vllm/vllm-openai:v0.25.1`. Official upstream images only (`vllm/vllm-openai[-rocm]:<tag>`); vllm engine only. Also available as `deployment.vllm_image` in a deploy config. Default: platform vLLM. |
@@ -164,7 +165,7 @@ veri deployments create \
   --scale-to-zero-window 1800
 ```
 
-The deployment reports `serving` once at least one replica is up. `list` and `get` show the fleet as `ready/desired` (for example `2/3` while a scale-up is still provisioning). A replica that dies is replaced automatically; the deployment keeps serving at reduced capacity in the meantime.
+The deployment reports `serving` once at least one replica is up. `list` and `get` show the fleet as `ready/desired` (for example `2/3` while a scale-up is still provisioning). A replica that dies is replaced automatically; the deployment keeps serving at reduced capacity in the meantime. If the last box dies, the deployment shows `provisioning` (with `failure_code` `replica_lost`) while Veri replaces it, up to `--self-heal-attempts` times; see [Self-healing](/deployments#self-healing).
 
 ### Autoscaling
 
@@ -187,6 +188,7 @@ veri deployments update dep_abc --replicas 4                    # fixed fleet of
 veri deployments update dep_abc --min-replicas 1 --max-replicas 6
 veri deployments update dep_abc --concurrency-target 4
 veri deployments update dep_abc --min-replicas 1                 # parked: wakes it now
+veri deployments update dep_abc --self-heal-attempts 5           # replace a lost last box up to 5 times
 ```
 
 `update` returns immediately with the new desired state; the fleet converges in the background (watch the `replicas` column approach `desired/desired`). Model, GPU, and provider are immutable — recreate the deployment to change those.
