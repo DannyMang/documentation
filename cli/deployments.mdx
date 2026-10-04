@@ -285,7 +285,7 @@ Wake: 2 failed wake boots in a row (last wake started 2026-10-03T10:00:00Z); a r
 | --- | --- |
 | `0` | Success. |
 | `1` | User error (both `--model` and `--from-hf` passed, missing `--gpu-type` inline). |
-| `2` | API error. The server's message is printed as one `Error:` line on stderr. |
+| `2` | API error. The server's message is printed as one `Error:` line on stderr, ending in the error code when the server sent one: `Error: self_heal_attempts must be between 0 and 5 (got 9) (code: invalid_self_heal_attempts)`. |
 | `4` | Auth error. |
 
 ## What's next
