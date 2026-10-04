@@ -97,7 +97,7 @@ When a deployment that has served loses its last GPU box (the box crashes, its h
 - When a replacement reaches `serving`, `failure_code` and `error` clear and the full budget is available again for the next loss. Any PATCH to the deployment also restarts the budget.
 - When the attempts are used up, or with `self_heal_attempts: 0`, a deployment with `min_replicas` of 1 or more goes `failed` with `failure_code: replica_lost` (billing ends; redeploy to bring it back), and a `min_replicas: 0` deployment parks (`scaled_to_zero`, also with `replica_lost`) and wakes on the next request.
 
-`self_heal_attempts` only governs losing the last box. A multi-replica fleet that loses some of its boxes keeps serving on the rest and replaces them on the same ladder whatever the setting, pausing after 5 replacements until you PATCH the deployment. A first boot that fails is not self-healed (it fails with `watchdog_timeout` or the box's own `failure_code`), and a wake that fails re-parks with backoff instead (with `min_replicas` of 1 or more, Veri retries that wake itself once the backoff has passed).
+`self_heal_attempts` only governs losing the last box. A multi-replica fleet that loses some of its boxes keeps serving on the rest and replaces them on the same ladder whatever the setting, pausing after 5 replacements until you PATCH the deployment. A first boot that fails is not self-healed (it fails with `watchdog_timeout` or the box's own `failure_code`), and a wake that fails re-parks with backoff instead (with `min_replicas` of 1 or more, Veri retries that wake itself once the backoff has passed, and stops after 3 failed wakes in a row).
 
 ## Calling a deployment
 
