@@ -82,7 +82,7 @@ env["version"]["spec"]   # the normalized spec that sessions will run
 | `permissions` | Tool rules in the harness's own syntax, evaluated top to bottom with the last match winning. `ask` (human approval) is not available yet. |
 | `idle_timeout_s` | Seconds without input before the session snapshots its workspace and pauses (60 to 21600). |
 
-The API returns the **normalized** spec: defaults filled in, hostnames lowercased, duplicate entries removed, skills pinned. That is exactly what the sandbox is built from.
+The API returns the **normalized** spec: defaults filled in, hostnames lowercased, duplicate entries removed, skills pinned, and every secret the spec references (including the model's and each MCP server's) listed in `secrets`. That is exactly what the sandbox is built from, and what `veri environments get --toml` prints.
 
 ## Versions
 

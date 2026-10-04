@@ -51,7 +51,7 @@ If the environment's model is a Veri deployment, each session gets a 24-hour [mo
 | Type | Payload |
 | --- | --- |
 | `user.message` | `{text}`, what you sent |
-| `user.interrupt` | you stopped a run |
+| `user.interrupt` | you stopped a run; the run ends with `run.completed{stop_reason: "interrupted"}` |
 | `agent.message` | `{text}`, the agent's reply |
 | `agent.thinking` | `{text}` |
 | `agent.tool_use` | `{name, input}` |
