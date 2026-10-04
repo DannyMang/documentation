@@ -16,7 +16,7 @@ dep = client.deployments.create(
     model="Qwen/Qwen2.5-0.5B-Instruct",
     source="huggingface",
     name="hello-deploy",
-    gpu={"gpu_type": "A100-80GB", "gpu_count": 1},
+    gpu={"gpu_type": "L4-24GB", "gpu_count": 1},
 )
 
 try:
@@ -47,7 +47,7 @@ dep = client.deployments.create(
     model=job.id,                # the training job ID
     source="training_job",       # not huggingface
     name=f"ft-{job.id[:8]}",
-    gpu={"gpu_type": "A100-80GB", "gpu_count": 1},  # often smaller than training GPU
+    gpu={"gpu_type": "L4-24GB", "gpu_count": 1},  # often smaller than training GPU
 )
 
 dep.wait()
@@ -78,7 +78,7 @@ dep = client.deployments.create(
     model="meta-llama/Llama-3.1-8B-Instruct",
     source="huggingface",
     name="llama-8b",
-    gpu={"gpu_type": "H100-80GB", "gpu_count": 1},
+    gpu={"gpu_type": "L4-24GB", "gpu_count": 4},  # tensor parallel; room for the 128K context
 )
 dep.wait()
 
@@ -117,13 +117,13 @@ dep_small = client.deployments.create(
     model="Qwen/Qwen2.5-0.5B-Instruct",
     source="huggingface",
     name="qwen-small",
-    gpu={"gpu_type": "A100-80GB", "gpu_count": 1},
+    gpu={"gpu_type": "L4-24GB", "gpu_count": 1},
 )
 dep_big = client.deployments.create(
     model="Qwen/Qwen2.5-7B-Instruct",
     source="huggingface",
     name="qwen-big",
-    gpu={"gpu_type": "H100-80GB", "gpu_count": 1},
+    gpu={"gpu_type": "L4-24GB", "gpu_count": 4},
 )
 
 dep_small.wait()

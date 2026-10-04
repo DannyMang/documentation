@@ -25,7 +25,7 @@ Reference for `/v1/deployments/*`. All endpoints require Bearer token auth (`Aut
 
 ## POST /v1/deployments
 
-Create a deployment from a base HF model or a completed training job.
+Create a deployment from a base HF model, a completed training job, or a saved model in your library.
 
 **Request schema:**
 
@@ -34,21 +34,46 @@ Create a deployment from a base HF model or a completed training job.
   "model": "Qwen/Qwen2.5-0.5B-Instruct",
   "source": "huggingface",
   "name": "my-deploy",
-  "gpu": {"gpu_type": "A100-80GB", "gpu_count": 1},
+  "gpu": {"gpu_type": "L4-24GB", "gpu_count": 1},
   "provider": "aws"
 }
 ```
 
 | Field | Required | Notes |
 | --- | --- | --- |
-| `model` | yes | HF model ID (when `source=huggingface`) or training job ID (when `source=training_job`) |
-| `source` | yes | `huggingface` or `training_job` |
+| `model` | yes | HF model ID (when `source=huggingface`), training job ID (when `source=training_job`), or saved model ID (when `source=custom_model`) |
+| `source` | no | `training_job` (the default), `huggingface`, or `custom_model` |
 | `name` | yes | Human label; appears in dashboard + as the OpenAI `model` field default |
-| `gpu` | yes | `{"gpu_type": "...", "gpu_count": 1-8}` |
-| `provider` | no | Defaults to `aws` (the only serving provider today) |
+| `gpu` | yes | `{"gpu_type": "...", "gpu_count": N}`. The (provider, `gpu_type`, `gpu_count`) shape must be one the provider sells for serving: on `aws`, `L4-24GB` or `A10G-24GB` x1 or x4, and `A100-80GB` or `H100-80GB` x8 only. See [Serving providers](/deployments/providers). |
+| `provider` | no | Defaults to `aws` (the only serving provider live today) |
 | `self_heal_attempts` | no | `0` to `5`, default `3`: how many times Veri replaces the GPU box when the deployment's last box dies after it has served. See [Self-healing](/deployments#self-healing). |
 
-**Validation:** When `source=training_job`, the job must exist, belong to you, and be `completed`. Otherwise `404` or `400`.
+**Validation:** When `source=training_job`, the job must exist in your workspace (`404` otherwise) and be `completed` (`400` otherwise). When `source=custom_model`, the saved model must exist in your workspace (`404`) and be `ready` (`409` while it is still importing). An unsupported GPU shape is a `400`. Other errors: `402` when the workspace has no billing account yet, and `429` with code `ACTIVE_DEPLOYMENT_LIMIT` when the new replicas don't fit the workspace's active-replica limit.
+
+A field that fails validation, on create or on [PATCH](#patch-v1deploymentsid), returns `400` with a stable `code` next to the message, so you can branch on it instead of matching the text:
+
+```json
+{
+  "error": {
+    "code": "invalid_self_heal_attempts",
+    "message": "self_heal_attempts must be between 0 and 5 (got 9); 0 turns self-healing off"
+  }
+}
+```
+
+| Code | Field |
+| --- | --- |
+| `invalid_gpu_shape` | `gpu` (a `gpu_type` or `gpu_count` the provider does not sell for serving). |
+| `invalid_replica_bounds` | `num_replicas`, `min_replicas`, `max_replicas`. |
+| `invalid_concurrency_target` | `concurrency_target`. |
+| `invalid_scale_to_zero_window_seconds` | `scale_to_zero_window_seconds`. |
+| `invalid_idle_delete_after_days` | `idle_delete_after_days`. |
+| `invalid_self_heal_attempts` | `self_heal_attempts`. |
+| `invalid_vllm_extra_args` | `vllm_extra_args`. |
+| `invalid_vllm_image` | `vllm_image`. |
+| `invalid_trace_retention` | `trace_retention`. |
+
+Other `400`s (an unknown source, a training job that is not completed, a provider that is not enabled, a deployment that is stopped) carry only a message. The Python SDK puts the code on `VeriError.code`.
 
 **Response** (`201`):
 
@@ -61,12 +86,15 @@ Create a deployment from a base HF model or a completed training job.
   "model": "Qwen/Qwen2.5-0.5B-Instruct",
   "source": "huggingface",
   "endpoint_url": null,
-  "gpu": {"type": "A100-80GB", "count": 1},
+  "gpu": {"type": "L4-24GB", "count": 1},
   "provider": "aws",
   "total_requests": 0,
   "error": null,
   "failure_code": null,
   "self_heal_attempts": 3,
+  "last_wake_at": null,
+  "wake_failure_count": 0,
+  "next_wake_not_before": null,
   "started_at": null,
   "stopped_at": null,
   "created_at": "2026-05-12T...",
@@ -74,11 +102,19 @@ Create a deployment from a base HF model or a completed training job.
 }
 ```
 
-`endpoint_url` populates when status reaches `serving`: for managed deployments it is `https://api.veri.studio/v1/deployments/{id}/chat/completions` (call it with your Veri API key); for BYOC `huggingface` deployments it is the endpoint under your own Hugging Face account.
+`endpoint_url` populates when status reaches `serving`: for managed deployments it is `https://api.veri.studio/v1/deployments/{id}/chat/completions` (call it with your Veri API key); for BYOC `huggingface` deployments it is the endpoint under your own Hugging Face account. It reads `null` while the deployment is parked (`scaled_to_zero`) and is set again once a wake serves; the platform URL itself never changes, and a request to it is what wakes a parked deployment.
 
-When a deployment fails, `error` holds the human-readable message and `failure_code` a stable, machine-readable reason you can branch on, for example `watchdog_timeout`, `CAPACITY_UNAVAILABLE`, `oom`, `model_source_unsupported`, or `replica_lost`. Both are `null` while nothing has failed, and both clear when a parked deployment wakes.
+When a deployment fails, `error` holds the human-readable message and `failure_code` a stable, machine-readable reason you can branch on, for example `watchdog_timeout`, `CAPACITY_UNAVAILABLE`, `vllm_failed_to_start`, `oom`, `model_source_unsupported`, or `replica_lost`. Both are `null` while nothing has failed. An idle park and a wake clear both; a wake that fails re-parks the deployment with the wake's error and code (for example `wake_boot_failed` or `CAPACITY_UNAVAILABLE`).
 
 `replica_lost` means the deployment lost its last GPU box after it had served. While `status` is `provisioning`, Veri is replacing the box ([Self-healing](/deployments#self-healing)) and the code clears once a replacement serves; with `failed` (or `scaled_to_zero` for a `min_replicas: 0` deployment) the `self_heal_attempts` budget was used up or set to `0`.
+
+Three fields report the wake state of a [scale-to-zero](#waking-from-zero) deployment:
+
+| Field | Meaning |
+| --- | --- |
+| `last_wake_at` | When the most recent wake started: a chat request to the parked deployment, `POST /wake`, a PATCH that left it with `min_replicas` of 1 or more, or Veri retrying a failed wake of a deployment with `min_replicas` of 1 or more. Kept after the wake serves and after the deployment parks again; `null` if it never woke. |
+| `wake_failure_count` | Failed wake boots in a row since the deployment last reached `serving`. `0` when the last boot served; it resets to `0` when a wake reaches `serving`, not when a new wake starts. |
+| `next_wake_not_before` | Set after a failed wake: the earliest time a chat request (or, with `min_replicas` of 1 or more and fewer than 3 failed wakes in a row, Veri itself) starts the next wake. `POST /wake` and a PATCH that raises `min_replicas` to 1 or more do not wait for it. `null` until a wake fails, and cleared when a wake reaches `serving`; a time in the past means the backoff is over. |
 
 ## GET /v1/deployments
 
@@ -101,7 +137,15 @@ Partial update of the scaling settings on a live deployment. Mutable fields: `nu
 
 Returns the updated deployment immediately with the new *desired* state; the control plane converges the replica fleet in the background. Compare `ready_replicas` (observed) against `num_replicas` (desired) to watch convergence.
 
-Turning scale-to-zero on (`min_replicas` to `0`), or changing `scale_to_zero_window_seconds`, starts a fresh idle window, so a deployment that has already been idle does not park right after the update.
+A field you leave out keeps its stored value. `scale_to_zero_window_seconds` and `idle_delete_after_days` also take an explicit `null`, which clears them back to their defaults (the 3600-second idle window; never auto-stop a parked deployment). On any other field, `null` is the same as leaving it out.
+
+```bash
+curl -X PATCH "https://api.veri.studio/v1/deployments/dep_abc" \
+  -H "Authorization: Bearer vk_..." -H "Content-Type: application/json" \
+  -d '{"scale_to_zero_window_seconds": null, "idle_delete_after_days": null}'
+```
+
+Turning scale-to-zero on (`min_replicas` to `0`), or changing or clearing `scale_to_zero_window_seconds`, starts a fresh idle window, so a deployment that has already been idle does not park right after the update.
 
 When the update takes effect depends on the deployment's status:
 
@@ -113,10 +157,16 @@ When the update takes effect depends on the deployment's status:
 | `provisioning` (first boot) | Saved now, applied **once the deployment is serving**: the response shows the new desired `num_replicas` next to `ready_replicas: 0`, and extra replicas launch only after the first one serves, so a broken configuration does not boot several GPUs before it fails. |
 | `waking` | No second wake. The new floor applies to the wake in progress, or as soon as it serves. |
 
+`self_heal_attempts` is the exception: in every status it applies immediately, as the policy for the next time the deployment's last box dies while serving. Any PATCH also restarts the replacement count, so a self-heal in progress gets the full new budget.
+
 Waking on update is checked against the workspace active-replica limit before anything is saved: if the new floor does not fit, the update returns `429` with code `ACTIVE_DEPLOYMENT_LIMIT` and the deployment stays parked with its previous settings. An update that raises `num_replicas` on a running deployment is checked the same way.
 
 ```python
 dep = client.deployments.update(deployment_id, min_replicas=1, max_replicas=4)
+# Back to the defaults (sends an explicit null):
+dep = client.deployments.update(
+    deployment_id, clear_scale_to_zero_window_seconds=True, clear_idle_delete_after_days=True
+)
 ```
 
 ## GET /v1/deployments/{id}/replicas
@@ -222,7 +272,7 @@ A chat request to a `scaled_to_zero` deployment triggers its wake and answers `5
 }
 ```
 
-Raw HTTP clients should retry after `Retry-After` seconds. The Python SDK retries for you: `chat()` sleeps and re-sends until the deployment serves the request or `wake_timeout_s` (default `1320`, which outlasts the server's 20-minute boot ceiling) elapses, calling `on_waking(message)` on each `503` so you can surface progress. Set `wake_timeout_s=0` to fail fast with the `503` instead.
+Raw HTTP clients should retry after `Retry-After` seconds. The Python SDK retries for you: `chat()` sleeps and re-sends until the deployment serves the request or `wake_timeout_s` (default `1320`, which outlasts the server's default 20-minute boot deadline; a deployment with an explicit [`vllm_image`](/deployments#serving-newer-architectures) gets a longer deadline, so raise `wake_timeout_s` for those) elapses, calling `on_waking(message)` on each `503` so you can surface progress. Set `wake_timeout_s=0` to fail fast with the `503` instead.
 
 ```python
 response = client.deployments.chat(
@@ -234,6 +284,10 @@ response = client.deployments.chat(
     timeout_s=120,                      # HTTP timeout for this call (long non-streaming answers)
 )
 ```
+
+The same `503` `deployment_waking` answers every request while the deployment boots without a serving replica: a first boot (`queued`, `provisioning`), a wake (`waking`, then `provisioning`), and a [self-healing](/deployments#self-healing) replacement of a lost last box (`provisioning` with `failure_code: replica_lost`). The `Retry-After` is `30` seconds.
+
+**If a wake fails** (no GPU capacity, or the box fails or does not become ready within the boot deadline), the deployment parks again (`scaled_to_zero`, still wakeable), `error` holds the cause, `wake_failure_count` goes up by one and `next_wake_not_before` is set. Until that time a chat request does not start another wake: it gets `503` `deployment_waking` with `Retry-After` set to the seconds left and the cause in the message. The wait starts at 60 seconds and doubles with each failed wake in a row, up to 1 hour. `POST /wake`, or a PATCH that raises `min_replicas` to 1 or more, retries at once. With `min_replicas` of 1 or more you don't need traffic to recover: Veri starts the next wake itself once `next_wake_not_before` has passed, so the replica floor comes back on its own (if the workspace active-replica limit is full at that point, the deployment stays parked and Veri retries as soon as there is room). Veri stops retrying on its own after 3 failed wakes in a row, so a deployment that cannot boot does not keep launching GPU boxes: it stays `scaled_to_zero`, and `error` says Veri stopped retrying automatically. Call `POST /wake` or PATCH `min_replicas` to try again (a chat request after `next_wake_not_before` also wakes it). If that wake fails too, the deployment stays parked with no automatic retry until a wake reaches `serving`. Both fields reset when a wake reaches `serving`, and Veri's own retries resume.
 
 ### Upstream unavailable
 
@@ -305,19 +359,23 @@ Aggregated counters across all requests:
 
 ## State machine
 
-```
-queued → provisioning → serving → stopped
-                    ↘                    ↘
-                     failed             failed
-```
+The [lifecycle diagram](/deployments#the-deployment-lifecycle) shows every transition. In short:
 
-`scaled_to_zero` means parked with wake-on-request: no replicas run, and a chat request or `POST /wake` moves it on. `waking` is an in-flight status between `scaled_to_zero` and `serving` while the replacement box boots. `stopped` and `failed` are terminal.
+| Status | Meaning |
+| --- | --- |
+| `queued` | Created; no GPU box has launched yet. |
+| `provisioning` | At least one GPU box launched and is booting: the first boot, a wake boot, or [self-healing](/deployments#self-healing) a lost last box. |
+| `serving` | At least one replica is serving requests. |
+| `scaled_to_zero` | Parked: no replicas run (an idle `min_replicas: 0` deployment, or one whose wake failed). A chat request, `POST /wake`, or raising `min_replicas` to 1 or more wakes it; after a failed wake, Veri wakes a deployment with `min_replicas` of 1 or more again once the backoff has passed, until 3 wakes in a row have failed. |
+| `waking` | A wake was accepted and the GPU boxes are being launched. It moves to `provisioning` as soon as a box launches, and back to `scaled_to_zero` if none can launch (a request after the backoff, Veri itself for `min_replicas` of 1 or more until 3 wakes in a row have failed, or `POST /wake` tries again). |
+| `stopped` | Stopped by you, or by `idle_delete_after_days`. Terminal. |
+| `failed` | Ended by an error, by running out of credit (`insufficient_credits`), or by its workspace losing its last member or being deleted (`workspace_empty`, `workspace_deleted`). Terminal. |
 
-Billing applies while replicas run, i.e. during `serving` (replica warmup is billed once the deployment serves). `scaled_to_zero`, `waking`, `stopped`, and `failed` are not billed.
+Billing is per replica: each GPU box bills from its launch until it is terminated, so boot (`provisioning`) and drain time are billed. Boot time is charged once the deployment serves, parks, stops, or fails. `queued`, `waking`, and `scaled_to_zero` cost nothing (a wake's boxes bill from their own launch). A `stopped` or `failed` deployment accrues nothing further: each box that ran is settled up to the moment it was freed. See [Billing](/deployments/cost).
 
-## Worker-only endpoints
+## Internal callbacks
 
-None — deployments don't have a worker callback API. The serving backend talks to the model server directly via the registered backend interface.
+The GPU boxes behind a deployment report their status and heartbeats to the control plane at `POST /v1/deployments/{id}/status`, authenticated with a per-deployment token that only the boxes hold. This route is internal to the platform: it is not part of the customer API, and your API key cannot call it.
 
 ## SDK convenience
 
@@ -332,7 +390,7 @@ recent = dep.requests(limit=20)
 dep.stop()
 ```
 
-These all hit the endpoints above. `wait()` returns once the status settles: `serving`, `failed`, `stopped`, or `scaled_to_zero` (a parked deployment won't move again without traffic, so waiting on it would just burn the timeout). `dep.chat()` retries through a wake with the default 22-minute budget and accepts `upstream_retries` and `timeout_s`; call `client.deployments.chat()` directly to tune `wake_timeout_s` or `on_waking`.
+These all hit the endpoints above. `wait()` returns once the status settles: `serving`, `failed`, `stopped`, or `scaled_to_zero` (a parked deployment won't move again without traffic or a wake retry, so waiting on it would just burn the timeout). `dep.chat()` retries through a wake with the default 22-minute budget and accepts `upstream_retries` and `timeout_s`; call `client.deployments.chat()` directly to tune `wake_timeout_s` or `on_waking`.
 
 ## Related
 

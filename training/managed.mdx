@@ -30,10 +30,12 @@ GRPO is the default. All methods support [LoRA and QLoRA](/training/grpo#lora-an
 ```mermaid
 stateDiagram-v2
     [*] --> queued
-    queued --> provisioning : reconciler picks up
-    provisioning --> running : worker deployed, first step ran
-    provisioning --> failed : capacity_unavailable (no GPU capacity in any zone)
-    provisioning --> failed : provisioning_error (worker failed to come up)
+    queued --> provisioning : GPU instance acquired
+    queued --> failed : CAPACITY_UNAVAILABLE (no GPU capacity in any zone)
+    provisioning --> configuring : instance booted, worker setting up
+    provisioning --> failed : provisioning_error / provisioning_timeout
+    configuring --> running : worker started training
+    configuring --> failed : configuring_timeout
     running --> completed : reached max_steps or num_epochs
     running --> failed : OOM / dependency / timeout / network
     running --> cancelled : user called cancel
@@ -44,10 +46,11 @@ stateDiagram-v2
 
 What happens at each transition:
 
-- **`queued`** — job row written, balance pre-checked (HTTP 402 if insufficient credit). No spend yet.
-- **`provisioning`** — Veri leases a GPU and the instance boots and self-configures the worker. `started_at` is still `null`. Once the instance boots, the GPU is rented and **cost accrues from this point**, even before the first training step. A job that never secures a GPU (for example `CAPACITY_UNAVAILABLE`) rents nothing and is not billed.
-- **`running`** — worker reports its first step. `started_at` populates. Metrics start streaming.
-- **`completed | failed | cancelled`** — pod auto-terminates. Cost is attributed (`cost_attributed_at`). Stripe credit is deducted (`billing_deducted_at`). The full stdout is uploaded to S3 and available via `GET /v1/training_jobs/{id}/logs/full`.
+- **`queued`**: job row written (HTTP 402 at submit if the workspace has no billing account). No spend yet. Veri tries to acquire a GPU instance from here; if no zone has capacity, the job goes straight to `failed` with `CAPACITY_UNAVAILABLE`.
+- **`provisioning`**: Veri has leased a GPU and the instance boots. `started_at` is still `null`. Once the instance is acquired, the GPU is rented and **cost accrues from this point**, even before the first training step. A job that never secures a GPU (for example `CAPACITY_UNAVAILABLE`) rents nothing and is not billed.
+- **`configuring`**: the instance is up and the worker is setting up its environment.
+- **`running`**: the worker has started the training process (dataset and model load, then training steps). `started_at` populates. Metrics start streaming with the first step.
+- **`completed | failed | cancelled`**: pod auto-terminates. Cost is attributed (`cost_attributed_at`). Stripe credit is deducted (`billing_deducted_at`). The full stdout is uploaded to S3 and available via `GET /v1/training_jobs/{id}/logs/full`.
 
 Cancellation is **immediate**: the instance is terminated as soon as the request is
 accepted. The worker does not get a chance to flush anything, so whatever

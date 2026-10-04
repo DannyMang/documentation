@@ -28,22 +28,25 @@ Worker-only endpoints (used by the runner agent, authenticated via per-job `call
 
 Create a job. Returns immediately with status `queued`.
 
-**Request schema** (`TrainingJobCreate`):
+**Request schema** (`TrainingJobCreate`). This body is the [L4 GSM8K example](/training/examples#math-reasoning-with-grpo) as a raw request: GRPO with LoRA on a single `L4-24GB`.
 
 ```json
 {
-  "base_model": "Qwen/Qwen2.5-7B-Instruct",
+  "base_model": "Qwen/Qwen2.5-1.5B-Instruct",
   "dataset_id": "ds_abc123",
   "reward_source": "def reward(completions, answer, **kwargs):\n    ...",
   "method": "grpo",
   "hyperparameters": {
-    "learning_rate": 1e-6,
+    "max_steps": 200,
     "rollouts_per_prompt": 8,
-    "max_response_length": 2048,
-    "kl_coef": 0.001
+    "max_response_length": 512,
+    "lora_rank": 16,
+    "lora_alpha": 32,
+    "learning_rate": 2e-5,
+    "system_prompt": "You are a math tutor. Think step by step, then put ONLY the final numeric answer inside <answer></answer> tags, e.g. <answer>42</answer>."
   },
-  "output_name": "qwen-7b-math",
-  "gpu": {"gpu_type": "H100-80GB", "gpu_count": 2},
+  "output_name": "qwen-1.5b-gsm8k",
+  "gpu": {"gpu_type": "L4-24GB", "gpu_count": 1},
   "provider": "aws",
   "checkpoint_destination": {"type": "veri"}
 }
@@ -59,7 +62,7 @@ Create a job. Returns immediately with status `queued`.
 - `method=grpo` or `grpo_harness` → reward required (`reward_source`, `reward_sources`, or `environments`). `grpo_agentic` is being rebuilt and is not currently available.
 - `method=sft_text`, `dpo`, `sft_video_gen`, or `custom_script` → reward fields must be omitted (these learn from the dataset)
 - `gpu.gpu_type` must be one of: `A100-80GB`, `H100-80GB`, `L4-24GB`, `A10G-24GB`
-- `gpu.gpu_count` in `[1, 8]`
+- `gpu.gpu_count` must be a node shape the provider sells for that `gpu_type` (on `aws`: `1` or `4` for `L4-24GB`/`A10G-24GB`, `8` for `A100-80GB`/`H100-80GB`); see [GPU config schema](#gpu-config-schema)
 
 **Errors:**
 - `400 Bad Request`: invalid reward source (too many, too large, or doesn't define a function)
@@ -74,13 +77,13 @@ Create a job. Returns immediately with status `queued`.
   "object": "training_job",
   "id": "tj_abc123",
   "status": "queued",
-  "base_model": "Qwen/Qwen2.5-7B-Instruct",
+  "base_model": "Qwen/Qwen2.5-1.5B-Instruct",
   "dataset_id": "ds_abc123",
   "reward_count": 1,
   "method": "grpo",
   "hyperparameters": {...},
-  "output_name": "qwen-7b-math",
-  "gpu_requested": {"type": "H100-80GB", "count": 2},
+  "output_name": "qwen-1.5b-gsm8k",
+  "gpu_requested": {"type": "L4-24GB", "count": 1},
   "gpu": null,
   "provider": null,
   "error": null,
@@ -181,18 +184,19 @@ URL expires in 1 hour; re-call to get a fresh one.
 
 ### GRPOHyperparameters (method=grpo)
 
-See [GRPO algorithm](/training/grpo) for the full walkthrough. Schema fields with defaults:
+See [GRPO algorithm](/training/grpo) for the full walkthrough. Fields, with the value a job uses when the field is omitted:
 
 ```python
 learning_rate: float = 1e-6
-num_epochs: int = 1
-max_steps: int | None = None
+num_epochs: int = 1            # not used by GRPO; the run length is max_steps
+max_steps: int | None = None   # omitted = 100 steps (one prompt per step)
 rollouts_per_prompt: int = 8
-kl_coef: float = 0.001
-max_prompt_length: int = 1024
+kl_coef: float = 0.0           # omitted = 0.0: no KL penalty, no reference model
+max_prompt_length: int = 1024  # not applied by the default trainer
 max_response_length: int = 2048
-global_batch_size: int = 64
-seed: int = 42
+global_batch_size: int = 64    # accepted but ignored by GRPO
+seed: int = 42                 # accepted but not applied; runs use seed 42
+system_prompt: str | None = None  # wraps each string prompt as a system + user chat
 use_unsloth: bool = False
 lora_rank: int | None = None   # set to enable LoRA (null = full fine-tune)
 lora_alpha: int | None = None  # LoRA scaling; pairs with lora_rank
@@ -232,10 +236,10 @@ seed: int = 42
 ## GPU config schema
 
 ```python
-gpu = {"gpu_type": "H100-80GB", "gpu_count": 2}
+gpu = {"gpu_type": "L4-24GB", "gpu_count": 1}
 ```
 
-Supported `gpu_type` values: `A100-80GB`, `H100-80GB`, `L4-24GB`, `A10G-24GB`. AMD `MI300X-192GB` is not yet available for training. On AWS, `A100-80GB` and `H100-80GB` launch as 8-GPU nodes; `L4-24GB` and `A10G-24GB` are the single-GPU shapes. On [`vast`](/training/providers/vast), `A100-80GB` and `H100-80GB` rent as flexible 1-8 GPU chunks; on [`digitalocean`](/training/providers/digitalocean), `H100-80GB` comes in fixed 1x and 8x droplets. Run `veri gpu list` to see current availability and pricing for every shape.
+Supported `gpu_type` values: `A100-80GB`, `H100-80GB`, `L4-24GB`, `A10G-24GB`. AMD `MI300X-192GB` is not yet available for training. On AWS (the default), `A100-80GB` and `H100-80GB` come only as whole 8-GPU nodes (`gpu_count: 8`), and `L4-24GB` and `A10G-24GB` come as 1 or 4 GPUs; any other count is rejected at submit with a `400`. On [`vast`](/training/providers/vast), `A100-80GB` and `H100-80GB` rent as flexible 1-8 GPU chunks; on [`digitalocean`](/training/providers/digitalocean), `H100-80GB` comes in fixed 1x and 8x droplets. Run `veri gpu list` to see current availability and pricing for every shape.
 
 ## Checkpoint destination schema
 

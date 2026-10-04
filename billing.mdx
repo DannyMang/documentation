@@ -37,7 +37,7 @@ Switch between your personal workspace and your teams from the sidebar. The bill
 A team owner is a member with the admin role in the team.
 
 <Note>
-  A team's balance is linked to the team itself, not to the person who created it. When a member is removed, work they launched keeps running and keeps billing the team; an owner can stop it. If the last member leaves, everything still running is stopped.
+  A team's balance is linked to the team itself, not to the person who created it. When a member is removed, work they launched keeps running and keeps billing the team; an owner can stop it. If the last member leaves, everything still running is terminated: its training jobs and deployments end as `failed` with the reason `workspace_empty`, and their final usage is settled.
 </Note>
 
 ## Adding funds

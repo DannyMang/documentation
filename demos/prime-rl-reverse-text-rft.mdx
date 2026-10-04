@@ -20,7 +20,7 @@ Because this is a custom script, the framework is your choice. Swap the two file
 ## Prerequisites
 
 - A Veri API key.
-- An H100-80GB box with at least 2 GPUs (one for inference, one for the trainer).
+- An H100-80GB box with at least 2 GPUs (one for inference, one for the trainer). The example rents 2x H100 on [Vast.ai](/training/providers/vast); on AWS, H100 comes only as a whole 8-GPU node (`gpu_count=8`).
 - Optional: a Weights & Biases API key for full RL observability (reward, KL, entropy, and sample-completion tables). Set it as `WANDB_API_KEY` and the run links to your W&B project automatically.
 
 ## The run config
@@ -111,6 +111,7 @@ job = client.training_jobs.create_custom_script(
     base_image="veri/base-vllm",
     gpu_type="H100-80GB",
     gpu_count=2,
+    provider="vast",  # 2x H100 is a Vast.ai shape; on AWS, H100 is a whole 8-GPU node
     output_name="rft-reverse-text",
     env={
         "VERI_RFT_ENV_ID": "reverse-text",

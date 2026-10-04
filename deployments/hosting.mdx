@@ -13,12 +13,14 @@ Rough sizing for **inference only** (training needs more headroom):
 
 | Model size | Minimum | Comfortable | Notes |
 | --- | --- | --- | --- |
-| ≤ 1B | A100-80GB ×1 | A100-80GB ×1 | Small models always fit on a single GPU. |
-| 3–8B | A100-80GB ×1 | H100-80GB ×1 | A100-80GB works; H100-80GB is faster per request. |
-| 14–34B | H100-80GB ×2 | H100-80GB ×4 | Tensor parallel; expect TP2 or TP4. |
-| 70B+ | H100-80GB ×4 (quantized) | H100-80GB ×8 | TP8 for full precision; quantized at TP4. |
+| ≤ 4B | L4-24GB ×1 | L4-24GB ×1 | Small models fit on a single 24 GB GPU. `A10G-24GB` is the same tier. |
+| 7–8B | L4-24GB ×1 | L4-24GB ×4 | On one card, a long-context model may need `vllm_extra_args: ["--max-model-len", "8192"]`; ×4 runs tensor parallel (TP4). |
+| 14–34B | L4-24GB ×4 | H100-80GB ×8 | Tensor parallel across the node. |
+| 70B+ | A100-80GB ×8 | H100-80GB ×8 | TP8 on a whole 8-GPU node. |
 
-**Rule of thumb:** Serving uses ~half the GPU you trained on. A 7B model trained on 8×A100 typically serves on 1×A100.
+These are AWS shapes (the default provider): `L4-24GB` and `A10G-24GB` come as 1 or 4 GPUs, and `A100-80GB` and `H100-80GB` only as whole 8-GPU nodes. Any other `gpu_count` is rejected at create.
+
+**Rule of thumb:** Serving needs less GPU than training. A 7B model trained on an 8×A100 node typically serves on 1 to 4 L4s.
 
 ## Serving shapes by provider
 
@@ -43,11 +45,11 @@ These are operational expectations, not contractual. The slowest part is usually
 
 ## Endpoint URL stability
 
-Once a deployment reaches `serving`, its `endpoint_url` is the platform URL `https://api.veri.studio/v1/deployments/{id}/chat/completions`, authenticated with your Veri API key. It never changes, including across scale-to-zero parks and wakes: save it to your config, it stays valid until you `stop` the deployment.
+Once a deployment reaches `serving`, its `endpoint_url` is the platform URL `https://api.veri.studio/v1/deployments/{id}/chat/completions`, authenticated with your Veri API key. The URL is fixed for the deployment's lifetime, including across scale-to-zero parks and wakes, so you can save it to your config: a request to it while the deployment is parked wakes it. The `endpoint_url` field itself reads `null` while the deployment is parked (`scaled_to_zero`) and returns once a wake serves. After you `stop` the deployment, requests to the URL return `400`.
 
 ## OOM at load
 
-If the model fails to load (OOM during weight init, not a request failure), the deployment transitions to `failed` with `error.message` populated.
+If the model fails to load on a first boot (for example CUDA out of memory during weight init, not a request failure), the deployment transitions to `failed`. `failure_code` is usually `vllm_failed_to_start` (or `oom`), and `error` carries the engine's startup log tail, where the out-of-memory message shows up. A wake boot that fails this way re-parks instead.
 
 ```python
 dep = client.deployments.get(deployment_id)
@@ -55,7 +57,7 @@ if dep.status == "failed":
     print(dep.error)
 ```
 
-Common fix: bump to a larger GPU (`A100-80GB` → `H100-80GB`) or add a second GPU (`gpu_count=2`).
+Common fix: move to a larger shape (`L4-24GB` ×1 → `L4-24GB` ×4, or a whole `A100-80GB`/`H100-80GB` ×8 node), or shorten the context with `vllm_extra_args: ["--max-model-len", "8192"]`.
 
 ## Where to go next
 

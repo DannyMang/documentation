@@ -136,7 +136,7 @@ kind = "train"
 [dataset]    # id = "ds_..."
 [reward]     # file = "./reward.py"   (grpo only)
 [method]     # type = "grpo"; learning_rate = 1e-6; max_steps = 100; rollouts_per_prompt = 4
-[resources]  # gpu_type = "H100-80GB"; gpu_count = 1  (optional: provider, region)
+[resources]  # gpu_type = "L4-24GB"; gpu_count = 1  (optional: provider, region)
 ```
 
 ```bash
@@ -147,7 +147,7 @@ veri jobs get <id> && veri jobs download <id> --output-dir ./checkpoints
 veri jobs cancel <id>
 ```
 
-Key hyperparameter defaults — grpo: lr 1e-6, rollouts_per_prompt 8, kl_coef 0.001, max_response_length 2048; sft_text: lr 2e-5, num_epochs 1; dpo: lr 5e-6, beta 0.1. LoRA via `lora_rank`/`lora_alpha`; QLoRA via `load_in_4bit` (NVIDIA only).
+Key hyperparameter defaults: grpo: lr 1e-6, rollouts_per_prompt 8, kl_coef 0.0 (omitted = no KL term), max_steps 100 (one prompt per step; num_epochs is not used), max_response_length 2048; sft_text: lr 2e-5, num_epochs 1; dpo: lr 5e-6, beta 0.1. LoRA via `lora_rank`/`lora_alpha`; QLoRA via `load_in_4bit` (NVIDIA only).
 
 Optional: push the trained artifact to the user's Hugging Face account when the job finishes — requires `veri hf set` once (see the Hugging Face section), then add to the train config:
 
@@ -166,7 +166,7 @@ Docs (per-method guides + full hyperparameter tables): https://docs.veri.studio/
 
 | Provider | GPUs | Status |
 | --- | --- | --- |
-| `aws` (default) | L4-24GB, A10G-24GB (1x); A100-80GB, H100-80GB (whole 8-GPU nodes — you pay for all 8) | live |
+| `aws` (default) | L4-24GB, A10G-24GB (1x or 4x); A100-80GB, H100-80GB (whole 8-GPU nodes only: gpu_count 8, you pay for all 8) | live |
 | `vast` | A100/H100-80GB (1/2/4/8x marketplace) | live |
 | `digitalocean` | H100-80GB (1x/8x droplets; capacity flaps — failed submits are unbilled, retry) | live |
 | `gcp` | — | gated off: submit returns "coming soon" 400 |
@@ -180,7 +180,7 @@ Docs (per-provider constraints): https://docs.veri.studio/training/providers
 ```bash
 veri run-script ./my-run \
   --entrypoint "torchrun --nproc_per_node=\$VERI_NUM_GPUS train.py" \
-  --base-image veri/base --gpu-type H100-80GB --gpu-count 1 \
+  --base-image veri/base --gpu-type L4-24GB --gpu-count 1 \
   --requirements ./my-run/requirements.txt
 ```
 
@@ -251,8 +251,9 @@ interactively on a TTY and will hang an agent session. (`--cache` reuses/populat
 server-side copy of the HF snapshot so repeat deploys of the same repo skip the download.)
 
 ALWAYS pass `--gpu-type` explicitly and right-size it (`veri gpu list` for prices; L4-24GB
-handles ≤4B models). The default is `A100-80GB`, which on AWS is a whole 8-GPU node — an
-expensive shape for small models.
+handles ≤4B models). `veri deploy` defaults to `L4-24GB` x1; `veri deployments create` requires
+`--gpu-type`. On AWS, `A100-80GB`/`H100-80GB` serve only as whole 8-GPU nodes (`--gpu-count 8`);
+x1 is a 400.
 
 - Engine: `vllm` only (any other value returns 400). Extra vLLM flags: repeat `--vllm-arg=<token>` or `deployment.vllm_extra_args` list in the config.
 - Serving providers live: `aws` (default). Gated off (create returns "coming soon" 400): `gcp` (single-GPU A100), `digitalocean`, `huggingface` (BYOC). `vast` is training-only (serving returns 400).

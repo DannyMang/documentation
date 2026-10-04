@@ -16,7 +16,7 @@ Charges accrue per minute while any replica is up. When you call `stop` (or a `m
 | Status | Charging? |
 | --- | --- |
 | `queued` | No |
-| `provisioning` | **Yes**: a box holds a GPU from launch, so warmup is billable time (charged once the deployment serves, or settled if it stops or fails first) |
+| `provisioning` | **Yes**: a box holds a GPU from launch, so warmup is billable time (charged once the deployment serves, or settled if it parks, stops, or fails first) |
 | `serving` | **Yes** (per running replica, draining replicas included) |
 | `scaled_to_zero` | No (parked time is never charged or counted) |
 | `waking` | No (the new boxes bill once they launch) |

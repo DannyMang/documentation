@@ -11,12 +11,12 @@ AWS is the default provider and the most reliable for NVIDIA training. Omit the 
 
 | GPU type | VRAM | Instance | GPUs per node |
 | --- | --- | --- | --- |
-| `L4-24GB` | 24 GB | g6.xlarge | 1 |
-| `A10G-24GB` | 24 GB | g5.xlarge | 1 |
+| `L4-24GB` | 24 GB | g6.xlarge (1), g6.12xlarge (4) | 1 or 4 |
+| `A10G-24GB` | 24 GB | g5.xlarge (1), g5.12xlarge (4) | 1 or 4 |
 | `A100-80GB` | 80 GB | p4de.24xlarge | 8 |
 | `H100-80GB` | 80 GB | p5.48xlarge | 8 |
 
-L4 and A10G are single-GPU instances — you rent one card. A100 and H100 are whole 8-GPU nodes: you get (and pay for) all 8 cards regardless of `gpu_count`, which controls how many are used for training, not how many are rented.
+L4 and A10G come as 1-GPU or 4-GPU instances: set `gpu_count` to `1` or `4`. A100 and H100 come only as whole 8-GPU nodes: set `gpu_count` to `8` (you rent and pay for all 8 cards). Any other `gpu_count` is rejected at submit with a `400` that names the providers selling that shape, for example [Vast.ai](/training/providers/vast) for 1, 2, or 4 A100/H100 GPUs.
 
 ## Submitting a job
 

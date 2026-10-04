@@ -96,7 +96,7 @@ Submit it with the CLI:
 veri run-script ./my-run \
   --entrypoint "torchrun --nproc_per_node=$VERI_NUM_GPUS train.py" \
   --base-image veri/base \
-  --gpu-type H100-80GB \
+  --gpu-type L4-24GB \
   --gpu-count 1 \
   --requirements ./my-run/requirements.txt
 ```

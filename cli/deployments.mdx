@@ -22,7 +22,7 @@ In a terminal, it asks whether to cache the model in Veri storage for faster sta
 | Flag | Purpose |
 | --- | --- |
 | `--name` | Endpoint name. Default: derived from the repo name (`qwen3-4b`). |
-| `--gpu-type` | GPU shape. Default `A100-80GB`. |
+| `--gpu-type` | GPU shape. Default `L4-24GB`. |
 | `--gpu-count` | GPUs per replica. Default `1`. |
 | `--engine` | `vllm` (the default and only serving engine). |
 | `--replicas` | GPU-box replicas behind the endpoint. Default `1`. |
@@ -79,21 +79,21 @@ Two mutually exclusive modes — deploy a training job's output, or deploy a Hug
 veri deployments create \
   --model job_abc \
   --name my-endpoint \
-  --gpu-type A100-80GB \
+  --gpu-type L4-24GB \
   --gpu-count 1
 
 # From a saved model in your library:
 veri deployments create \
   --from-model mdl_abc \
   --name support-prod \
-  --gpu-type A100-80GB \
+  --gpu-type L4-24GB \
   --gpu-count 1
 
 # Directly from HuggingFace (no training):
 veri deployments create \
   --from-hf Qwen/Qwen3-4B \
   --name qwen-prod \
-  --gpu-type A100-80GB \
+  --gpu-type L4-24GB \
   --gpu-count 1
 ```
 
@@ -165,7 +165,7 @@ veri deployments create \
   --scale-to-zero-window 1800
 ```
 
-The deployment reports `serving` once at least one replica is up. `list` and `get` show the fleet as `ready/desired` (for example `2/3` while a scale-up is still provisioning). A replica that dies is replaced automatically; the deployment keeps serving at reduced capacity in the meantime. If the last box dies, the deployment shows `provisioning` (with `failure_code` `replica_lost`) while Veri replaces it, up to `--self-heal-attempts` times; see [Self-healing](/deployments#self-healing).
+The deployment reports `serving` once at least one replica is up. `list` and `get` show the fleet as `ready/desired` (for example `2/3` while a scale-up is still provisioning). When some replicas of a fleet die, the deployment keeps serving on the rest at reduced capacity while Veri launches replacements; replacements back off (the first at once, then 10, 20, 40 and 80 seconds after the previous) and pause after 5 in a row until you `update` the deployment. If the last box dies after the deployment has served, it shows `provisioning` (with `failure_code` `replica_lost`) while Veri replaces it, up to `--self-heal-attempts` times (default 3); once those are used up, a `--min-replicas 0` deployment parks and any other deployment fails. See [Self-healing](/deployments#self-healing).
 
 ### Autoscaling
 
@@ -181,6 +181,8 @@ veri deployments wake dep_abc     # 202; no-op if already up
 
 Then poll `veri deployments get dep_abc` until it's `serving`. Raising the floor also wakes it: `veri deployments update dep_abc --min-replicas 1` on a parked deployment wakes it immediately. A wake (explicit, request-triggered, or from raising `--min-replicas`) relaunches `min_replicas` boxes (at least one; the autoscaler grows the fleet again if traffic returns) and is subject to the workspace active-replica limit, like a create: with no headroom it returns `429` with code `ACTIVE_DEPLOYMENT_LIMIT` and the deployment stays parked, so stop or scale down something else first. Optionally set `--idle-delete-after N` to auto-stop a deployment that stays parked with no traffic for N days.
 
+A wake that fails (for example no GPU capacity) puts the deployment back to `scaled_to_zero` with the reason in its `error`, and the next wake waits out a backoff (1 minute, doubling up to 1 hour). With `--min-replicas 0` the next request after the backoff retries it; with `--min-replicas 1` or more Veri retries the wake itself once the backoff has passed, so the floor comes back without traffic (and as soon as there is room if the workspace active-replica limit is full). After 3 failed wakes in a row Veri stops retrying on its own and says so in `error`. `veri deployments wake` retries immediately whatever the count, and so does `veri deployments update` with `--min-replicas` of 1 or more.
+
 ### Change scaling on a live deployment
 
 ```bash
@@ -189,13 +191,16 @@ veri deployments update dep_abc --min-replicas 1 --max-replicas 6
 veri deployments update dep_abc --concurrency-target 4
 veri deployments update dep_abc --min-replicas 1                 # parked: wakes it now
 veri deployments update dep_abc --self-heal-attempts 5           # replace a lost last box up to 5 times
+veri deployments update dep_abc --clear-scale-to-zero-window     # idle window back to the default (3600s)
+veri deployments update dep_abc --clear-idle-delete-after        # never auto-stop while parked
 ```
 
-`update` returns immediately with the new desired state; the fleet converges in the background (watch the `replicas` column approach `desired/desired`). Model, GPU, and provider are immutable — recreate the deployment to change those.
+`update` returns immediately with the new desired state; the fleet converges in the background (watch the `replicas` column approach `desired/desired`). Model, GPU, and provider are immutable: recreate the deployment to change those. A flag you leave out keeps its current setting; `--clear-scale-to-zero-window` and `--clear-idle-delete-after` put those two settings back to their defaults (each cannot be combined with its value flag). Clearing the window on a `--min-replicas 0` deployment starts a fresh idle window, like changing it.
 
 - **Parked (`scaled_to_zero`):** raising `--min-replicas` to 1 or more wakes the deployment immediately and boots the new floor, like `veri deployments wake`. It is checked against the workspace active-replica limit first: if the new floor does not fit, `update` fails with `429` (`ACTIVE_DEPLOYMENT_LIMIT`) and nothing changes. Other settings are saved and apply from the next wake.
 - **First boot (`provisioning`):** scaling changes apply once the deployment is serving; extra replicas launch after the first one serves. `update` prints a note saying so.
 - **`waking`:** no second wake; the new settings apply to the boot in progress, or once it serves.
+- **`--self-heal-attempts`** is not a boot setting: it applies at once in every status, the next time the deployment's last box dies while serving (and any update restarts the replacement count). An update that only changes it prints that instead of the boot note.
 
 ### Session affinity
 
@@ -266,7 +271,13 @@ veri deployments get dep_abc                        # one deployment, with its s
 | `--limit` | Maximum number to return. Default `20`. |
 | `--after <id>` | Pagination cursor: return deployments created after this ID. |
 
-A deployment can hold a GPU while `provisioning`, `serving`, or `waking`, so to catch everything holding one, list without `--status` and scan the `status` column.
+A deployment holds GPU boxes while it is `provisioning` or `serving`. A `queued` or `waking` deployment moves to `provisioning` as soon as its first box launches, and a `scaled_to_zero` one holds none. To catch everything holding or about to hold a GPU, list without `--status` and scan the `status` column.
+
+The table (and `--format csv`) shows `id`, `name`, `status`, `replicas`, `model`, `endpoint_url`, `cost_per_hour_usd` and `self_heal_attempts`. With `--format json`, `list` and `get` also return the scaling settings (`min_replicas`, `max_replicas`, `concurrency_target`, `scale_to_zero_window_seconds` and `idle_delete_after_days`, where `null` means the default: a 3600-second idle window, never auto-stop), `failure_code`, and the wake state of a scale-to-zero deployment: `last_wake_at`, `wake_failure_count` and `next_wake_not_before` (see [the deployment object](/deployments/api#post-v1deployments)). When wakes have been failing, the table output adds a line under the table:
+
+```text
+Wake: 2 failed wake boots in a row (last wake started 2026-10-03T10:00:00Z); a request wakes it again from 2026-10-03T10:04:00Z, `veri deployments wake dep_abc` retries now.
+```
 
 ## Exit codes
 
@@ -274,7 +285,7 @@ A deployment can hold a GPU while `provisioning`, `serving`, or `waking`, so to 
 | --- | --- |
 | `0` | Success. |
 | `1` | User error (both `--model` and `--from-hf` passed, missing `--gpu-type` inline). |
-| `2` | API error. |
+| `2` | API error. The server's message is printed as one `Error:` line on stderr. |
 | `4` | Auth error. |
 
 ## What's next

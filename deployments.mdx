@@ -36,7 +36,7 @@ You set these at create time, whether from the [SDK](/deployments/examples) (`cl
 | `source` | No | `training_job` | Where `model` comes from: `huggingface`, `training_job`, or `custom_model`. See [Model sources](#model-sources). |
 | `name` | Yes | — | Display name, also the `model` value clients send in requests. |
 | `gpu.gpu_type` | Yes | — | GPU SKU (for example `L4-24GB`, `A100-80GB`). Run `veri gpu list` for offered shapes and [Sizing the GPU](#sizing-the-gpu) for guidance. |
-| `gpu.gpu_count` | No | `1` | GPUs per replica, for multi-GPU model parallelism. |
+| `gpu.gpu_count` | Yes (inline CLI flags default to `1`) | none | GPUs per replica, for multi-GPU model parallelism. Must be a count the provider sells for that `gpu_type`: on AWS, `1` or `4` for `L4-24GB`/`A10G-24GB` and `8` for `A100-80GB`/`H100-80GB`. |
 | `engine` | No | `vllm` | Inference engine. `vllm` is the only serving engine; any other value returns a 400 at create. |
 | `provider` | No | `aws` | Cloud to serve on — see [Serving providers](/deployments/providers) for shapes and status, or run `veri gpu list` for the live catalog. |
 | `replicas` | No | `1` | GPU-box replicas behind one endpoint (1-8). Shorthand for equal `min_replicas`/`max_replicas` (a fixed fleet). |
@@ -51,7 +51,7 @@ You set these at create time, whether from the [SDK](/deployments/examples) (`cl
 | `trace_bodies` | No | `false` | Capture this deployment's request/response bodies as browsable [traces](/deployments/observability#request-traces). Enabling stores end-user prompt/completion content. First 5,000 traces per workspace each month are free, then metered per 1k from credits. |
 | `trace_retention` | No | `base` | Trace retention class: `base` (14 days) or `extended` (400 days, extended rate). Requires `trace_bodies: true`. |
 
-`min_replicas`, `max_replicas`, `concurrency_target`, `scale_to_zero_window_seconds`, `idle_delete_after_days`, and `self_heal_attempts` can also be changed later on a live deployment: see [Scaling](/cli/deployments#replicas-autoscaling-and-scale-to-zero). Model, GPU, and provider are immutable: changing those means a new deployment. Raising `min_replicas` to 1 or more on a parked (`scaled_to_zero`) deployment wakes it immediately, subject to the workspace active-replica limit (`429` if it is full, and nothing changes). Scaling changes made during the first boot apply once the deployment is serving. See [what an update does in each status](/deployments/api#patch-v1deploymentsid).
+`min_replicas`, `max_replicas`, `concurrency_target`, `scale_to_zero_window_seconds`, `idle_delete_after_days`, and `self_heal_attempts` can also be changed later on a live deployment: see [Scaling](/cli/deployments#replicas-autoscaling-and-scale-to-zero). Model, GPU, and provider are immutable: changing those means a new deployment. Send `null` for `scale_to_zero_window_seconds` or `idle_delete_after_days` to put it back to its default. Raising `min_replicas` to 1 or more on a parked (`scaled_to_zero`) deployment wakes it immediately, subject to the workspace active-replica limit (`429` if it is full, and nothing changes). Scaling changes made during the first boot apply once the deployment is serving; a new `self_heal_attempts` applies immediately in every status. See [what an update does in each status](/deployments/api#patch-v1deploymentsid).
 
 At call time, `chat` also accepts a session key for cache-warm routing across replicas.
 
@@ -64,20 +64,23 @@ At call time, `chat` also accepts a session key for cache-warm routing across re
 ```mermaid
 stateDiagram-v2
     [*] --> queued
-    queued --> provisioning : reconciler picks up
-    provisioning --> serving : replica ready, endpoint reachable
-    provisioning --> failed : GPU lease failed / image pull error / self-healing used up
-    serving --> scaled_to_zero : idle past window (min_replicas 0 only)
-    serving --> provisioning : last box lost, self-healing replaces it
-    provisioning --> scaled_to_zero : self-healing used up (min_replicas 0)
-    scaled_to_zero --> waking : request, POST /wake, or min_replicas raised to 1+
-    waking --> provisioning : reconciler re-provisions
-    serving --> stopped : user called stop
-    scaled_to_zero --> stopped : user called stop / idle_delete_after_days
-    serving --> failed : last box lost, self-healing off
+    queued --> provisioning : first GPU box launched
+    queued --> failed : no box could launch (for example CAPACITY_UNAVAILABLE)
+    provisioning --> serving : a replica is ready, endpoint reachable
+    provisioning --> failed : first boot crashed or timed out, or self-healing used up
+    serving --> provisioning : no replica serving while one boots (for example self-healing a lost last box)
+    serving --> failed : last box lost, self-healing off or used up
+    serving --> scaled_to_zero : idle past window (min_replicas 0 only), or last box lost with self-healing off or used up
+    provisioning --> scaled_to_zero : wake boot failed (backoff before the next wake), or self-healing used up (min_replicas 0)
+    scaled_to_zero --> waking : request, POST /wake, min_replicas raised to 1+, or wake retry (min_replicas 1+)
+    waking --> provisioning : first GPU box launched
+    waking --> scaled_to_zero : no box could launch (backoff before the next wake)
+    scaled_to_zero --> stopped : idle_delete_after_days
     stopped --> [*]
     failed --> [*]
 ```
+
+Not drawn: `stop` moves a deployment in any status other than `stopped` or `failed` to `stopped`. Running out of credit, or the workspace losing its last member, moves a `queued`, `provisioning`, `serving`, or `waking` deployment to `failed`. `stopped` and `failed` are final.
 
 Deployments consume GPU credit **only while replicas are running**: billing is metered per replica, from each GPU box's launch (warmup included) to its termination. `scaled_to_zero` charges nothing. Once `stopped`, billing stops; the deployment row stays for history. `stop` is permanent, not a pause: a stopped deployment cannot be woken or resumed (bring it back by creating a new one). Scale to zero (`min_replicas: 0`) is the pause path.
 
@@ -94,7 +97,7 @@ When a deployment that has served loses its last GPU box (the box crashes, its h
 - When a replacement reaches `serving`, `failure_code` and `error` clear and the full budget is available again for the next loss. Any PATCH to the deployment also restarts the budget.
 - When the attempts are used up, or with `self_heal_attempts: 0`, a deployment with `min_replicas` of 1 or more goes `failed` with `failure_code: replica_lost` (billing ends; redeploy to bring it back), and a `min_replicas: 0` deployment parks (`scaled_to_zero`, also with `replica_lost`) and wakes on the next request.
 
-`self_heal_attempts` only governs losing the last box. A multi-replica fleet that loses some of its boxes keeps serving on the rest and replaces them on the same ladder whatever the setting, pausing after 5 replacements until you PATCH the deployment. A first boot that fails is not self-healed (it fails with `watchdog_timeout` or the box's own `failure_code`), and a wake that fails re-parks with backoff instead.
+`self_heal_attempts` only governs losing the last box. A multi-replica fleet that loses some of its boxes keeps serving on the rest and replaces them on the same ladder whatever the setting, pausing after 5 replacements until you PATCH the deployment. A first boot that fails is not self-healed (it fails with `watchdog_timeout` or the box's own `failure_code`), and a wake that fails re-parks with backoff instead (with `min_replicas` of 1 or more, Veri retries that wake itself once the backoff has passed, and stops after 3 failed wakes in a row).
 
 ## Calling a deployment
 
@@ -148,12 +151,14 @@ Pick a GPU large enough to hold the weights with headroom. Some rough starting p
 
 | Model size | Minimum | Comfortable |
 | --- | --- | --- |
-| ≤ 1B | A100-80GB ×1 | A100-80GB ×1 |
-| 3–8B | A100-80GB ×1 | H100-80GB ×1 |
-| 14–34B | H100-80GB ×2 | H100-80GB ×4 |
-| 70B+ | H100-80GB ×4 (quantized) | H100-80GB ×8 |
+| ≤ 4B | L4-24GB ×1 | L4-24GB ×1 |
+| 7–8B | L4-24GB ×1 (shorter context) | L4-24GB ×4 |
+| 14–34B | L4-24GB ×4 | H100-80GB ×8 |
+| 70B+ | A100-80GB ×8 | H100-80GB ×8 |
 
-Serving usually needs **less** GPU than training the same model. A 7B you trained on 8×A100 typically serves on 1×A100.
+These are the shapes AWS (the default provider) sells: `L4-24GB` and `A10G-24GB` come as 1 or 4 GPUs, and `A100-80GB` and `H100-80GB` only as whole 8-GPU nodes. Other GPU counts are rejected at create with a `400`. See [Serving providers](/deployments/providers). On a single 24 GB card, a 7-8B model with a long context window may need a smaller context length to fit its KV cache: pass `vllm_extra_args: ["--max-model-len", "8192"]`, or use 4 GPUs.
+
+Serving usually needs **less** GPU than training the same model. A 7B you trained on an 8×A100 node typically serves on 1 to 4 L4s.
 
 ## Serving newer architectures
 
@@ -179,7 +184,7 @@ How it behaves:
 
 - Only official upstream images are accepted: `vllm/vllm-openai:<tag>` (NVIDIA) or `vllm/vllm-openai-rocm:<tag>` (AMD). Anything else is rejected at create.
 - The image runs via Docker on the deployment's box, on every provider, and is used exactly as written: the platform never rewrites or substitutes it.
-- The image is pulled from Docker Hub when the box boots. This pull can be too slow or rate limited to provision reliably, and a deployment that hits the provisioning timeout fails. Explicit images are supported as literal overrides; the supported route for a newer architecture is the platform's next validated vLLM version.
+- The image is pulled from Docker Hub when the box boots, so the boot deadline is longer than the default 20 minutes: 40 minutes plus 5 seconds per GB of the deployment's total GPU memory. The pull can still be too slow or rate limited to provision reliably: a first boot that passes the deadline fails with `watchdog_timeout`, and a wake boot re-parks (a request after the backoff, or `POST /wake`, wakes it again). Explicit images are supported as literal overrides; the supported route for a newer architecture is the platform's next validated vLLM version.
 - Without `vllm_image`, the deployment runs the platform-managed vLLM version for its provider, which never pulls at boot.
 - `engine: vllm` only.
 - The image is set at create and immutable, like model and GPU.
