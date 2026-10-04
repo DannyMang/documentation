@@ -496,11 +496,11 @@
               }
             }
           },
+          "400": {
+            "description": "Empty file, invalid JSONL, a row with no training fields (none of prompt, messages, text, chosen + rejected, conversations, instruction + output), or an unknown format"
+          },
           "409": {
             "description": "JSON create: a dataset with that name already exists"
-          },
-          "422": {
-            "description": "Empty file, invalid JSONL, a row missing the 'prompt' field, or an unknown format"
           }
         },
         "security": [
@@ -786,7 +786,7 @@
           "Datasets"
         ],
         "summary": "Append rows",
-        "description": "Append rows to the stream. Every row is validated against the locked format; one bad row rejects the whole batch (nothing is written). A correction is a new row with `supersedes` naming the row it replaces — it takes effect in snapshots cut from now on, older snapshots keep the original. Emits one `dataset.rows_appended` webhook per batch.",
+        "description": "Append rows to the stream. Every row is validated against the locked format; one bad row rejects the whole batch (nothing is written). A correction is a new row with `supersedes` naming the row it replaces; it takes effect in snapshots cut from now on, and older snapshots keep the original. Emits one `dataset.rows_appended` webhook per batch.",
         "operationId": "append_rows",
         "parameters": [
           {
@@ -1411,7 +1411,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Detach result: {serve_name, deleted} — deleted=true when removed immediately, else deleted=false with status 'detaching'",
+            "description": "Detach result: {serve_name, deleted}. deleted=true when removed immediately, else deleted=false with status 'detaching'",
             "content": {
               "application/json": {
                 "schema": {}
@@ -1436,7 +1436,7 @@
           "Deployments"
         ],
         "summary": "Flip an adapter to a new version",
-        "description": "Point an attached alias at a new adapter model with zero downtime. The new version is staged alongside the current one; the alias cuts over atomically only once EVERY serving replica reports the new version loaded. Until then the call answers 409 'not yet converged' — retry the identical PATCH until it succeeds; the current version keeps serving throughout.",
+        "description": "Point an attached alias at a new adapter model with zero downtime. The new version is staged alongside the current one; the alias cuts over atomically only once EVERY serving replica reports the new version loaded. Until then the call answers 409 'not yet converged'; retry the identical PATCH until it succeeds; the current version keeps serving throughout.",
         "operationId": "flip",
         "parameters": [
           {
@@ -1502,7 +1502,7 @@
           "Deployments"
         ],
         "summary": "Roll back an adapter",
-        "description": "Point the alias back at the previously served adapter model (previous_model_id) under a fresh version. Status returns to 'attaching' until every serving replica reports the rollback target loaded — usually immediate when the old weights are still resident, otherwise after a re-download.",
+        "description": "Point the alias back at the previously served adapter model (previous_model_id) under a fresh version. Status returns to 'attaching' until every serving replica reports the rollback target loaded: usually immediate when the old weights are still resident, otherwise after a re-download.",
         "operationId": "rollback",
         "parameters": [
           {
@@ -3177,7 +3177,7 @@
           "Models"
         ],
         "summary": "Get a lineage's retention window",
-        "description": "How long unprotected versions of this lineage are kept before the nightly sweep purges their weights. Protected versions — targeted by an alias, the previous production version, pinned or tagged, or in use by a deployment — are never purged.",
+        "description": "How long unprotected versions of this lineage are kept before the nightly sweep purges their weights. Protected versions (targeted by an alias, the previous production version, pinned or tagged, or in use by a deployment) are never purged.",
         "operationId": "get_model_retention",
         "parameters": [
           {
@@ -5394,7 +5394,7 @@
           },
           "state": {
             "type": "string",
-            "description": "downloading | loading | loaded | failed — or \"missing\" when the\nreplica's last report doesn't mention this internal_name at all."
+            "description": "downloading | loading | loaded | failed, or \"missing\" when the\nreplica's last report doesn't mention this internal_name at all."
           },
           "error": {
             "type": [
@@ -5460,7 +5460,7 @@
               "string",
               "null"
             ],
-            "description": "The previously served model, if any — the rollback target."
+            "description": "The previously served model, if any (the rollback target)."
           },
           "pending_model_id": {
             "type": [
@@ -5573,7 +5573,7 @@
           },
           "fleet_flips_staged": {
             "type": "integer",
-            "description": "Multi-adapter fleets serving this lineage on which a flip to the new\nversion was staged (production moves only). The fleet cuts over once\nevery replica has the version loaded — no redeploy.",
+            "description": "Multi-adapter fleets serving this lineage on which a flip to the new\nversion was staged (production moves only). The fleet cuts over once\nevery replica has the version loaded; no redeploy.",
             "minimum": 0
           }
         }
@@ -6020,7 +6020,7 @@
       },
       "CreateModelRequest": {
         "type": "object",
-        "description": "Generic create body. `source.type` selects the ingress path; Phase 1 accepts\nonly training_job (huggingface/upload return 501).",
+        "description": "Generic create body. `source.type` selects the ingress path; only\ntraining_job is accepted today (huggingface/upload return 501).",
         "required": [
           "name",
           "source"
@@ -6041,7 +6041,7 @@
               "string",
               "null"
             ],
-            "description": "Which artifact to save from the source job: \"full\" (default, the\nstandalone checkpoint) or \"adapter\" (LoRA jobs only — stores the PEFT\nadapter dir as-is, without merging; the row records the job's base\nmodel, VS-405)."
+            "description": "Which artifact to save from the source job: \"full\" (default, the\nstandalone checkpoint) or \"adapter\" (LoRA jobs only: stores the PEFT\nadapter dir as-is, without merging; the row records the job's base\nmodel)."
           }
         }
       },
@@ -6451,7 +6451,7 @@
               "null"
             ],
             "format": "int32",
-            "description": "VS-341: number of GPU-box replicas to launch. Omitted => 1, which is\nbyte-for-byte today's single-box behavior. Validated 1..=8 at create.\nSugar for min_replicas == max_replicas == N (the CLI --replicas flag)."
+            "description": "Number of GPU-box replicas to launch. Omitted => 1 (a single box).\nValidated 1..=8 at create. Sugar for min_replicas == max_replicas == N\n(the CLI --replicas flag)."
           },
           "min_replicas": {
             "type": [
@@ -6459,7 +6459,7 @@
               "null"
             ],
             "format": "int32",
-            "description": "Scaling foundation (§10): replica-count bounds. min == max => fixed N\n(autoscaling off — there is no boolean flag). Omitted => both default to\nnum_replicas (fixed N). min = 0 arms scale-to-zero (VS-313): the fleet\nparks after the idle window and wakes on the next request."
+            "description": "Replica-count bounds. min == max => fixed N (autoscaling off; there is\nno boolean flag). Omitted => both default to num_replicas (fixed N).\nmin = 0 enables scale to zero: the fleet parks after the idle window\nand wakes on the next request."
           },
           "max_replicas": {
             "type": [
@@ -6474,7 +6474,7 @@
               "null"
             ],
             "format": "double",
-            "description": "Per-replica concurrency setpoint the (VS-342) autoscaler targets:\ndesired = ceil(total_ongoing / concurrency_target), clamped to\n[max(min_replicas, 1), max_replicas]. Stored as target_ongoing_requests.\nOmitted => 8 (throughput-biased; lower it for latency-sensitive chat)."
+            "description": "Per-replica concurrency setpoint the autoscaler targets:\ndesired = ceil(total_ongoing / concurrency_target), clamped to\n[max(min_replicas, 1), max_replicas]. Stored as target_ongoing_requests.\nOmitted => 8 (throughput-biased; lower it for latency-sensitive chat)."
           },
           "scale_to_zero_window_seconds": {
             "type": [
@@ -6482,7 +6482,7 @@
               "null"
             ],
             "format": "int32",
-            "description": "VS-313: idle seconds before a min_replicas=0 deployment parks\n(scaled_to_zero). Omitted => 3600. Floor 300 (Fireworks' convention)."
+            "description": "Idle seconds before a min_replicas=0 deployment parks\n(scaled_to_zero). Omitted => 3600. Minimum 300."
           },
           "idle_delete_after_days": {
             "type": [
@@ -6490,7 +6490,7 @@
               "null"
             ],
             "format": "int32",
-            "description": "VS-313: optional GC — a deployment parked at zero with no traffic for\nthis many days goes terminal (stopped). Omitted => kept forever."
+            "description": "Optional cleanup: a deployment parked at zero with no traffic for\nthis many days goes terminal (stopped). Omitted => kept forever."
           },
           "self_heal_attempts": {
             "type": [
@@ -6505,7 +6505,7 @@
               "boolean",
               "null"
             ],
-            "description": "HF cache-through (source=huggingface only): also save the downloaded\nsnapshot to the caller's model library so later deploys of this repo\nstart from S3 instead of the HF hub. Best-effort — a failed upload\nnever affects this deployment. Omitted => no caching."
+            "description": "HF cache-through (source=huggingface only): also save the downloaded\nsnapshot to the caller's model library so later deploys of this repo\nstart from S3 instead of the HF hub. Best-effort: a failed upload\nnever affects this deployment. Omitted => no caching."
           },
           "vllm_extra_args": {
             "type": [
@@ -6515,18 +6515,18 @@
             "items": {
               "type": "string"
             },
-            "description": "VS-370: extra vLLM CLI flags appended verbatim to the engine command\n(argv list, e.g. [\"--speculative-config\", \"{...}\", \"--kv-cache-dtype\",\n\"fp8\"]). vllm engine only. Flags the platform owns (--model, --port,\n--host, --api-key, --served-model-name) and --trust-remote-code are\nrejected at create."
+            "description": "Extra vLLM CLI flags appended verbatim to the engine command\n(argv list, e.g. [\"--speculative-config\", \"{...}\", \"--kv-cache-dtype\",\n\"fp8\"]). vllm engine only. Flags the platform owns (--model, --port,\n--host, --api-key, --served-model-name) and --trust-remote-code are\nrejected at create."
           },
           "vllm_image": {
             "type": [
               "string",
               "null"
             ],
-            "description": "VS-426: explicit vLLM serving image (e.g. \"vllm/vllm-openai:v0.25.1\")\nfor architectures newer than the platform default vLLM. Official\nupstream images only (vllm/vllm-openai[-rocm]:<tag>). vllm engine only.\nForces the docker launcher on every provider, including AWS. Omitted =>\nplatform default."
+            "description": "Explicit vLLM serving image (e.g. \"vllm/vllm-openai:v0.25.1\")\nfor architectures newer than the platform default vLLM. Official\nupstream images only (vllm/vllm-openai[-rocm]:<tag>). vllm engine only.\nForces the docker launcher on every provider, including AWS. Omitted =>\nplatform default."
           },
           "startup_profiling": {
             "type": "boolean",
-            "description": "Opt-in vLLM startup diagnostics: the serving agent exports\nVLLM_LOGGING_LEVEL=DEBUG + VLLM_GC_DEBUG=1 to the engine, records\nstartup phase timings, and reports them on the first healthy heartbeat\n(or in the failure detail with a deeper stderr tail). Default false —\ndiagnostic logging slows inference, so use for diagnosis launches, not\nsteady customer traffic."
+            "description": "Opt-in vLLM startup diagnostics: the serving agent exports\nVLLM_LOGGING_LEVEL=DEBUG + VLLM_GC_DEBUG=1 to the engine, records\nstartup phase timings, and reports them on the first healthy heartbeat\n(or in the failure detail with a deeper stderr tail). Default false:\ndiagnostic logging slows inference, so use for diagnosis launches, not\nsteady customer traffic."
           },
           "trace_bodies": {
             "type": "boolean",
@@ -6616,7 +6616,7 @@
               "null"
             ],
             "format": "double",
-            "description": "VS-380: mean GPU utilization percent (0-100) across replicas reporting\nin the bucket; null when no replica reported GPU telemetry. Debugging\nmetric — scale on requests_waiting + kv_cache_usage."
+            "description": "Mean GPU utilization percent (0-100) across replicas reporting\nin the bucket; null when no replica reported GPU telemetry. Debugging\nmetric: scale on requests_waiting + kv_cache_usage."
           },
           "gpu_memory_used_bytes": {
             "type": [
@@ -6624,7 +6624,7 @@
               "null"
             ],
             "format": "double",
-            "description": "VS-380: summed GPU memory in use (bytes) across reporting replicas."
+            "description": "Summed GPU memory in use (bytes) across reporting replicas."
           }
         }
       },
@@ -6963,7 +6963,7 @@
               "null"
             ],
             "format": "double",
-            "description": "VS-380: this replica's latest GPU utilization percent in the bucket."
+            "description": "This replica's latest GPU utilization percent in the bucket."
           },
           "gpu_memory_used_bytes": {
             "type": [
@@ -6971,7 +6971,7 @@
               "null"
             ],
             "format": "double",
-            "description": "VS-380: this replica's latest GPU memory in use (bytes) in the bucket."
+            "description": "This replica's latest GPU memory in use (bytes) in the bucket."
           }
         }
       },
@@ -7087,7 +7087,7 @@
               "null"
             ],
             "format": "double",
-            "description": "VS-380 GPU hardware snapshot (NVML, from the last heartbeat). All\nfields absent when the worker did not report telemetry. Debugging\nmetric only: scale on requests_waiting + kv_cache_usage, not this\n(nvidia-smi-style utilization measures kernel residency, not pressure).\nMean utilization percent (0-100) across the replica's GPUs."
+            "description": "GPU hardware snapshot (NVML, from the last heartbeat). All\nfields absent when the worker did not report telemetry. Debugging\nmetric only: scale on requests_waiting + kv_cache_usage, not this\n(nvidia-smi-style utilization measures kernel residency, not pressure).\nMean utilization percent (0-100) across the replica's GPUs."
           },
           "gpu_memory_used_bytes": {
             "type": [
@@ -7388,14 +7388,14 @@
             "items": {
               "type": "string"
             },
-            "description": "VS-370: the extra vLLM CLI flags this deployment was created with\n(argv list). Null unless supplied at create."
+            "description": "The extra vLLM CLI flags this deployment was created with\n(argv list). Null unless supplied at create."
           },
           "vllm_image": {
             "type": [
               "string",
               "null"
             ],
-            "description": "VS-426: the explicit vLLM serving image this deployment was created\nwith. Null unless supplied at create."
+            "description": "The explicit vLLM serving image this deployment was created\nwith. Null unless supplied at create."
           },
           "startup_profiling": {
             "type": "boolean",
@@ -7418,7 +7418,7 @@
           "num_replicas": {
             "type": "integer",
             "format": "int32",
-            "description": "VS-341: DESIRED replica count (GPU boxes) behind this deployment. The\nobserved count is ready_replicas — the K8s spec/status split; the CLI\nrenders \"ready/desired\" (e.g. 2/3)."
+            "description": "Desired replica count (GPU boxes) behind this deployment. The\nobserved count is ready_replicas; the CLI renders \"ready/desired\"\n(e.g. 2/3)."
           },
           "ready_replicas": {
             "type": "integer",
@@ -7448,7 +7448,7 @@
               "null"
             ],
             "format": "int32",
-            "description": "VS-313: idle window before a min=0 deployment parks (None = 3600s)."
+            "description": "Idle window before a min=0 deployment parks (None = 3600s)."
           },
           "idle_delete_after_days": {
             "type": [
@@ -7456,7 +7456,7 @@
               "null"
             ],
             "format": "int32",
-            "description": "VS-313: parked-deployment GC in days (None = kept forever)."
+            "description": "Days a parked deployment is kept before it is stopped (None = kept\nforever)."
           },
           "self_heal_attempts": {
             "type": "integer",
@@ -7553,7 +7553,7 @@
       },
       "DeploymentUpdate": {
         "type": "object",
-        "description": "PATCH /v1/deployments/{id} — the mutable-field whitelist. Everything else on\na deployment (model, source, gpu, engine, provider) is immutable, matching\nevery surveyed platform (Fireworks/Baseten/K8s): changing those is a new\ndeployment. deny_unknown_fields makes an attempt to PATCH an immutable field\na validation error instead of a silent no-op.\n\nDesired-state semantics: the PATCH validates + persists the new bounds and\nreturns immediately (desired + observed); the reconciler's scaling pass\nconverges the replica fleet asynchronously. A scaled_to_zero deployment\nleft with min_replicas >= 1 is woken by the PATCH itself (cap-checked);\nduring a first boot the new bounds apply once the deployment serves.\nAn omitted field keeps its stored value; only scale_to_zero_window_seconds\nand idle_delete_after_days read an explicit null as \"clear\".",
+        "description": "PATCH /v1/deployments/{id}: the mutable-field whitelist. Everything else on\na deployment (model, source, gpu, engine, provider) is immutable: changing\nthose means creating a new deployment. Sending an immutable field in a\nPATCH is a validation error instead of a silent no-op.\n\nDesired-state semantics: the PATCH validates + persists the new bounds and\nreturns immediately (desired + observed); the reconciler's scaling pass\nconverges the replica fleet asynchronously. A scaled_to_zero deployment\nleft with min_replicas >= 1 is woken by the PATCH itself (cap-checked);\nduring a first boot the new bounds apply once the deployment serves.\nAn omitted field keeps its stored value; only scale_to_zero_window_seconds\nand idle_delete_after_days read an explicit null as \"clear\".",
         "properties": {
           "num_replicas": {
             "type": [
@@ -7995,7 +7995,7 @@
               "null"
             ],
             "format": "double",
-            "description": "Per-GPU USD/hr for this shape. On the wire from the transport this is the\nprovider's RAW published rate; before returning to the caller the endpoint\nmarks it up by the per-provider markup (VS-344) so it matches the customer\nprice on /v1/cost/rates and never leaks the raw margin."
+            "description": "Per-GPU USD/hr for this shape. On the wire from the transport this is the\nprovider's RAW published rate; before returning to the caller the endpoint\nmarks it up by the per-provider markup so it matches the customer\nprice on /v1/cost/rates and never leaks the raw margin."
           },
           "detail": {
             "type": [
@@ -8096,11 +8096,11 @@
               "format": "int32",
               "minimum": 0
             },
-            "description": "Orderable GPUs-per-node counts for this shape (e.g. [8] for AWS\nA100/H100 — whole nodes only; [1, 8] for DigitalOcean H100 training)."
+            "description": "Orderable GPUs-per-node counts for this shape (e.g. [8] for AWS\nA100/H100, whole nodes only; [1, 8] for DigitalOcean H100 training)."
           },
           "status": {
             "type": "string",
-            "description": "\"available\" (orderable now) or \"coming_soon\" (wired but behind a\nfeature flag — a create 400s until the flag flips)."
+            "description": "\"available\" (orderable now) or \"coming_soon\" (wired but behind a\nfeature flag; a create 400s until the flag flips)."
           },
           "usd_per_gpu_hr": {
             "type": [
@@ -8108,7 +8108,7 @@
               "null"
             ],
             "format": "double",
-            "description": "Customer $/GPU-hr (marked up, matching /v1/cost/rates). Absent until\nthe provider's rate is seeded — never a fabricated 0."
+            "description": "Customer $/GPU-hr (marked up, matching /v1/cost/rates). Absent until\nthe provider's rate is seeded; never a fabricated 0."
           }
         }
       },
@@ -8130,7 +8130,7 @@
       },
       "GpuDeviceMetrics": {
         "type": "object",
-        "description": "One GPU's NVML reading from the replica's last heartbeat (VS-380). Every\nfield except `index` is individually best-effort (some GPUs/VMs withhold\npower or temperature).",
+        "description": "One GPU's NVML reading from the replica's last heartbeat. Every\nfield except `index` is individually best-effort (some GPUs/VMs withhold\npower or temperature).",
         "required": [
           "index"
         ],
@@ -8338,7 +8338,7 @@
             }
           }
         ],
-        "description": "Harness-in-the-loop GRPO (VS-372): the user's own agent harness (Claude\nAgent SDK / LangChain / OpenAI Agents SDK) drives multi-turn rollouts\nagainst the in-training policy. Shares GRPO's core knobs; the\nharness-specific ones tune rollout execution and the colocated vLLM\npolicy server. The harness code itself arrives via the job's `script`\npayload (same shape as custom_script)."
+        "description": "Harness-in-the-loop GRPO: the user's own agent harness (Claude\nAgent SDK / LangChain / OpenAI Agents SDK) drives multi-turn rollouts\nagainst the in-training policy. Shares GRPO's core knobs; the\nharness-specific ones tune rollout execution and the colocated vLLM\npolicy server. The harness code itself arrives via the job's `script`\npayload (same shape as custom_script)."
       },
       "HeadlineMetric": {
         "type": "object",
@@ -8385,7 +8385,7 @@
           },
           "private": {
             "type": "boolean",
-            "description": "Repo visibility. Defaults to private — a public push is an explicit\nchoice, never an accident."
+            "description": "Repo visibility. Defaults to private: a public push is an explicit\nchoice, never an accident."
           }
         }
       },
@@ -8462,7 +8462,7 @@
       },
       "HfPushConfig": {
         "type": "object",
-        "description": "Opt-in end-of-training push of the trained artifact to the user's Hugging\nFace account. Requires a connected HF integration\n(PUT /v1/settings/integrations/huggingface); the token itself never rides\nin the job config — the worker exchanges its callback_token for it at\nruntime, exactly like W&B.",
+        "description": "Opt-in end-of-training push of the trained artifact to the user's Hugging\nFace account. Requires a connected HF integration\n(PUT /v1/settings/integrations/huggingface); the token itself never rides\nin the job config; the worker exchanges its callback_token for it at\nruntime, exactly like W&B.",
         "required": [
           "repo",
           "artifact"
@@ -8478,7 +8478,7 @@
           },
           "private": {
             "type": "boolean",
-            "description": "Repo visibility. Defaults to private — a public push is an explicit\nchoice, never an accident."
+            "description": "Repo visibility. Defaults to private: a public push is an explicit\nchoice, never an accident."
           }
         }
       },
@@ -8602,7 +8602,7 @@
           },
           "workspace": {
             "$ref": "#/components/schemas/WorkspaceInfo",
-            "description": "The active workspace (VS-470 R13): the billing entity every call and\ncharge is scoped to. Personal: id == user id, kind \"personal\"."
+            "description": "The active workspace: the billing entity every call and\ncharge is scoped to. Personal: id == user id, kind \"personal\"."
           }
         }
       },
@@ -8790,7 +8790,7 @@
         "properties": {
           "download_url": {
             "type": "string",
-            "description": "Presigned URL of the primary weights file. Legacy single-file field:\nan HF checkpoint is a directory, so downloading only this yields an\nunloadable model — use `files` instead."
+            "description": "Presigned URL of the primary weights file. Legacy single-file field:\nan HF checkpoint is a directory, so downloading only this yields an\nunloadable model; use `files` instead."
           },
           "files": {
             "type": "array",
@@ -9052,7 +9052,7 @@
               "string",
               "null"
             ],
-            "description": "Dataset snapshot (Task 2) or plain dataset id the version was trained on."
+            "description": "Dataset snapshot or plain dataset id the version was trained on."
           },
           "training_job_id": {
             "type": [
@@ -9086,7 +9086,7 @@
           },
           "status": {
             "type": "string",
-            "description": "'ready' | 'purged' (Task 6, VS-84). A purged version still lists —\nnumber, tags, audit and scorecards stay — but its weights are deleted\nand it can no longer be deployed, attached or promoted."
+            "description": "'ready' | 'purged'. A purged version still lists (number, tags,\naudit and scorecards stay), but its weights are deleted\nand it can no longer be deployed, attached or promoted."
           },
           "purged_at": {
             "type": [
@@ -9381,7 +9381,7 @@
                     "null"
                   ],
                   "format": "double",
-                  "description": "VS-380 GPU hardware snapshot (NVML, from the last heartbeat). All\nfields absent when the worker did not report telemetry. Debugging\nmetric only: scale on requests_waiting + kv_cache_usage, not this\n(nvidia-smi-style utilization measures kernel residency, not pressure).\nMean utilization percent (0-100) across the replica's GPUs."
+                  "description": "GPU hardware snapshot (NVML, from the last heartbeat). All\nfields absent when the worker did not report telemetry. Debugging\nmetric only: scale on requests_waiting + kv_cache_usage, not this\n(nvidia-smi-style utilization measures kernel residency, not pressure).\nMean utilization percent (0-100) across the replica's GPUs."
                 },
                 "gpu_memory_used_bytes": {
                   "type": [
@@ -9720,14 +9720,14 @@
                   "items": {
                     "type": "string"
                   },
-                  "description": "VS-370: the extra vLLM CLI flags this deployment was created with\n(argv list). Null unless supplied at create."
+                  "description": "The extra vLLM CLI flags this deployment was created with\n(argv list). Null unless supplied at create."
                 },
                 "vllm_image": {
                   "type": [
                     "string",
                     "null"
                   ],
-                  "description": "VS-426: the explicit vLLM serving image this deployment was created\nwith. Null unless supplied at create."
+                  "description": "The explicit vLLM serving image this deployment was created\nwith. Null unless supplied at create."
                 },
                 "startup_profiling": {
                   "type": "boolean",
@@ -9750,7 +9750,7 @@
                 "num_replicas": {
                   "type": "integer",
                   "format": "int32",
-                  "description": "VS-341: DESIRED replica count (GPU boxes) behind this deployment. The\nobserved count is ready_replicas — the K8s spec/status split; the CLI\nrenders \"ready/desired\" (e.g. 2/3)."
+                  "description": "Desired replica count (GPU boxes) behind this deployment. The\nobserved count is ready_replicas; the CLI renders \"ready/desired\"\n(e.g. 2/3)."
                 },
                 "ready_replicas": {
                   "type": "integer",
@@ -9780,7 +9780,7 @@
                     "null"
                   ],
                   "format": "int32",
-                  "description": "VS-313: idle window before a min=0 deployment parks (None = 3600s)."
+                  "description": "Idle window before a min=0 deployment parks (None = 3600s)."
                 },
                 "idle_delete_after_days": {
                   "type": [
@@ -9788,7 +9788,7 @@
                     "null"
                   ],
                   "format": "int32",
-                  "description": "VS-313: parked-deployment GC in days (None = kept forever)."
+                  "description": "Days a parked deployment is kept before it is stopped (None = kept\nforever)."
                 },
                 "self_heal_attempts": {
                   "type": "integer",
@@ -10779,7 +10779,7 @@
               "string",
               "null"
             ],
-            "description": "The workspace to credit (VS-470 R6): its id (`ws_...`), its Clerk\norganization id (`org_...`), or your user id for your personal\nworkspace. You must be a member. Omitted = the request's active\nworkspace. The code is still redeemable once per person, whichever\nworkspace is named."
+            "description": "The workspace to credit: its id (`ws_...`), its Clerk\norganization id (`org_...`), or your user id for your personal\nworkspace. You must be a member. Omitted = the request's active\nworkspace. The code is still redeemable once per person, whichever\nworkspace is named."
           }
         }
       },
@@ -10817,7 +10817,7 @@
           },
           "launch_enabled": {
             "type": "boolean",
-            "description": "Whether training jobs may launch into this region right now. A listed\nregion with `launch_enabled: false` is coming soon (visible while its\nsubstrate is provisioned); submit rejects it. VS-257 Phase 1."
+            "description": "Whether training jobs may launch into this region right now. A listed\nregion with `launch_enabled: false` is coming soon (visible while its\nsubstrate is provisioned); submit rejects it."
           }
         }
       },
@@ -10846,7 +10846,7 @@
       },
       "RegisterRequest": {
         "type": "object",
-        "description": "Body for POST /v1/models/register: save a completed job as a library\nmodel and (model versions Task 1) optionally register it into a lineage.",
+        "description": "Body for POST /v1/models/register: save a completed job as a library\nmodel and optionally register it into a lineage.",
         "required": [
           "training_job_id",
           "name"
@@ -10878,7 +10878,7 @@
               "string",
               "null"
             ],
-            "description": "Dataset snapshot (Task 2) or plain dataset id recorded on the version."
+            "description": "Dataset snapshot or plain dataset id recorded on the version."
           },
           "tags": {
             "type": "array",
@@ -11273,7 +11273,7 @@
           },
           "id": {
             "type": "string",
-            "description": "\"<dataset_id>@snap-<seq>\" — the id a job pins."
+            "description": "\"<dataset_id>@snap-<seq>\": the id a job pins."
           },
           "dataset_id": {
             "type": "string"
@@ -11531,7 +11531,7 @@
               "string",
               "null"
             ],
-            "description": "Dataset reference: a dataset id or name, optionally pinned to a\nsnapshot — `ds_…@snap-3` trains on that snapshot, `ds_…@latest` cuts\n(or reuses) a snapshot at the current head and pins it. A plain\nreference to a stream dataset behaves like `@latest`; a plain\nreference to a one-shot upload trains on it as before."
+            "description": "Dataset reference: a dataset id or name, optionally pinned to a\nsnapshot: `ds_…@snap-3` trains on that snapshot, `ds_…@latest` cuts\n(or reuses) a snapshot at the current head and pins it. A plain\nreference to a stream dataset behaves like `@latest`; a plain\nreference to a one-shot upload trains on it as before."
           },
           "script": {
             "oneOf": [

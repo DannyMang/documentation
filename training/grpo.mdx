@@ -26,15 +26,16 @@ Every field of the GRPO hyperparameters, with defaults:
 
 | Parameter | Default | What it does |
 | --- | --- | --- |
-| `learning_rate` | `1e-6` | AdamW step size. Stable for most LLM RL. |
-| `num_epochs` | `1` | Passes over the dataset. Overridden by `max_steps` if both set. |
-| `max_steps` | `null` | Total gradient steps. Set this to cap a long run. |
+| `learning_rate` | `1e-6` | AdamW step size, sized for full finetuning. With LoRA (`lora_rank`), use a LoRA-scale rate; the [L4 example](/training/examples#math-reasoning-with-grpo) uses `2e-5`. |
+| `num_epochs` | `1` | Not used by GRPO. The run length is `max_steps`. |
+| `max_steps` | `100` | Total training steps (`100` when omitted). Each step trains on one prompt and its `rollouts_per_prompt` completions, so one pass over an N-prompt dataset is N steps. |
 | `rollouts_per_prompt` | `8` | Group size. Higher = better advantage estimates, more compute per step. |
-| `kl_coef` | `0.001` | KL penalty weight against the reference (frozen) model. Prevents drift. |
-| `max_prompt_length` | `1024` | Tokens. Truncate longer prompts. |
+| `kl_coef` | `0.0` | KL penalty weight against the reference (frozen) model. When omitted it is `0.0`: no KL penalty and no reference model in memory. Set it (for example `0.001`) to limit drift. |
+| `max_prompt_length` | `1024` | Tokens. Not applied by the default trainer (prompts are not truncated); with `use_unsloth` it sizes the context window together with `max_response_length`. |
 | `max_response_length` | `2048` | Tokens. Truncate longer completions. Big OOM lever. |
-| `global_batch_size` | `64` | Total batch across all GPUs. Auto-split per device. |
-| `seed` | `42` | RNG seed for reproducibility. |
+| `global_batch_size` | `64` | Accepted but ignored by GRPO. Each step's batch is one prompt's `rollouts_per_prompt` completions. |
+| `seed` | `42` | Accepted but not applied by GRPO; runs use the trainer's default seed (`42`). |
+| `system_prompt` | `null` | When set, each string prompt becomes a system + user chat, so the model's chat template applies. Use it to tell the model the output format your reward checks. |
 | `lora_rank` | `null` | Train LoRA adapters of this rank instead of full finetuning. `null` means full finetune. |
 | `lora_alpha` | `null` | LoRA scaling factor. Defaults to `lora_rank` when unset. |
 | `load_in_4bit` | `false` | QLoRA: load the base in 4-bit (NF4) and train LoRA adapters on top. Requires `lora_rank`. Single-GPU. |
@@ -74,53 +75,54 @@ hyperparameters={
 
 **For first runs, change two things:**
 
-- `max_response_length` — drop to `512` if you're hitting OOM, raise to `4096` for tasks that need long outputs (reasoning, code)
-- `max_steps` — set to `50–100` for smoke tests, then drop the cap when the loop looks healthy
+- `max_response_length`: drop to `512` if you're hitting OOM, raise to `4096` for tasks that need long outputs (reasoning, code)
+- `max_steps`: set to `50` to `100` for smoke tests, then raise it for the real run (omitting it means 100 steps)
 
 **Everything else holds for most tasks:**
 
-- `learning_rate=1e-6` — stable across model sizes
-- `rollouts_per_prompt=8` — sweet spot for advantage signal vs. compute. Drop to `4` only if you're cost-constrained
-- `kl_coef=0.001` — conservative; raise to `0.01` if the model drifts too fast (incoherent outputs)
+- `learning_rate=1e-6` for full finetuning; with LoRA, a LoRA-scale rate such as `2e-5`
+- `rollouts_per_prompt=8`: sweet spot for advantage signal vs. compute. Drop to `4` only if you're cost-constrained
+- `kl_coef`: leave it unset (`0.0`, no reference model). If outputs drift into incoherence, set `0.001` to `0.01`
 
 ## Common failure modes
 
-**Policy collapse** — `policy_entropy → 0`, model produces identical outputs for every prompt. Cause: KL coefficient too low, learning rate too high, or reward function gives the same score to too many completions. Lower learning_rate, raise kl_coef.
+**Policy collapse**: `entropy → 0`, model produces identical outputs for every prompt. Cause: KL coefficient too low, learning rate too high, or reward function gives the same score to too many completions. Lower learning_rate, raise kl_coef.
 
 **Reward hacking** — Reward goes up, but outputs become weird (gaming the reward function rather than solving the task). Tighten the reward — add format checks, length penalties, or a frontier judge as a sanity scorer.
 
-**Length explosion** — `response_length_mean` grows toward `max_response_length` without reward improving. Add a length penalty to the reward, or drop `max_response_length`.
+**Length explosion**: `completions/mean_length` grows toward `max_response_length` without reward improving. Add a length penalty to the reward, or drop `max_response_length`.
 
 ## Reading the metrics
 
 Pull metrics with `GET /v1/training_jobs/{id}/metrics` (or the dashboard if you're integrated with W&B):
 
 ```python
-metrics = client.training_jobs.get(job_id).metrics  # latest sample
-# Or for the full series:
-# httpx.get(f"{base_url}/v1/training_jobs/{job_id}/metrics?keys=loss,kl_div,reward_mean")
+series = client.training_jobs.metrics(job_id, keys=["reward", "reward_std", "loss"])
+for point in series["metrics"]:
+    print(point["step"], point["values"])
 ```
 
 | Metric | What healthy looks like |
 | --- | --- |
-| `reward_mean` | Climbs over training. Plateaus at the ceiling of your reward design. |
-| `reward_std` | Stays > 0. If it collapses to ~0, all completions look the same — policy collapse. |
-| `kl_div` | Stays bounded. If it grows unboundedly, the policy is drifting; raise `kl_coef`. |
-| `loss` | Decreases overall, but expect noise — RL loss is not as clean as supervised. |
-| `response_length_mean` | Stable or modestly growing. Steep growth = length explosion. |
-| `policy_entropy` | Slow decline as the model becomes more confident. Steep decline = collapse risk. |
+| `reward` | Mean reward per step. Climbs over training. Plateaus at the ceiling of your reward design. |
+| `reward_std` | Stays > 0. If it collapses to ~0, all completions look the same (policy collapse). |
+| `kl` | Reported only when `kl_coef` is above 0. Stays bounded. If it grows unboundedly, the policy is drifting; raise `kl_coef`. |
+| `loss` | Expect noise: RL loss is not as clean as supervised and does not need to decrease. |
+| `completions/mean_length` | Stable or modestly growing. Steep growth = length explosion. |
+| `entropy` | Slow decline as the model becomes more confident. Steep decline = collapse risk. |
 
 ## Sample hyperparameter blocks
 
-**Smoke test (small model, quick iteration):**
+**Smoke test (small model on one L4, LoRA):**
 
 ```python
 hyperparameters={
-    "learning_rate": 1e-6,
-    "rollouts_per_prompt": 4,
-    "max_response_length": 512,
-    "kl_coef": 0.001,
     "max_steps": 50,
+    "rollouts_per_prompt": 8,
+    "max_response_length": 512,
+    "lora_rank": 16,
+    "lora_alpha": 32,
+    "learning_rate": 2e-5,
 }
 ```
 
@@ -132,7 +134,7 @@ hyperparameters={
     "rollouts_per_prompt": 8,
     "max_response_length": 2048,
     "kl_coef": 0.001,
-    "num_epochs": 1,
+    "max_steps": 1000,  # GRPO runs max_steps steps; num_epochs is not used
 }
 ```
 
@@ -144,7 +146,7 @@ hyperparameters={
     "rollouts_per_prompt": 8,
     "max_response_length": 4096,
     "kl_coef": 0.005,
-    "num_epochs": 2,
+    "max_steps": 2000,
 }
 ```
 

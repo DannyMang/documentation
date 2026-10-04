@@ -200,6 +200,7 @@ veri deployments update dep_abc --clear-idle-delete-after        # never auto-st
 - **Parked (`scaled_to_zero`):** raising `--min-replicas` to 1 or more wakes the deployment immediately and boots the new floor, like `veri deployments wake`. It is checked against the workspace active-replica limit first: if the new floor does not fit, `update` fails with `429` (`ACTIVE_DEPLOYMENT_LIMIT`) and nothing changes. Other settings are saved and apply from the next wake.
 - **First boot (`provisioning`):** scaling changes apply once the deployment is serving; extra replicas launch after the first one serves. `update` prints a note saying so.
 - **`waking`:** no second wake; the new settings apply to the boot in progress, or once it serves.
+- **`--self-heal-attempts`** is not a boot setting: it applies at once in every status, the next time the deployment's last box dies while serving (and any update restarts the replacement count). An update that only changes it prints that instead of the boot note.
 
 ### Session affinity
 
@@ -272,7 +273,7 @@ veri deployments get dep_abc                        # one deployment, with its s
 
 A deployment holds GPU boxes while it is `provisioning` or `serving`. A `queued` or `waking` deployment moves to `provisioning` as soon as its first box launches, and a `scaled_to_zero` one holds none. To catch everything holding or about to hold a GPU, list without `--status` and scan the `status` column.
 
-With `--format json`, `get` also returns the wake state of a scale-to-zero deployment: `last_wake_at`, `wake_failure_count` and `next_wake_not_before` (see [the deployment object](/deployments/api#post-v1deployments)). When wakes have been failing, the table output adds a line under the table:
+The table (and `--format csv`) shows `id`, `name`, `status`, `replicas`, `model`, `endpoint_url`, `cost_per_hour_usd` and `self_heal_attempts`. With `--format json`, `list` and `get` also return the scaling settings (`min_replicas`, `max_replicas`, `concurrency_target`, `scale_to_zero_window_seconds` and `idle_delete_after_days`, where `null` means the default: a 3600-second idle window, never auto-stop), `failure_code`, and the wake state of a scale-to-zero deployment: `last_wake_at`, `wake_failure_count` and `next_wake_not_before` (see [the deployment object](/deployments/api#post-v1deployments)). When wakes have been failing, the table output adds a line under the table:
 
 ```text
 Wake: 2 failed wake boots in a row (last wake started 2026-10-03T10:00:00Z); a request wakes it again from 2026-10-03T10:04:00Z, `veri deployments wake dep_abc` retries now.
@@ -284,7 +285,7 @@ Wake: 2 failed wake boots in a row (last wake started 2026-10-03T10:00:00Z); a r
 | --- | --- |
 | `0` | Success. |
 | `1` | User error (both `--model` and `--from-hf` passed, missing `--gpu-type` inline). |
-| `2` | API error. |
+| `2` | API error. The server's message is printed as one `Error:` line on stderr. |
 | `4` | Auth error. |
 
 ## What's next

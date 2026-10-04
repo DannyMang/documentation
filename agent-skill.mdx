@@ -147,7 +147,7 @@ veri jobs get <id> && veri jobs download <id> --output-dir ./checkpoints
 veri jobs cancel <id>
 ```
 
-Key hyperparameter defaults — grpo: lr 1e-6, rollouts_per_prompt 8, kl_coef 0.001, max_response_length 2048; sft_text: lr 2e-5, num_epochs 1; dpo: lr 5e-6, beta 0.1. LoRA via `lora_rank`/`lora_alpha`; QLoRA via `load_in_4bit` (NVIDIA only).
+Key hyperparameter defaults: grpo: lr 1e-6, rollouts_per_prompt 8, kl_coef 0.0 (omitted = no KL term), max_steps 100 (one prompt per step; num_epochs is not used), max_response_length 2048; sft_text: lr 2e-5, num_epochs 1; dpo: lr 5e-6, beta 0.1. LoRA via `lora_rank`/`lora_alpha`; QLoRA via `load_in_4bit` (NVIDIA only).
 
 Optional: push the trained artifact to the user's Hugging Face account when the job finishes — requires `veri hf set` once (see the Hugging Face section), then add to the train config:
 
