@@ -1119,7 +1119,7 @@
             }
           },
           "400": {
-            "description": "Invalid request: unknown source or engine, an unknown or not yet available provider, a (provider, gpu_type, gpu_count) shape the provider does not sell for serving, invalid replica bounds or scaling values, rejected vllm_extra_args or vllm_image, an unpriced shape, or a training job that is not completed"
+            "description": "Invalid request: unknown source or engine, an unknown or not yet available provider, a (provider, gpu_type, gpu_count) shape the provider does not sell for serving, invalid replica bounds or scaling values, rejected vllm_extra_args or vllm_image, an unpriced shape, a training job that is not completed, or a LoRA adapter checkpoint (a training job with lora_rank, or a saved model made from one), which needs merged weights or a multi_adapter deployment"
           },
           "402": {
             "description": "No billing account is linked to this workspace yet"
@@ -5449,7 +5449,7 @@
           },
           "internal_name": {
             "type": "string",
-            "description": "Versioned vLLM-facing name (\"{serve_name}@v{version}\")."
+            "description": "vLLM-facing name (\"{serve_name}@v{version}-{tag}\", tag derived from\nmodel_id): never reused for different weights."
           },
           "status": {
             "type": "string",
