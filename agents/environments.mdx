@@ -1,0 +1,93 @@
+---
+title: "Environments"
+description: "The reusable config a managed agent session runs under: harness, model, sandbox, egress, secrets, tools, skills, permissions"
+keywords: ["agents", "environment", "claude code", "sandbox", "mcp", "skills", "permissions"]
+---
+
+## Overview
+
+An environment is everything a session needs except the conversation: which harness runs, which model it talks to, how big the sandbox is, what the network may reach, which secrets and MCP servers are available, which skills are installed, and which tools are allowed. Create one, then start as many sessions from it as you like.
+
+Every edit is a new **immutable version**. A session pins the version it started with, so changing an environment never alters a running or paused session.
+
+## Create one
+
+```toml environment.toml
+kind = "environment"
+name = "coder"
+description = "Claude Code on our fine-tuned Qwen"
+
+harness = "claude-code"          # the only harness today
+size = "standard"                # small | standard | large
+egress = "restricted"            # restricted (default) | unrestricted
+allowed_hosts = ["api.example.com"]
+secrets = ["GITHUB_TOKEN"]       # names from `veri secrets`
+skills = ["pdf-processing", "git-hygiene@2"]
+idle_timeout_s = 900
+
+[model]
+deployment_id = "dep1a2b3c4d5e"  # a Veri deployment, OR:
+# base_url = "https://api.openai.com/v1"
+# secret = "OPENAI_API_KEY"      # sent only to that host
+
+[env]
+LOG_LEVEL = "info"
+
+[[mcp_servers]]
+name = "composio"
+url = "https://mcp.composio.dev/sse"
+secret = "COMPOSIO_KEY"
+
+[permissions]
+default = "allow"                # allow | deny
+rules = [
+  { tool = "Bash(rm *)", action = "deny" },
+  { tool = "WebFetch", action = "deny" },
+]
+```
+
+```bash
+veri run environment.toml          # or: veri environments create environment.toml
+veri environments list
+veri environments get <id> --toml  # round-trips the normalized spec
+veri environments update <id> environment.toml   # appends a new version
+```
+
+```python
+from veri_sdk import Client
+
+client = Client()
+env = client.environments.create(
+    "coder",
+    model={"deployment_id": "dep1a2b3c4d5e"},
+    secrets=["GITHUB_TOKEN"],
+    skills=["pdf-processing"],
+    permissions={"default": "allow", "rules": [{"tool": "Bash(rm *)", "action": "deny"}]},
+)
+env["version"]["spec"]   # the normalized spec that sessions will run
+```
+
+## Fields
+
+| Field | Meaning |
+| --- | --- |
+| `harness` | `claude-code`. OpenCode, Codex and custom images are planned and rejected with a clear message until then. |
+| `model` | Exactly one of `deployment_id` (a Veri deployment in this workspace; each session gets a short-lived [model access key](/secrets#model-access-keys) automatically) or `base_url` plus an optional `secret` holding its API key. |
+| `size` | Sandbox CPU and memory tier. |
+| `egress` | `restricted` allows only the built-in hosts (Veri API, GitHub, npm, PyPI), your `allowed_hosts`, the model host and every MCP host, over HTTPS. `unrestricted` is open internet. |
+| `env` | Plain environment variables. Names the runtime owns (`ANTHROPIC_*`, `OPENAI_*`, `VERI_*`) are rejected. |
+| `secrets` | [Secret](/secrets) names. A secret without `scope_host` becomes an environment variable; one with `scope_host` is attached only to requests for that host and never enters the sandbox. |
+| `mcp_servers` | Streamable-HTTP MCP servers written into the harness's MCP config. `secret` is sent as a bearer token. |
+| `skills` | [Skills](/agents/skills) by name (latest) or `name@N`. The resolved versions are pinned in the spec. |
+| `permissions` | Tool rules in the harness's own syntax, evaluated top to bottom with the last match winning. `ask` (human approval) is not available yet. |
+| `idle_timeout_s` | Seconds without input before the session snapshots its workspace and pauses (60 to 21600). |
+
+The API returns the **normalized** spec: defaults filled in, hostnames lowercased, duplicate entries removed, skills pinned. That is exactly what the sandbox is built from.
+
+## Versions
+
+```bash
+veri environments get <id> --version 1
+```
+
+`POST /v1/environments/{id}/versions` with a full spec appends version `latest + 1`. Deleting an environment hides it and stops new sessions; existing sessions keep their pinned version.
