@@ -10509,7 +10509,7 @@
       },
       "ParallelismHyperparameters": {
         "type": "object",
-        "description": "Multi-GPU knobs for managed `sft_text` / `dpo` (VS-476, phase 1). Names follow\nthe Ultra-Scale Playbook: `zero_stage`, `*_parallel_size`, `micro_batch_size`\n(mbs), `gradient_accumulation_steps`, `global_batch_size` (gbs = mbs x ga x dp),\n`gradient_checkpointing` (= activation recomputation), `precision`, `cpu_offload`.\nEvery field is optional; absent means \"auto\" / today's single-process defaults.\n`batch_size` remains an undocumented alias of `micro_batch_size` (read by the\nrunner, not part of the public schema). Validated by\n`api::training_jobs::validate_parallelism`.",
+        "description": "Multi-GPU training settings for sft_text and dpo jobs with gpu_count > 1.\nNames follow the Ultra-Scale Playbook. All optional.",
         "properties": {
           "zero_stage": {
             "oneOf": [
@@ -10517,7 +10517,8 @@
                 "type": "null"
               },
               {
-                "$ref": "#/components/schemas/ZeroStage"
+                "$ref": "#/components/schemas/ZeroStage",
+                "description": "\"auto\" (default), 0 (data parallel), 2 or 3 (FSDP2 sharding)."
               }
             ]
           },
@@ -10526,76 +10527,93 @@
               "integer",
               "null"
             ],
-            "format": "int32"
+            "format": "int32",
+            "description": "Data-parallel replicas; derived as gpu_count / (tp x cp x pp) when absent.",
+            "minimum": 1
           },
           "tensor_parallel_size": {
             "type": [
               "integer",
               "null"
             ],
-            "format": "int32"
+            "format": "int32",
+            "description": "Tensor-parallel size (1 only in this release).",
+            "minimum": 1
           },
           "context_parallel_size": {
             "type": [
               "integer",
               "null"
             ],
-            "format": "int32"
+            "format": "int32",
+            "description": "Context-parallel size (1 only in this release).",
+            "minimum": 1
           },
           "pipeline_parallel_size": {
             "type": [
               "integer",
               "null"
             ],
-            "format": "int32"
+            "format": "int32",
+            "description": "Pipeline-parallel size (1 only; not available in managed training).",
+            "minimum": 1
           },
           "expert_parallel_size": {
             "type": [
               "integer",
               "null"
             ],
-            "format": "int32"
+            "format": "int32",
+            "description": "Expert-parallel size (1 only; not available in managed training).",
+            "minimum": 1
           },
           "micro_batch_size": {
             "type": [
               "integer",
               "null"
             ],
-            "format": "int32"
+            "format": "int32",
+            "description": "Samples per GPU per forward pass (playbook mbs). Default 1.",
+            "minimum": 1
           },
           "gradient_accumulation_steps": {
             "type": [
               "integer",
               "null"
             ],
-            "format": "int32"
+            "format": "int32",
+            "description": "Micro-batches accumulated per optimizer step. Default 1, or derived from global_batch_size.",
+            "minimum": 1
           },
           "global_batch_size": {
             "type": [
               "integer",
               "null"
             ],
-            "format": "int32"
+            "format": "int32",
+            "description": "Samples per optimizer step = micro_batch_size x gradient_accumulation_steps x data_parallel_size.",
+            "minimum": 1
           },
           "gradient_checkpointing": {
             "type": [
               "boolean",
               "null"
-            ]
+            ],
+            "description": "Activation recomputation (default true)."
           },
           "precision": {
             "type": [
               "string",
               "null"
             ],
-            "description": "\"bf16\" (default, pure bf16), \"bf16_mixed\" (fp32 master weights) or \"fp32\"."
+            "description": "\"bf16\" (default), \"bf16_mixed\" (fp32 master weights) or \"fp32\"."
           },
           "cpu_offload": {
             "type": [
               "boolean",
               "null"
             ],
-            "description": "FSDP parameter/optimizer offload to host RAM; requires zero_stage 2 or 3."
+            "description": "Offload FSDP parameters and optimizer state to host RAM; requires zero_stage 2 or 3."
           }
         }
       },
@@ -12543,7 +12561,7 @@
             "type": "string"
           }
         ],
-        "description": "`zero_stage`: `\"auto\"` (the worker picks DDP when the model states fit one\nGPU, otherwise ZeRO-3) or an explicit stage 0 / 2 / 3. ZeRO-1 needs\nDeepSpeed, which is not on the worker AMI, and is rejected at submit."
+        "description": "ZeRO sharding stage: \"auto\" (data parallel when the model states fit one GPU,\notherwise stage 3), or an explicit 0, 2 or 3."
       }
     },
     "securitySchemes": {
