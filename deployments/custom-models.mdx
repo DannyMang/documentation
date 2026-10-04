@@ -104,6 +104,8 @@ veri deployments create --from-model <your-model-id> \
   --name support-prod --gpu-type L4-24GB --gpu-count 1
 ```
 
+A model saved from a LoRA training job (one trained with `lora_rank`) holds only the adapter, so deploying it on its own returns a `400`. Serve it as merged weights or on its base model; see [Serve it](/training/examples#math-reasoning-with-grpo) in the GRPO example.
+
 The deployment records both the saved model and its source checkpoint, so you can always trace what a running endpoint is serving. Because the checkpoint location is captured when the deployment is created, later renaming or removing the model from your library does not affect a running deployment.
 
 See [Deployments](/deployments) for the serving lifecycle and the OpenAI-compatible chat surface.
