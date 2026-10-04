@@ -16,17 +16,19 @@ Either way, the result is a dataset record with an `id` you reference in `client
 
 ## JSONL format
 
-Each line is one training example:
+Each line is one training example, and the fields depend on the training method. A GRPO row has a `prompt`:
 
 ```json
 {"prompt": [{"role": "user", "content": "What is 12 + 7?"}], "answer": "19"}
 {"prompt": "What is 45 - 18?", "answer": "27"}
 ```
 
-- **`prompt`** (required) — string OR list of OpenAI-format message dicts
-- **`answer`** — ground truth used by your reward function (optional but typically present). The column name is passed to your reward as a keyword argument of the same name, so it must match what the function reads. Every example here uses `answer`; if you map it to another name, read that name instead.
+- **`prompt`**: a string or a list of OpenAI-format message dicts
+- **`answer`**: ground truth used by your reward function (optional but typically present). The column name is passed to your reward as a keyword argument of the same name, so it must match what the function reads. Every example here uses `answer`; if you map it to another name, read that name instead.
 
-The validation step at upload rejects any row missing `prompt`.
+[SFT](/training/sft) rows carry `messages` (chat), `text`, or `prompt` + `completion`. [DPO](/training/dpo) rows carry `chosen` + `rejected`, with an optional `prompt`. The ShareGPT and Alpaca shapes in [Supported formats](#supported-formats) upload too.
+
+Upload rejects a row that has none of `prompt`, `messages`, `text`, `chosen` + `rejected`, `conversations`, or `instruction` + `output`. When you submit a job, Veri checks the dataset's row format against the method and rejects a clear mismatch with a 400 that names the fields the method needs: for example `sft_text` on prompt-only rows, or `dpo` on prompt-completion rows. Any other row the trainer can't use fails with `dataset_format_incompatible` at the start of the job.
 
 ## Source types
 
