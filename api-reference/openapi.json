@@ -1586,6 +1586,108 @@
         ]
       }
     },
+    "/v1/deployments/{deployment_id}/messages": {
+      "post": {
+        "tags": [
+          "Deployments"
+        ],
+        "summary": "Anthropic Messages API (proxy)",
+        "description": "Forwards an Anthropic Messages request to the deployment's serving replica (vLLM's native `/v1/messages`). Point `ANTHROPIC_BASE_URL` at `/v1/deployments/{id}` and use a model access key as `ANTHROPIC_AUTH_TOKEN`. Streaming (`stream: true`) is passed through as SSE. `model` is rewritten to the deployment's served name; inline `system` messages are folded into `system`.",
+        "operationId": "messages",
+        "parameters": [
+          {
+            "name": "deployment_id",
+            "in": "path",
+            "description": "Deployment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {}
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The Anthropic-shaped response (or an SSE stream)",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "Not serving, multi-adapter / BYOC deployment, or malformed body"
+          },
+          "404": {
+            "description": "Not found or not owned by the caller"
+          },
+          "503": {
+            "description": "Deployment waking or no serving replica; retry after Retry-After"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/deployments/{deployment_id}/messages/count_tokens": {
+      "post": {
+        "tags": [
+          "Deployments"
+        ],
+        "summary": "Anthropic count_tokens (proxy)",
+        "operationId": "count_tokens",
+        "parameters": [
+          {
+            "name": "deployment_id",
+            "in": "path",
+            "description": "Deployment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {}
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "`{input_tokens}` from the serving replica",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "404": {
+            "description": "Not found or not owned by the caller"
+          },
+          "503": {
+            "description": "Deployment waking or no serving replica"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/deployments/{deployment_id}/metrics": {
       "get": {
         "tags": [

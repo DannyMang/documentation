@@ -65,6 +65,10 @@ Payloads above 64 KiB (a large file read, for example) are stored in object stor
 
 Lifecycle transitions also fire [webhooks](/webhooks): `session.started`, `session.paused`, `session.ended`, `session.failed`.
 
-## Pricing
+## Pricing and limits
 
-A session is billed per hour while its sandbox is awake. Paused and ended sessions cost nothing. Model calls to a Veri deployment are billed through that deployment; calls to your own endpoint are billed by its provider. Set `budget_usd` to pause the session automatically when its sandbox spend reaches the ceiling.
+A session is billed at a flat rate per hour while its sandbox is awake, settled per minute. Paused and ended sessions cost nothing. Model calls to a Veri deployment are billed through that deployment; calls to your own endpoint are billed by its provider.
+
+Set `budget_usd` to pause the session automatically when its sandbox spend reaches the ceiling; the transcript records a `session.budget_exhausted` event and the session's `failure_code` reads `budget_exhausted`. Resume it to continue (the budget still applies, so raise it first or start a new session).
+
+A workspace can have two sessions that are not ended at a time, paused sessions included. Creating a third returns `429 CONCURRENT_SESSION_LIMIT`. Contact us to raise the limit.
