@@ -20,7 +20,7 @@ Created stream ds_9f2c81ab (acme-feedback, format=preference).
 Append with `veri datasets append acme-feedback <file.jsonl|->`, then train on `acme-feedback@latest`.
 ```
 
-`--format` locks the row shape and is required: `prompt`, `preference`, `completion`, `chat`, or `eval` (experiment rows; see [Experiments](/evals/experiments#datasets-and-the-eval-row-format)). Every append is validated against it, so a malformed row is rejected at append time rather than at training time.
+`--format` locks the row shape and is required: `prompt`, `preference`, `completion`, `chat`, or `eval` (experiment rows; see [Experiments](/evals/experiments#datasets-and-the-eval-row-format)). Every append is validated against it, so a malformed row is rejected at append time rather than at training time. A `chat` stream whose first row has no `prompt` reports its format as `chat_no_prompt`: it still takes chat rows, but GRPO jobs on it are rejected at submit, since GRPO generates from a `prompt`.
 
 Every stream command accepts the dataset's name or its `ds_...` id.
 
