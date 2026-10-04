@@ -7629,79 +7629,86 @@
         }
       },
       "DpoHyperparameters": {
-        "type": "object",
-        "properties": {
-          "learning_rate": {
-            "type": "number",
-            "format": "double"
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ParallelismHyperparameters"
           },
-          "num_epochs": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "max_steps": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "beta": {
-            "type": "number",
-            "format": "double"
-          },
-          "loss_type": {
-            "type": "string"
-          },
-          "max_length": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "max_prompt_length": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "use_unsloth": {
-            "type": "boolean"
-          },
-          "lora_rank": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "lora_alpha": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "load_in_4bit": {
-            "type": "boolean"
-          },
-          "checkpoint_every": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "checkpoint_keep": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
+          {
+            "type": "object",
+            "properties": {
+              "learning_rate": {
+                "type": "number",
+                "format": "double"
+              },
+              "num_epochs": {
+                "type": "integer",
+                "format": "int32"
+              },
+              "max_steps": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32"
+              },
+              "beta": {
+                "type": "number",
+                "format": "double"
+              },
+              "loss_type": {
+                "type": "string"
+              },
+              "max_length": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32"
+              },
+              "max_prompt_length": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32"
+              },
+              "use_unsloth": {
+                "type": "boolean"
+              },
+              "lora_rank": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32"
+              },
+              "lora_alpha": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32"
+              },
+              "load_in_4bit": {
+                "type": "boolean"
+              },
+              "checkpoint_every": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "format": "double"
+              },
+              "checkpoint_keep": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32"
+              }
+            }
           }
-        }
+        ]
       },
       "EnvironmentConfig": {
         "type": "object",
@@ -10500,6 +10507,98 @@
           }
         }
       },
+      "ParallelismHyperparameters": {
+        "type": "object",
+        "description": "Multi-GPU knobs for managed `sft_text` / `dpo` (VS-476, phase 1). Names follow\nthe Ultra-Scale Playbook: `zero_stage`, `*_parallel_size`, `micro_batch_size`\n(mbs), `gradient_accumulation_steps`, `global_batch_size` (gbs = mbs x ga x dp),\n`gradient_checkpointing` (= activation recomputation), `precision`, `cpu_offload`.\nEvery field is optional; absent means \"auto\" / today's single-process defaults.\n`batch_size` remains an undocumented alias of `micro_batch_size` (read by the\nrunner, not part of the public schema). Validated by\n`api::training_jobs::validate_parallelism`.",
+        "properties": {
+          "zero_stage": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ZeroStage"
+              }
+            ]
+          },
+          "data_parallel_size": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "tensor_parallel_size": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "context_parallel_size": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "pipeline_parallel_size": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "expert_parallel_size": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "micro_batch_size": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "gradient_accumulation_steps": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "global_batch_size": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "gradient_checkpointing": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "precision": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "\"bf16\" (default, pure bf16), \"bf16_mixed\" (fp32 master weights) or \"fp32\"."
+          },
+          "cpu_offload": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "FSDP parameter/optimizer offload to host RAM; requires zero_stage 2 or 3."
+          }
+        }
+      },
       "PinRequest": {
         "type": "object",
         "properties": {
@@ -11038,71 +11137,78 @@
         }
       },
       "SftTextHyperparameters": {
-        "type": "object",
-        "properties": {
-          "learning_rate": {
-            "type": "number",
-            "format": "double"
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ParallelismHyperparameters"
           },
-          "num_epochs": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "max_steps": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "max_seq_length": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "packing": {
-            "type": "boolean"
-          },
-          "dataset_text_field": {
-            "type": "string"
-          },
-          "use_unsloth": {
-            "type": "boolean"
-          },
-          "lora_rank": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "lora_alpha": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "load_in_4bit": {
-            "type": "boolean"
-          },
-          "checkpoint_every": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "checkpoint_keep": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
+          {
+            "type": "object",
+            "properties": {
+              "learning_rate": {
+                "type": "number",
+                "format": "double"
+              },
+              "num_epochs": {
+                "type": "integer",
+                "format": "int32"
+              },
+              "max_steps": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32"
+              },
+              "max_seq_length": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32"
+              },
+              "packing": {
+                "type": "boolean"
+              },
+              "dataset_text_field": {
+                "type": "string"
+              },
+              "use_unsloth": {
+                "type": "boolean"
+              },
+              "lora_rank": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32"
+              },
+              "lora_alpha": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32"
+              },
+              "load_in_4bit": {
+                "type": "boolean"
+              },
+              "checkpoint_every": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "format": "double"
+              },
+              "checkpoint_keep": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32"
+              }
+            }
           }
-        }
+        ]
       },
       "SftVideoGenHyperparameters": {
         "type": "object",
@@ -12426,6 +12532,18 @@
             "description": "Days unprotected model versions and unreferenced dataset snapshots are\nkept (default 90; 0 = zero-data-retention opt-in)."
           }
         }
+      },
+      "ZeroStage": {
+        "oneOf": [
+          {
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "description": "`zero_stage`: `\"auto\"` (the worker picks DDP when the model states fit one\nGPU, otherwise ZeRO-3) or an explicit stage 0 / 2 / 3. ZeRO-1 needs\nDeepSpeed, which is not on the worker AMI, and is rejected at submit."
       }
     },
     "securitySchemes": {
