@@ -496,11 +496,11 @@
               }
             }
           },
+          "400": {
+            "description": "Empty file, invalid JSONL, a row with no training fields (none of prompt, messages, text, chosen + rejected, conversations, instruction + output), or an unknown format"
+          },
           "409": {
             "description": "JSON create: a dataset with that name already exists"
-          },
-          "422": {
-            "description": "Empty file, invalid JSONL, a row missing the 'prompt' field, or an unknown format"
           }
         },
         "security": [
