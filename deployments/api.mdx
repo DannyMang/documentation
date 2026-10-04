@@ -50,6 +50,31 @@ Create a deployment from a base HF model, a completed training job, or a saved m
 
 **Validation:** When `source=training_job`, the job must exist in your workspace (`404` otherwise) and be `completed` (`400` otherwise). When `source=custom_model`, the saved model must exist in your workspace (`404`) and be `ready` (`409` while it is still importing). An unsupported GPU shape is a `400`. Other errors: `402` when the workspace has no billing account yet, and `429` with code `ACTIVE_DEPLOYMENT_LIMIT` when the new replicas don't fit the workspace's active-replica limit.
 
+A field that fails validation, on create or on [PATCH](#patch-v1deploymentsid), returns `400` with a stable `code` next to the message, so you can branch on it instead of matching the text:
+
+```json
+{
+  "error": {
+    "code": "invalid_self_heal_attempts",
+    "message": "self_heal_attempts must be between 0 and 5 (got 9); 0 turns self-healing off"
+  }
+}
+```
+
+| Code | Field |
+| --- | --- |
+| `invalid_gpu_shape` | `gpu` (a `gpu_type` or `gpu_count` the provider does not sell for serving). |
+| `invalid_replica_bounds` | `num_replicas`, `min_replicas`, `max_replicas`. |
+| `invalid_concurrency_target` | `concurrency_target`. |
+| `invalid_scale_to_zero_window_seconds` | `scale_to_zero_window_seconds`. |
+| `invalid_idle_delete_after_days` | `idle_delete_after_days`. |
+| `invalid_self_heal_attempts` | `self_heal_attempts`. |
+| `invalid_vllm_extra_args` | `vllm_extra_args`. |
+| `invalid_vllm_image` | `vllm_image`. |
+| `invalid_trace_retention` | `trace_retention`. |
+
+Other `400`s (an unknown source, a training job that is not completed, a provider that is not enabled, a deployment that is stopped) carry only a message. The Python SDK puts the code on `VeriError.code`.
+
 **Response** (`201`):
 
 ```json
@@ -131,6 +156,8 @@ When the update takes effect depends on the deployment's status:
 | `queued` | Nothing has launched yet, so the deployment boots with the new settings. |
 | `provisioning` (first boot) | Saved now, applied **once the deployment is serving**: the response shows the new desired `num_replicas` next to `ready_replicas: 0`, and extra replicas launch only after the first one serves, so a broken configuration does not boot several GPUs before it fails. |
 | `waking` | No second wake. The new floor applies to the wake in progress, or as soon as it serves. |
+
+`self_heal_attempts` is the exception: in every status it applies immediately, as the policy for the next time the deployment's last box dies while serving. Any PATCH also restarts the replacement count, so a self-heal in progress gets the full new budget.
 
 Waking on update is checked against the workspace active-replica limit before anything is saved: if the new floor does not fit, the update returns `429` with code `ACTIVE_DEPLOYMENT_LIMIT` and the deployment stays parked with its previous settings. An update that raises `num_replicas` on a running deployment is checked the same way.
 
