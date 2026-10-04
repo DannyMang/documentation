@@ -351,11 +351,14 @@ Aggregated counters across all requests:
   "total_requests": 42,
   "total_prompt_tokens": 5230,
   "total_completion_tokens": 1840,
+  "total_cost_usd": 2.6,
   "avg_latency_ms": 1240.5,
   "error_rate": 0.024,
   "uptime_seconds": 3600.0
 }
 ```
+
+`total_cost_usd` is the GPU cost accrued over the deployment's life: every replica of every boot, from its launch to its termination (or now), at its per-box rate, before rounding to the cent. `uptime_seconds` is the time at least one box was up, summed over every boot; time spent parked is not counted. See [Billing](/deployments/cost#cost-and-uptime-you-see).
 
 ## State machine
 
