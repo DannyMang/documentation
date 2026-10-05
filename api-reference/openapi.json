@@ -6237,7 +6237,7 @@
               "string",
               "null"
             ],
-            "description": "Locked row format (prompt | preference | completion | chat | eval). Null on\na legacy dataset until its first append locks it."
+            "description": "Row format. A stream's locked format (prompt | preference | completion |\nchat | eval); an upload records its first row's shape, which adds\nchat_no_prompt (chat rows without a `prompt`, still locked as chat), text,\nsharegpt and alpaca (no lock). Job submit refuses GRPO on chat_no_prompt,\ntext, sharegpt and alpaca rows. Null on Hugging Face / volume sources, and\non a legacy dataset until its first append locks it."
           },
           "head_row": {
             "type": "integer",
@@ -8238,19 +8238,25 @@
           },
           "max_prompt_length": {
             "type": "integer",
-            "format": "int32"
+            "format": "int32",
+            "description": "Only applies with use_unsloth (it sizes the context window with\nmax_response_length); without it a submit that sets it is a 400."
           },
           "max_response_length": {
             "type": "integer",
             "format": "int32"
           },
           "global_batch_size": {
-            "type": "integer",
-            "format": "int32"
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Not supported by GRPO: a submit that sets it is a 400. Echoed only for\na job stored with it before that check."
           },
           "seed": {
             "type": "integer",
-            "format": "int32"
+            "format": "int32",
+            "description": "Trainer random seed (GRPOConfig.seed)."
           },
           "use_unsloth": {
             "type": "boolean"
@@ -9230,7 +9236,7 @@
                     "string",
                     "null"
                   ],
-                  "description": "Locked row format (prompt | preference | completion | chat | eval). Null on\na legacy dataset until its first append locks it."
+                  "description": "Row format. A stream's locked format (prompt | preference | completion |\nchat | eval); an upload records its first row's shape, which adds\nchat_no_prompt (chat rows without a `prompt`, still locked as chat), text,\nsharegpt and alpaca (no lock). Job submit refuses GRPO on chat_no_prompt,\ntext, sharegpt and alpaca rows. Null on Hugging Face / volume sources, and\non a legacy dataset until its first append locks it."
                 },
                 "head_row": {
                   "type": "integer",
