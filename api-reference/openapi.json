@@ -11320,7 +11320,7 @@
         "properties": {
           "status": {
             "type": "string",
-            "description": "\"credited\" | \"pending\" | \"none\""
+            "description": "\"approved\" (credit on its way) | \"credited\" | \"pending\" (under review) | \"denied\""
           },
           "amount_usd": {
             "type": [
