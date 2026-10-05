@@ -28,7 +28,9 @@ Each line is one training example, and the fields depend on the training method.
 
 [SFT](/training/sft) rows carry `messages` (chat), `text`, or `prompt` + `completion`. [DPO](/training/dpo) rows carry `chosen` + `rejected`, with an optional `prompt`. The ShareGPT and Alpaca shapes in [Supported formats](#supported-formats) upload too.
 
-Upload rejects a row that has none of `prompt`, `messages`, `text`, `chosen` + `rejected`, `conversations`, or `instruction` + `output`. When you submit a job, Veri checks the dataset's row format against the method and rejects a clear mismatch with a 400 that names the fields the method needs: for example `sft_text` on prompt-only rows, or `dpo` on prompt-completion rows. Any other row the trainer can't use fails with `dataset_format_incompatible` at the start of the job.
+Upload rejects a row that has none of `prompt`, `messages`, `text`, `chosen` + `rejected`, `conversations`, or `instruction` + `output`. The dataset's `format` records the shape of its first row: `prompt`, `completion`, `preference`, `chat` (chat rows that also carry a `prompt`), `chat_no_prompt` (chat rows without one), `text`, `alpaca`, `sharegpt`, or `eval`.
+
+When you submit a job, Veri checks that format against the method and rejects a clear mismatch with a 400 that names the fields the method needs. For example: GRPO on `chat_no_prompt`, `text`, `alpaca` or `sharegpt` rows (GRPO generates from a `prompt`, so add a `prompt` column), `sft_text` on prompt-only rows, or `dpo` on prompt-completion rows. Datasets with no recorded format (Hugging Face and volume sources) and any other row the trainer can't use fail with `dataset_format_incompatible` at the start of the job.
 
 ## Source types
 
