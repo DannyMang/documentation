@@ -216,6 +216,27 @@ max_seq_len: int = 8192
 
 This method is being rebuilt and is not currently available. For environment-based RL today, use a [custom script](/training/custom-script).
 
+### Multi-GPU fields (method=sft_text, dpo)
+
+Added to `SFTTextHyperparameters` and `DPOHyperparameters` for jobs with `gpu_count` above 1; see [Multi-GPU training](/training/multi-gpu) for semantics and validation. All optional; absent keys are not echoed back.
+
+```python
+zero_stage: "auto" | int = "auto"       # 0 (data parallel), 2 or 3 (FSDP2 sharding); 1 is rejected
+data_parallel_size: int | None = None   # must equal gpu_count in this release
+tensor_parallel_size: int = 1           # 1 only in this release
+context_parallel_size: int = 1          # 1 only in this release
+pipeline_parallel_size: int = 1         # 1 only (not available in managed training)
+expert_parallel_size: int = 1           # 1 only (not available in managed training)
+micro_batch_size: int = 1               # samples per GPU per forward pass (alias: batch_size)
+gradient_accumulation_steps: int = 1    # derived from global_batch_size when that is set
+global_batch_size: int | None = None    # = micro_batch_size x gradient_accumulation_steps x data_parallel_size
+gradient_checkpointing: bool = True
+precision: str = "bf16"                 # "bf16" | "bf16_mixed" | "fp32"
+cpu_offload: bool = False               # needs zero_stage 2 or 3
+```
+
+`micro_batch_size`, `gradient_accumulation_steps`, `global_batch_size`, `gradient_checkpointing` and `precision` are honoured on single-GPU jobs too; the sharding keys need `gpu_count` above 1.
+
 ### SFTVideoGenHyperparameters (method=sft_video_gen)
 
 ```python

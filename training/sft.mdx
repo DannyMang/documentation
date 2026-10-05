@@ -74,6 +74,13 @@ SFT takes no reward function — the labeled completions are the training signal
 | `use_liger` | `false` | Opt-in [liger-kernel](https://github.com/linkedin/Liger-Kernel) fused training kernels. Faster on single-GPU jobs at batch size 4 or more, or on models of about 3B and up; slower on small models at batch size 1. The entropy metric is not reported. Not supported with `gpu_count` > 1 or `use_unsloth`. |
 | `tunableop` | `false` | Opt-in PyTorch TunableOp GEMM autotuning (most useful on AMD MI300X). Tunes at runtime, so best for long runs with steady shapes; short or variable-length jobs can lose more to tuning than they gain. |
 | `hipblaslt` | `false` | Opt-in hipBLASLt GEMM routing on AMD (ROCm). Aimed at large-GEMM workloads; benchmarked slower on small models at batch 1, so measure before adopting. No-op on NVIDIA. |
+| `micro_batch_size` | `1` | Samples per GPU per forward pass. With `gpu_count` above 1 the optimizer batch is `micro_batch_size x gpu_count` unless `global_batch_size` is set. See [Multi-GPU training](/training/multi-gpu). |
+| `gradient_accumulation_steps` | `1` | Micro-batches accumulated per optimizer step. Derived from `global_batch_size` when that is set. |
+| `global_batch_size` | derived | Samples per optimizer step (`micro_batch_size x gradient_accumulation_steps x gpu_count`). Set it to keep training dynamics fixed across GPU counts. |
+| `zero_stage` | `"auto"` | Multi-GPU sharding: `0` data parallel, `2` shard gradients and optimizer, `3` also shard parameters (FSDP2). `"auto"` picks `0` when the model states fit one GPU, else `3`. `gpu_count` above 1 only. |
+| `precision` | `"bf16"` | `"bf16"`, `"bf16_mixed"` (fp32 master weights and optimizer, bf16 compute) or `"fp32"`. |
+| `gradient_checkpointing` | `true` | Activation recomputation. Turn off to trade memory for about a third less compute per step. |
+| `cpu_offload` | `false` | Park sharded parameters and optimizer states in host RAM (FSDP2). Needs `zero_stage` `2` or `3`; `gpu_count` above 1 only. |
 
 ## LoRA and QLoRA
 
