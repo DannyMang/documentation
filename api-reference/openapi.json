@@ -1613,6 +1613,108 @@
         ]
       }
     },
+    "/v1/deployments/{deployment_id}/messages": {
+      "post": {
+        "tags": [
+          "Deployments"
+        ],
+        "summary": "Anthropic Messages API (proxy)",
+        "description": "Forwards an Anthropic Messages request to the deployment's serving replica (vLLM's native `/v1/messages`). Point `ANTHROPIC_BASE_URL` at `/v1/deployments/{id}` and use a model access key as `ANTHROPIC_AUTH_TOKEN`. Streaming (`stream: true`) is passed through as SSE. `model` is rewritten to the deployment's served name; inline `system` messages are folded into `system`.",
+        "operationId": "messages",
+        "parameters": [
+          {
+            "name": "deployment_id",
+            "in": "path",
+            "description": "Deployment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {}
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The Anthropic-shaped response (or an SSE stream)",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "Not serving, multi-adapter / BYOC deployment, or malformed body"
+          },
+          "404": {
+            "description": "Not found or not owned by the caller"
+          },
+          "503": {
+            "description": "Deployment waking or no serving replica; retry after Retry-After"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/deployments/{deployment_id}/messages/count_tokens": {
+      "post": {
+        "tags": [
+          "Deployments"
+        ],
+        "summary": "Anthropic count_tokens (proxy)",
+        "operationId": "count_tokens",
+        "parameters": [
+          {
+            "name": "deployment_id",
+            "in": "path",
+            "description": "Deployment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {}
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "`{input_tokens}` from the serving replica",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "404": {
+            "description": "Not found or not owned by the caller"
+          },
+          "503": {
+            "description": "Deployment waking or no serving replica"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/deployments/{deployment_id}/metrics": {
       "get": {
         "tags": [
@@ -3547,6 +3649,120 @@
                 }
               }
             }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/secrets": {
+      "get": {
+        "tags": [
+          "Secrets"
+        ],
+        "summary": "List secrets",
+        "operationId": "list",
+        "responses": {
+          "200": {
+            "description": "Every secret in the workspace: names and metadata only, never values",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedList_SecretResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/secrets/{name}": {
+      "put": {
+        "tags": [
+          "Secrets"
+        ],
+        "summary": "Create or replace a secret",
+        "operationId": "put",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Secret name, environment-variable style ([A-Za-z_][A-Za-z0-9_]{0,63})",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutSecretRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The stored secret's metadata. The value is never returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid name, empty or oversized value, or malformed scope_host"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Secrets"
+        ],
+        "summary": "Delete a secret",
+        "operationId": "delete",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Secret name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deletion result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such secret in this workspace"
           }
         },
         "security": [
@@ -5621,7 +5837,8 @@
           "id",
           "name",
           "key_prefix",
-          "created_at"
+          "created_at",
+          "kind"
         ],
         "properties": {
           "object": {
@@ -5646,6 +5863,25 @@
               "null"
             ],
             "format": "date-time"
+          },
+          "kind": {
+            "type": "string",
+            "description": "'user' for a full workspace key; 'model_access' for a key bound to one\ndeployment's inference routes (Managed Agents)."
+          },
+          "deployment_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Set on model-access keys: the only deployment this key can call."
+          },
+          "expires_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When the key stops authenticating. Absent = never."
           }
         }
       },
@@ -6010,6 +6246,21 @@
               "null"
             ],
             "description": "Workspace the key is scoped to (workspaces design). Stamped by the web\nproxy from the active Clerk org, or passed explicitly by SDK callers.\nAbsent / equal to the caller's own id => a personal key. Validated\nserver-side at mint: a workspace the caller is not a member of is\nrejected, so the stamp is a convenience, never an authority."
+          },
+          "deployment_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Mint a deployment-scoped \"model access\" key: it authenticates only\n`GET /v1/deployments/{id}` and the inference routes under it. Hand this\nto agent sandboxes and external agent hosts instead of a workspace key.\nThe deployment must belong to the minted workspace."
+          },
+          "expires_in_seconds": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Optional lifetime in seconds (60 .. 31,536,000). Absent = never expires."
           }
         }
       },
@@ -9180,7 +9431,8 @@
                 "id",
                 "name",
                 "key_prefix",
-                "created_at"
+                "created_at",
+                "kind"
               ],
               "properties": {
                 "object": {
@@ -9205,6 +9457,25 @@
                     "null"
                   ],
                   "format": "date-time"
+                },
+                "kind": {
+                  "type": "string",
+                  "description": "'user' for a full workspace key; 'model_access' for a key bound to one\ndeployment's inference routes (Managed Agents)."
+                },
+                "deployment_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Set on model-access keys: the only deployment this key can call."
+                },
+                "expires_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time",
+                  "description": "When the key stops authenticating. Absent = never."
                 }
               }
             }
@@ -10080,6 +10351,57 @@
           }
         }
       },
+      "PaginatedList_SecretResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "data",
+          "has_more"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "object",
+                "name",
+                "created_at",
+                "updated_at"
+              ],
+              "properties": {
+                "object": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string",
+                  "description": "Environment-variable style name (`[A-Za-z_][A-Za-z0-9_]{0,63}`)."
+                },
+                "scope_host": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "updated_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "has_more": {
+            "type": "boolean"
+          }
+        }
+      },
       "PaginatedList_TrainingJobResponse": {
         "type": "object",
         "required": [
@@ -10897,6 +11219,25 @@
           }
         }
       },
+      "PutSecretRequest": {
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "properties": {
+          "value": {
+            "type": "string",
+            "description": "The secret value. Stored encrypted; never returned by the API."
+          },
+          "scope_host": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional HTTPS host the value is scoped to (e.g. \"api.openai.com\").\nWhen set, agent sessions only attach the value to requests for that\nhost; when absent, the value is injected as an environment variable.\nHostname only: no scheme, port, path or wildcard."
+          }
+        }
+      },
       "RecommendedConfig": {
         "type": "object",
         "required": [
@@ -11222,6 +11563,38 @@
             ]
           },
           "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "SecretResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "name",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "description": "Environment-variable style name (`[A-Za-z_][A-Za-z0-9_]{0,63}`)."
+          },
+          "scope_host": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
             "type": "string",
             "format": "date-time"
           }

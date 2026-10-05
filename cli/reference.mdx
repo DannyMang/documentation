@@ -200,6 +200,38 @@ veri wandb set --project my-experiments
 veri wandb status
 ```
 
+## `veri secrets` {#secrets}
+
+Workspace-scoped [secrets](/secrets) for agent sessions. Values are encrypted at rest and never printed back.
+
+| Command | Purpose |
+| --- | --- |
+| `set NAME --from-env VAR` | Store a secret from a local environment variable (also `--stdin`, or `--value`). |
+| `set NAME ... --scope-host HOST` | Only attach the value to requests the sandbox makes to `HOST`. |
+| `list` | Names and metadata. |
+| `delete NAME` | Remove it. |
+
+```bash
+veri secrets set OPENAI_API_KEY --from-env OPENAI_API_KEY --scope-host api.openai.com
+veri secrets list
+```
+
+## `veri api-keys` {#api-keys}
+
+Mint, list and revoke API keys. `--deployment` mints a [model access key](/secrets#model-access-keys) that can only call that deployment's inference routes.
+
+| Command | Purpose |
+| --- | --- |
+| `create NAME` | Mint a workspace key. The plaintext is printed once. |
+| `create NAME --deployment ID [--expires-in SECONDS]` | Mint a deployment-scoped model access key. |
+| `list` | Active keys (prefixes only). |
+| `revoke KEY_ID` | Revoke immediately. |
+
+```bash
+veri api-keys create agent-prod --deployment dep1a2b3c4d5e --expires-in 86400
+veri api-keys list
+```
+
 ## Evals commands {#evals}
 
 [Evaluations](/evals): evaluators, experiments, human review queues, and the promotion gate.

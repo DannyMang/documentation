@@ -1,0 +1,74 @@
+---
+title: "Sessions"
+description: "Run a managed agent: send messages, stream the transcript, pause, resume, end"
+keywords: ["agents", "sessions", "claude code", "sse", "transcript", "pause", "resume"]
+---
+
+## Overview
+
+A session is one running agent, started from an [environment](/agents/environments). The harness runs unmodified inside an isolated sandbox. You send messages, the agent works, and every step lands in an ordered transcript you can read back or stream live.
+
+```bash
+veri sessions create env_1a2b3c --title "fix the flaky test" --budget 5
+veri sessions send sess_9f8e7d "Find why tests/test_queue.py is flaky and fix it" --follow
+veri sessions pause sess_9f8e7d
+veri sessions resume sess_9f8e7d
+veri sessions delete sess_9f8e7d
+```
+
+```python
+from veri_sdk import Client
+
+client = Client()
+s = client.sessions.create("env_1a2b3c", title="fix the flaky test", budget_usd=5)
+client.sessions.send(s["id"], "Find why tests/test_queue.py is flaky and fix it")
+for ev in client.sessions.stream(s["id"]):
+    if ev["type"] == "agent.message":
+        print(ev["payload"]["text"])
+    if ev["type"] == "run.completed":
+        break
+```
+
+## Lifecycle
+
+| Status | Meaning |
+| --- | --- |
+| `provisioning` | The sandbox is starting (or restoring from a pause). |
+| `ready` | Idle, waiting for a message. |
+| `running` | The agent is working on your last message. One run at a time. |
+| `paused` | Workspace snapshotted, sandbox stopped. No compute is billed. |
+| `ended` | You ended it. The transcript stays readable for 30 days. |
+| `failed` | The sandbox or the agent failed terminally. `failure_code` says why. |
+
+Sessions pause themselves after the environment's `idle_timeout_s` without input. Sending a message to a paused session returns `409`; call `resume` first (it takes a few seconds while the workspace is restored).
+
+If the environment's model is a Veri deployment, each session gets a 24-hour [model access key](/secrets#model-access-keys) that can only call that deployment. It is revoked when the session ends.
+
+## Transcript
+
+`GET /v1/sessions/{id}/events?after_seq=N` returns a page of events, oldest first. `GET /v1/sessions/{id}/stream` is a server-sent-events stream of the same rows: `id` is the event's `seq`, `event` is its type. Reconnect with `Last-Event-ID` (or `?after_seq=`) to continue without gaps; the stream closes after the session's terminal status event.
+
+| Type | Payload |
+| --- | --- |
+| `user.message` | `{text}`, what you sent |
+| `user.interrupt` | you stopped a run; the run ends with `run.completed{stop_reason: "interrupted"}` |
+| `agent.message` | `{text}`, the agent's reply |
+| `agent.thinking` | `{text}` |
+| `agent.tool_use` | `{name, input}` |
+| `tool.result` | `{tool_use_id, content, is_error}` |
+| `usage` | `{awake_seconds, input_tokens, output_tokens, cache_read_tokens}` |
+| `run.completed` | `{stop_reason}`, the agent finished a turn |
+| `session.status` | `{status, from, failure_code, error}` |
+| `error` | `{message, fatal}` |
+
+Payloads above 64 KiB (a large file read, for example) are stored in object storage; the event carries a 1 KiB preview and `payload_ref`.
+
+Lifecycle transitions also fire [webhooks](/webhooks): `session.started`, `session.paused`, `session.ended`, `session.failed`.
+
+## Pricing and limits
+
+A session is billed at a flat rate per hour while its sandbox is awake, settled per minute. Paused and ended sessions cost nothing. Model calls to a Veri deployment are billed through that deployment; calls to your own endpoint are billed by its provider.
+
+Set `budget_usd` to pause the session automatically when its sandbox spend reaches the ceiling; the transcript records a `session.budget_exhausted` event and the session's `failure_code` reads `budget_exhausted`. Resume it to continue (the budget still applies, so raise it first or start a new session).
+
+A workspace can have two sessions that are not ended at a time, paused sessions included. Creating a third returns `429 CONCURRENT_SESSION_LIMIT`. Contact us to raise the limit.
