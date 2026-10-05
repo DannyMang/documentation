@@ -65,6 +65,7 @@
               "training/grpo",
               "training/sft",
               "training/dpo",
+              "training/multi-gpu",
               "training/wandb",
               "training/huggingface",
               "training/sharing"
