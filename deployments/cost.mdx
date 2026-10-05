@@ -27,6 +27,14 @@ A replica swap (`drain?replace=true`) runs one extra box for its overlap: the re
 
 Balance enforcement follows the same rule: when a parked deployment wakes, its spend counts from the new boot. Time spent parked is never charged and never counted against your balance.
 
+## Cost and uptime you see
+
+The dashboard and the metrics API use the same per-replica windows billing charges:
+
+- `total_cost_usd` on the deployment is what has been settled to your balance so far.
+- `GET /v1/deployments/{id}/metrics` returns `total_cost_usd` accrued over the deployment's whole life (every replica of every boot, up to now, before rounding to the cent) and `uptime_seconds`, the time at least one box was up. Both count every boot and leave out time spent parked.
+- `GET /v1/deployments/{id}/metrics/timeseries` reports `cost_usd` per bucket: the billed time of each replica that fell in that bucket. An hour in which nothing ran costs $0, and the buckets add up to the window's `cost_efficiency.cost_usd`.
+
 ## Avoiding idle bills
 
 A deployment with `min_replicas` of 1 or more (the default) keeps its warm floor running until you stop it — that's what you asked for, so there's **no idle auto-stop** on those.
