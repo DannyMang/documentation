@@ -1633,7 +1633,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Uptime, cost, and request aggregates",
+            "description": "Uptime, cost, lifetime request counters, and past-24-hour latency and error stats",
             "content": {
               "application/json": {
                 "schema": {
@@ -1981,6 +1981,20 @@
             "required": false,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "origin",
+            "in": "query",
+            "description": "Who issued the requests: `api` (default, your production traffic) or\n`eval` (calls Veri evaluations and experiments made to this\ndeployment). Eval traffic is recorded but kept out of the default\nlisting, the metrics endpoints and the request counters.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Who issued a request: `api` (your own API traffic) or `eval` (calls Veri\nevaluators and experiments made to the deployment).",
+              "enum": [
+                "api",
+                "eval"
+              ]
             }
           }
         ],
@@ -6683,15 +6697,18 @@
         "properties": {
           "total_requests": {
             "type": "integer",
-            "format": "int64"
+            "format": "int64",
+            "description": "Lifetime count of your API requests (eval calls excluded)."
           },
           "total_prompt_tokens": {
             "type": "integer",
-            "format": "int64"
+            "format": "int64",
+            "description": "Lifetime prompt tokens of your API requests (eval calls excluded)."
           },
           "total_completion_tokens": {
             "type": "integer",
-            "format": "int64"
+            "format": "int64",
+            "description": "Lifetime completion tokens of your API requests (eval calls excluded)."
           },
           "total_cost_usd": {
             "type": "number",
@@ -6702,7 +6719,8 @@
               "number",
               "null"
             ],
-            "format": "double"
+            "format": "double",
+            "description": "Mean end-to-end latency of your API requests in the past 24 hours;\nnull when there were none. The percentiles and `error_rate` cover the\nsame window."
           },
           "p50_latency_ms": {
             "type": [
