@@ -16,6 +16,8 @@ Veri is prepaid. You add credit to a balance, and every resource you run draws i
 | Volumes | Average GiB stored over the calendar month, above a **512 GiB free tier per workspace** | Monthly |
 | Request traces | Traces captured over the calendar month (see [Observability](/deployments/observability)) | Monthly |
 
+A training job that fails because of Veri's hardware or provisioning (`error.attribution` is `platform`) has its cost credited back to the workspace automatically; the job shows the credit under `refund`. See [Who the failure belongs to](/training/managed#who-the-failure-belongs-to).
+
 Every charge records which member launched the resource. In a team, each monthly statement on the billing page breaks spend down by member, and `veri billing transactions` shows the member on each debit.
 
 See [Deployment billing](/deployments/cost) for deployment billing states and scale-to-zero behaviour.

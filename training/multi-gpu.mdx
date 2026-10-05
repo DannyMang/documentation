@@ -141,6 +141,8 @@ Everything else, including a `micro_batch_size` that does not fit, is the job's 
 ## What the job reports
 
 - The resolved plan is the first thing in the job log: `plan: dp=4 zero_stage=3 tp=1 cp=1 mbs=1 grad_acc=1 gbs=4 precision=bf16 gradient_checkpointing=on (auto: 8.0 GB states/GPU)`, preceded by the parameter count, the budget and the decision.
+- The same plan is on the job as `resolved_parallelism`, under the knob names you submit (`data_parallel_size`, `zero_stage`, `micro_batch_size`, `gradient_accumulation_steps`, `global_batch_size`, `precision`, `gradient_checkpointing`, `cpu_offload`), plus `zero_stage_requested`, the memory `estimate` and the decision `trace`. Copy it into `hyperparameters` to pin an `"auto"` decision on the next run.
+- A failed job carries `error.attribution` (`customer`, `platform` or `pending`); platform failures are credited back. See [Who the failure belongs to](/training/managed#who-the-failure-belongs-to).
 - Progress and metrics come from rank 0 exactly as for a single GPU; `step` and `total_steps` count optimizer steps.
 - The final artifact is always a complete model directory (full safetensors for a full fine-tune, an adapter for LoRA), the same files a single-GPU job produces. Intermediate checkpoints are committed only once they are complete.
 - A failure names the GPU it started on: `rank 2/4 (node 0, local_rank 2) failed: OutOfMemoryError: CUDA out of memory ...` followed by the plan line and the traceback, with `error.code` set as below.
