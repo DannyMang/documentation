@@ -8533,6 +8533,13 @@
               "string",
               "null"
             ]
+          },
+          "attribution": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Who the failure belongs to: \"platform\" (credited), \"customer\", or\n\"pending\" (under review). Absent on jobs that failed before this field existed."
           }
         }
       },
@@ -10176,6 +10183,20 @@
                     }
                   ]
                 },
+                "resolved_parallelism": {
+                  "description": "The multi-GPU launch plan the worker resolved (dp, zero_stage, micro_batch_size,\ngradient_accumulation_steps, global_batch_size, precision, ...). Null for\nsingle-GPU jobs and before the worker has planned."
+                },
+                "refund": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$ref": "#/components/schemas/RefundInfo",
+                      "description": "Credit state for a platform-attributed failure; null when not applicable."
+                    }
+                  ]
+                },
                 "dashboard_url": {
                   "type": [
                     "string",
@@ -10913,6 +10934,26 @@
           },
           "balance_usd": {
             "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "RefundInfo": {
+        "type": "object",
+        "description": "Credit issued for a platform-attributed failure (phase 1 records the state;\nthe billing cron fills it in).",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "\"credited\" | \"pending\" | \"none\""
+          },
+          "amount_usd": {
+            "type": [
+              "number",
+              "null"
+            ],
             "format": "double"
           }
         }
@@ -11882,6 +11923,20 @@
               },
               {
                 "$ref": "#/components/schemas/JobError"
+              }
+            ]
+          },
+          "resolved_parallelism": {
+            "description": "The multi-GPU launch plan the worker resolved (dp, zero_stage, micro_batch_size,\ngradient_accumulation_steps, global_batch_size, precision, ...). Null for\nsingle-GPU jobs and before the worker has planned."
+          },
+          "refund": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RefundInfo",
+                "description": "Credit state for a platform-attributed failure; null when not applicable."
               }
             ]
           },
