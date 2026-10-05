@@ -49,6 +49,16 @@ print(response.usage)
 
 Streaming works: set `stream=true` and vLLM's SSE events are forwarded through unchanged, so `for chunk in oai.chat.completions.create(..., stream=True)` behaves exactly as it does against OpenAI. Veri meters token usage for every stream server-side. Your client receives the final usage-only chunk (empty `choices`, populated `usage`) only when it asks for it with `stream_options: {"include_usage": true}`, matching OpenAI's behaviour; without it the stream ends after the last content chunk, so loops that index `choices[0]` keep working.
 
+## Long generations
+
+Use `stream=true` for any answer that can take more than a minute to generate (a large `max_tokens`, a reasoning model, a small GPU). A stream sends tokens as they are produced, so the connection is never idle and there is no time limit beyond your client's own.
+
+Non-streaming requests work for long generations too. A request that finishes within 60 seconds is answered exactly as described below. One that is still generating after 60 seconds changes in three ways:
+
+- **The response starts early.** The `200` status and headers are sent at 60 seconds, then a newline every 15 seconds until the answer is ready, and then the completion JSON. This keeps proxies and the API's network edge (which closes a connection that sends nothing for about 100 seconds) from cutting the request and making your client retry the whole generation. JSON allows leading whitespace: the OpenAI Python and Node SDKs, `httpx`, `requests`, and `JSON.parse` parse the body unchanged.
+- **A late failure is in the body.** The status is already `200`, so an error after that point comes back as `{"error": {"code": ..., "message": ...}}` with no `choices`, the same error object a non-`200` response carries (for example code `upstream_unavailable` when the model server fails). If you parse responses yourself, check for an `error` key. With the OpenAI Python SDK, `response.choices` is `None` and the error is in `response.model_extra["error"]`; the Veri SDK raises it as a `VeriError`.
+- **Ten-minute limit.** A non-streaming request still running after 600 seconds is stopped and answered with error code `generation_timeout`. Sending the same request again hits the same limit, so switch to `stream=true`.
+
 ## Everything else is a passthrough
 
 The proxy keeps a few typed fields (`model`, `messages`, `temperature`, `max_tokens`, `stream`) and forwards **everything else the client sends** — `top_p`, `stop`, `seed`, `frequency_penalty`, `presence_penalty`, `logit_bias`, `response_format`, `tools`, `tool_choice`, ... — to vLLM untouched. vLLM is the schema authority: it applies its own defaults for omitted fields and rejects what it doesn't support.
