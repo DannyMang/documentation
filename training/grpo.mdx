@@ -31,10 +31,10 @@ Every field of the GRPO hyperparameters, with defaults:
 | `max_steps` | `100` | Total training steps (`100` when omitted). Each step trains on one prompt and its `rollouts_per_prompt` completions, so one pass over an N-prompt dataset is N steps. |
 | `rollouts_per_prompt` | `8` | Group size. Higher = better advantage estimates, more compute per step. |
 | `kl_coef` | `0.0` | KL penalty weight against the reference (frozen) model. When omitted it is `0.0`: no KL penalty and no reference model in memory. Set it (for example `0.001`) to limit drift. |
-| `max_prompt_length` | `1024` | Tokens. Not applied by the default trainer (prompts are not truncated); with `use_unsloth` it sizes the context window together with `max_response_length`. |
+| `max_prompt_length` | `1024` | Tokens. Only applies with `use_unsloth`, where it sizes the context window together with `max_response_length`. The default trainer does not truncate prompts, so without `use_unsloth` a job that sets it is rejected with a 400. |
 | `max_response_length` | `2048` | Tokens. Truncate longer completions. Big OOM lever. |
-| `global_batch_size` | `64` | Accepted but ignored by GRPO. Each step's batch is one prompt's `rollouts_per_prompt` completions. |
-| `seed` | `42` | Accepted but not applied by GRPO; runs use the trainer's default seed (`42`). |
+| `global_batch_size` | none | Not supported by GRPO: a job that sets it is rejected with a 400. Each step's batch is one prompt's `rollouts_per_prompt` completions. |
+| `seed` | `42` | Random seed for the trainer (sampling and initialization). Set it to make a run repeatable. |
 | `system_prompt` | `null` | When set, each string prompt becomes a system + user chat, so the model's chat template applies. Use it to tell the model the output format your reward checks. |
 | `lora_rank` | `null` | Train LoRA adapters of this rank instead of full finetuning. `null` means full finetune. |
 | `lora_alpha` | `null` | LoRA scaling factor. Defaults to `lora_rank` when unset. |

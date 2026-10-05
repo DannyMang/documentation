@@ -1119,7 +1119,7 @@
             }
           },
           "400": {
-            "description": "Invalid request: unknown source or engine, an unknown or not yet available provider, a (provider, gpu_type, gpu_count) shape the provider does not sell for serving, invalid replica bounds or scaling values, rejected vllm_extra_args or vllm_image, an unpriced shape, or a training job that is not completed"
+            "description": "Invalid request: unknown source or engine, an unknown or not yet available provider, a (provider, gpu_type, gpu_count) shape the provider does not sell for serving, invalid replica bounds or scaling values, rejected vllm_extra_args or vllm_image, an unpriced shape, a training job that is not completed, or a LoRA adapter checkpoint (a training job with lora_rank, or a saved model made from one), which needs merged weights or a multi_adapter deployment"
           },
           "402": {
             "description": "No billing account is linked to this workspace yet"
@@ -1633,7 +1633,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Uptime, cost, and request aggregates",
+            "description": "Uptime, cost, lifetime request counters, and past-24-hour latency and error stats",
             "content": {
               "application/json": {
                 "schema": {
@@ -1981,6 +1981,20 @@
             "required": false,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "origin",
+            "in": "query",
+            "description": "Who issued the requests: `api` (default, your production traffic) or\n`eval` (calls Veri evaluations and experiments made to this\ndeployment). Eval traffic is recorded but kept out of the default\nlisting, the metrics endpoints and the request counters.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Who issued a request: `api` (your own API traffic) or `eval` (calls Veri\nevaluators and experiments made to the deployment).",
+              "enum": [
+                "api",
+                "eval"
+              ]
             }
           }
         ],
@@ -5449,7 +5463,7 @@
           },
           "internal_name": {
             "type": "string",
-            "description": "Versioned vLLM-facing name (\"{serve_name}@v{version}\")."
+            "description": "vLLM-facing name (\"{serve_name}@v{version}-{tag}\", tag derived from\nmodel_id): never reused for different weights."
           },
           "status": {
             "type": "string",
@@ -6237,7 +6251,7 @@
               "string",
               "null"
             ],
-            "description": "Locked row format (prompt | preference | completion | chat | eval). Null on\na legacy dataset until its first append locks it."
+            "description": "Row format. A stream's locked format (prompt | preference | completion |\nchat | eval); an upload records its first row's shape, which adds\nchat_no_prompt (chat rows without a `prompt`, still locked as chat), text,\nsharegpt and alpaca (no lock). Job submit refuses GRPO on chat_no_prompt,\ntext, sharegpt and alpaca rows. Null on Hugging Face / volume sources, and\non a legacy dataset until its first append locks it."
           },
           "head_row": {
             "type": "integer",
@@ -6385,7 +6399,8 @@
         "properties": {
           "cost_usd": {
             "type": "number",
-            "format": "double"
+            "format": "double",
+            "description": "GPU cost billed inside the window: each in-scope replica's billed time\n(launch to termination) that falls in the window, times its per-box\nrate. Equals the sum of the buckets' `cost_usd`."
           },
           "cost_per_request_usd": {
             "type": [
@@ -6683,26 +6698,31 @@
         "properties": {
           "total_requests": {
             "type": "integer",
-            "format": "int64"
+            "format": "int64",
+            "description": "Lifetime count of your API requests (eval calls excluded)."
           },
           "total_prompt_tokens": {
             "type": "integer",
-            "format": "int64"
+            "format": "int64",
+            "description": "Lifetime prompt tokens of your API requests (eval calls excluded)."
           },
           "total_completion_tokens": {
             "type": "integer",
-            "format": "int64"
+            "format": "int64",
+            "description": "Lifetime completion tokens of your API requests (eval calls excluded)."
           },
           "total_cost_usd": {
             "type": "number",
-            "format": "double"
+            "format": "double",
+            "description": "GPU cost accrued over the deployment's life: every replica of every\nboot, from its launch to its termination (or now), at its per-box rate.\nThis is what billing charges, before rounding to the cent; the\ndeployment's own `total_cost_usd` is the part already settled."
           },
           "avg_latency_ms": {
             "type": [
               "number",
               "null"
             ],
-            "format": "double"
+            "format": "double",
+            "description": "Mean end-to-end latency of your API requests in the past 24 hours;\nnull when there were none. The percentiles and `error_rate` cover the\nsame window."
           },
           "p50_latency_ms": {
             "type": [
@@ -6741,7 +6761,8 @@
               "number",
               "null"
             ],
-            "format": "double"
+            "format": "double",
+            "description": "Seconds during which at least one GPU box was up and billed, summed over\nevery boot (wakes included, parked time excluded). Null until a box\nlaunches."
           }
         }
       },
@@ -6816,6 +6837,11 @@
           },
           "tpot_ms": {
             "$ref": "#/components/schemas/MetricPercentiles"
+          },
+          "cost_usd": {
+            "type": "number",
+            "format": "double",
+            "description": "GPU cost billed inside this bucket: every replica's billed time (launch\nto termination) that falls in the bucket, times its per-box rate. The\nbuckets sum to `cost_efficiency.cost_usd` (before cent rounding)."
           }
         }
       },
@@ -8238,19 +8264,25 @@
           },
           "max_prompt_length": {
             "type": "integer",
-            "format": "int32"
+            "format": "int32",
+            "description": "Only applies with use_unsloth (it sizes the context window with\nmax_response_length); without it a submit that sets it is a 400."
           },
           "max_response_length": {
             "type": "integer",
             "format": "int32"
           },
           "global_batch_size": {
-            "type": "integer",
-            "format": "int32"
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Not supported by GRPO: a submit that sets it is a 400. Echoed only for\na job stored with it before that check."
           },
           "seed": {
             "type": "integer",
-            "format": "int32"
+            "format": "int32",
+            "description": "Trainer random seed (GRPOConfig.seed)."
           },
           "use_unsloth": {
             "type": "boolean"
@@ -9230,7 +9262,7 @@
                     "string",
                     "null"
                   ],
-                  "description": "Locked row format (prompt | preference | completion | chat | eval). Null on\na legacy dataset until its first append locks it."
+                  "description": "Row format. A stream's locked format (prompt | preference | completion |\nchat | eval); an upload records its first row's shape, which adds\nchat_no_prompt (chat rows without a `prompt`, still locked as chat), text,\nsharegpt and alpaca (no lock). Job submit refuses GRPO on chat_no_prompt,\ntext, sharegpt and alpaca rows. Null on Hugging Face / volume sources, and\non a legacy dataset until its first append locks it."
                 },
                 "head_row": {
                   "type": "integer",
