@@ -4,4 +4,14 @@ description: "Recent product and platform changes in Veri"
 keywords: ["changelog", "releases", "platform updates"]
 ---
 
-No entries yet. Notable product and platform changes will be posted here as they ship.
+## Multi-GPU training for SFT and DPO
+
+`sft_text` and `dpo` jobs with `gpu_count` above 1 now run one process per GPU: data parallel when the model states fit one GPU, ZeRO-3 sharding (FSDP2) when they do not. New hyperparameters follow the Ultra-Scale Playbook: `zero_stage`, `micro_batch_size`, `gradient_accumulation_steps`, `global_batch_size`, `gradient_checkpointing`, `precision`, `cpu_offload`. See [Multi-GPU training](/training/multi-gpu).
+
+Behaviour changes to know about:
+
+- The default optimizer batch on a multi-GPU job is `micro_batch_size x gpu_count` (standard data parallelism). Set `global_batch_size` to pin it.
+- `batch_size` on `sft_text` and `dpo` stays accepted as an alias of `micro_batch_size` and is now type-checked: `0`, `"4"` or `2.0` are refused at submit instead of failing on the GPU.
+- `use_unsloth` and `load_in_4bit` with `gpu_count` above 1 are refused at submit (they were refused by the SDK only).
+- Intermediate checkpoints of managed jobs are now uploaded while the job runs (they were saved on the box but never uploaded).
+- New failure codes: `distributed_error`, `training_stalled`, `hardware_error`.

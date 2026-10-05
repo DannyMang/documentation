@@ -175,6 +175,23 @@ Check live prices/availability: `veri gpu list` (add `--provider`/`--region`/`--
 
 Docs (per-provider constraints): https://docs.veri.studio/training/providers
 
+### Multi-GPU training (sft_text, dpo)
+
+`gpu_count` above 1 on `sft_text` / `dpo` runs one process per GPU; the plan is automatic and printed at the top of the job log (`plan: dp=4 zero_stage=3 ...`). Knobs under `[method]` use Ultra-Scale Playbook names: `zero_stage` ("auto" | 0 | 2 | 3), `micro_batch_size` (per GPU; the optimizer batch is `micro_batch_size x gpu_count` unless `global_batch_size` is set), `gradient_accumulation_steps`, `global_batch_size`, `gradient_checkpointing`, `precision` ("bf16" | "bf16_mixed" | "fp32"), `cpu_offload`. Rules of thumb: leave `zero_stage` on "auto"; raise `micro_batch_size` until each GPU is busy (at `micro_batch_size = 1` four PCIe GPUs give no speedup, at 8 about 2.4x on L4 x4); set `global_batch_size` to keep training dynamics fixed when changing `gpu_count`; use `zero_stage = 3` plus `cpu_offload = true` for models that do not fit even when sharded. Not on multi-GPU: `use_unsloth`, `load_in_4bit`, `use_liger` (400 at submit). `grpo` and `grpo_harness` keep their own layouts. Docs: https://docs.veri.studio/training/multi-gpu
+
+### When a training job fails
+
+Read `error.code` first, then the log (`veri jobs logs <id>` or `GET /v1/training_jobs/{id}/logs/full`):
+
+| `error.code` | Do this |
+| --- | --- |
+| `oom` | Lower `micro_batch_size` / `max_seq_length` (or `max_length`, `max_response_length`); on multi-GPU set `zero_stage = 3`, `precision = "bf16"`, `cpu_offload = true`; or use `lora_rank`. The message names the GPU (`rank 2/4 ...`) and prints the plan. |
+| `config_error` | Fix the config; never retry the same payload. |
+| `dependency_error` | Fix the harness requirements / optimizer opt-in; never retry unchanged. |
+| `distributed_error`, `hardware_error` | Re-submit once; if it repeats, report the job id to Veri (hardware is the platform's fault, never the user's). |
+| `training_stalled` | The log tail carries every GPU's Python stack; lower `micro_batch_size` or the sequence length, then re-submit. |
+| `CAPACITY_UNAVAILABLE`, `provisioning_*`, `configuring_timeout`, `heartbeat_timeout` | Re-submit; try another `gpu_type` or region if it repeats. Failed submits are unbilled. |
+
 ### Custom scripts
 
 ```bash

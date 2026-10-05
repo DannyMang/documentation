@@ -192,10 +192,10 @@ num_epochs: int = 1            # not used by GRPO; the run length is max_steps
 max_steps: int | None = None   # omitted = 100 steps (one prompt per step)
 rollouts_per_prompt: int = 8
 kl_coef: float = 0.0           # omitted = 0.0: no KL penalty, no reference model
-max_prompt_length: int = 1024  # not applied by the default trainer
+max_prompt_length: int = 1024  # only with use_unsloth; setting it without use_unsloth is a 400
 max_response_length: int = 2048
-global_batch_size: int = 64    # accepted but ignored by GRPO
-seed: int = 42                 # accepted but not applied; runs use seed 42
+# global_batch_size: not supported by GRPO; setting it is a 400
+seed: int = 42                 # trainer random seed
 system_prompt: str | None = None  # wraps each string prompt as a system + user chat
 use_unsloth: bool = False
 lora_rank: int | None = None   # set to enable LoRA (null = full fine-tune)
@@ -215,6 +215,27 @@ max_seq_len: int = 8192
 ```
 
 This method is being rebuilt and is not currently available. For environment-based RL today, use a [custom script](/training/custom-script).
+
+### Multi-GPU fields (method=sft_text, dpo)
+
+Added to `SFTTextHyperparameters` and `DPOHyperparameters` for jobs with `gpu_count` above 1; see [Multi-GPU training](/training/multi-gpu) for semantics and validation. All optional; absent keys are not echoed back.
+
+```python
+zero_stage: "auto" | int = "auto"       # 0 (data parallel), 2 or 3 (FSDP2 sharding); 1 is rejected
+data_parallel_size: int | None = None   # must equal gpu_count in this release
+tensor_parallel_size: int = 1           # 1 only in this release
+context_parallel_size: int = 1          # 1 only in this release
+pipeline_parallel_size: int = 1         # 1 only (not available in managed training)
+expert_parallel_size: int = 1           # 1 only (not available in managed training)
+micro_batch_size: int = 1               # samples per GPU per forward pass (alias: batch_size)
+gradient_accumulation_steps: int = 1    # derived from global_batch_size when that is set
+global_batch_size: int | None = None    # = micro_batch_size x gradient_accumulation_steps x data_parallel_size
+gradient_checkpointing: bool = True
+precision: str = "bf16"                 # "bf16" | "bf16_mixed" | "fp32"
+cpu_offload: bool = False               # needs zero_stage 2 or 3
+```
+
+`micro_batch_size`, `gradient_accumulation_steps`, `global_batch_size`, `gradient_checkpointing` and `precision` are honoured on single-GPU jobs too; the sharding keys need `gpu_count` above 1.
 
 ### SFTVideoGenHyperparameters (method=sft_video_gen)
 

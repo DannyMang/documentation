@@ -69,8 +69,23 @@ When a job ends in `failed`, `error.code` carries one of:
 | `configuring_timeout` | The worker booted but made no training progress within the configuring deadline | Re-submit; if persistent, check the full log via `GET /v1/training_jobs/{id}/logs/full` |
 | `heartbeat_timeout` | Worker stopped reporting status for longer than `heartbeat_timeout_seconds` (default 300s; likely OOM-killed or network dropped) | Re-submit; if persistent, raise `gpu_count` |
 | `training_error` | Worker crash, reward function error, or dataset loading error (generic catch-all) | Read `error.message` + the full log via `GET /v1/training_jobs/{id}/logs/full` |
+| `distributed_error` | Multi-GPU job: the GPUs stopped talking to each other (NCCL error, collective timeout, rendezvous failure) | Re-submit once; if it repeats on the same configuration, report the job id. See [Multi-GPU training](/training/multi-gpu) |
+| `training_stalled` | Multi-GPU job: no progress line for the longer of 10 minutes and three times the median step time | Check the log tail (it carries each GPU's stack); lower `micro_batch_size` or the sequence length |
+| `hardware_error` | The box failed a hardware check (missing GPU, memory errors) | Re-submit; this one is on the platform |
 
 The last 200 log lines from the worker are surfaced in `error.log_tail` for fast triage; the full stdout is uploaded to S3 and accessible via `GET /v1/training_jobs/{id}/logs/full`.
+
+### Who the failure belongs to
+
+A failed job also carries `error.attribution`:
+
+| `error.attribution` | Meaning | Billing |
+| --- | --- | --- |
+| `customer` | The failure came from the job's own configuration, data or code (`oom`, `config_error`, `dependency_error`, `training_stalled`, `heartbeat_timeout` and similar) | Charged as usual |
+| `platform` | Veri's hardware or provisioning failed (`hardware_error`, `provisioning_error`, `provisioning_timeout`, `configuring_timeout`) | The job's cost is credited back to the workspace automatically |
+| `pending` | The cause is not clear from the evidence (for example `distributed_error` or `training_error` on a multi-GPU job). An operator reviews it | Charged; credited if the review finds a platform fault |
+
+Credits appear on the job as `refund` with `status` (`approved`, `credited`, `pending` or `denied`) and `amount_usd`, and as a `job_refunded` entry in the job's events. Multi-GPU jobs run a hardware check before any of your code and after a failure; the result is what makes a `hardware_error` verdict, never text in the log.
 
 ## Checkpoints
 

@@ -1119,7 +1119,7 @@
             }
           },
           "400": {
-            "description": "Invalid request: unknown source or engine, an unknown or not yet available provider, a (provider, gpu_type, gpu_count) shape the provider does not sell for serving, invalid replica bounds or scaling values, rejected vllm_extra_args or vllm_image, an unpriced shape, or a training job that is not completed"
+            "description": "Invalid request: unknown source or engine, an unknown or not yet available provider, a (provider, gpu_type, gpu_count) shape the provider does not sell for serving, invalid replica bounds or scaling values, rejected vllm_extra_args or vllm_image, an unpriced shape, a training job that is not completed, or a LoRA adapter checkpoint (a training job with lora_rank, or a saved model made from one), which needs merged weights or a multi_adapter deployment"
           },
           "402": {
             "description": "No billing account is linked to this workspace yet"
@@ -1613,6 +1613,108 @@
         ]
       }
     },
+    "/v1/deployments/{deployment_id}/messages": {
+      "post": {
+        "tags": [
+          "Deployments"
+        ],
+        "summary": "Anthropic Messages API (proxy)",
+        "description": "Forwards an Anthropic Messages request to the deployment's serving replica (vLLM's native `/v1/messages`). Point `ANTHROPIC_BASE_URL` at `/v1/deployments/{id}` and use a model access key as `ANTHROPIC_AUTH_TOKEN`. Streaming (`stream: true`) is passed through as SSE. `model` is rewritten to the deployment's served name; inline `system` messages are folded into `system`.",
+        "operationId": "messages",
+        "parameters": [
+          {
+            "name": "deployment_id",
+            "in": "path",
+            "description": "Deployment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {}
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The Anthropic-shaped response (or an SSE stream)",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "Not serving, multi-adapter / BYOC deployment, or malformed body"
+          },
+          "404": {
+            "description": "Not found or not owned by the caller"
+          },
+          "503": {
+            "description": "Deployment waking or no serving replica; retry after Retry-After"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/deployments/{deployment_id}/messages/count_tokens": {
+      "post": {
+        "tags": [
+          "Deployments"
+        ],
+        "summary": "Anthropic count_tokens (proxy)",
+        "operationId": "count_tokens",
+        "parameters": [
+          {
+            "name": "deployment_id",
+            "in": "path",
+            "description": "Deployment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {}
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "`{input_tokens}` from the serving replica",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "404": {
+            "description": "Not found or not owned by the caller"
+          },
+          "503": {
+            "description": "Deployment waking or no serving replica"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/deployments/{deployment_id}/metrics": {
       "get": {
         "tags": [
@@ -1633,7 +1735,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Uptime, cost, and request aggregates",
+            "description": "Uptime, cost, lifetime request counters, and past-24-hour latency and error stats",
             "content": {
               "application/json": {
                 "schema": {
@@ -1981,6 +2083,20 @@
             "required": false,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "origin",
+            "in": "query",
+            "description": "Who issued the requests: `api` (default, your production traffic) or\n`eval` (calls Veri evaluations and experiments made to this\ndeployment). Eval traffic is recorded but kept out of the default\nlisting, the metrics endpoints and the request counters.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Who issued a request: `api` (your own API traffic) or `eval` (calls Veri\nevaluators and experiments made to the deployment).",
+              "enum": [
+                "api",
+                "eval"
+              ]
             }
           }
         ],
@@ -3533,6 +3649,120 @@
                 }
               }
             }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/secrets": {
+      "get": {
+        "tags": [
+          "Secrets"
+        ],
+        "summary": "List secrets",
+        "operationId": "list",
+        "responses": {
+          "200": {
+            "description": "Every secret in the workspace: names and metadata only, never values",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedList_SecretResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/secrets/{name}": {
+      "put": {
+        "tags": [
+          "Secrets"
+        ],
+        "summary": "Create or replace a secret",
+        "operationId": "put",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Secret name, environment-variable style ([A-Za-z_][A-Za-z0-9_]{0,63})",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutSecretRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The stored secret's metadata. The value is never returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid name, empty or oversized value, or malformed scope_host"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Secrets"
+        ],
+        "summary": "Delete a secret",
+        "operationId": "delete",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Secret name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deletion result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such secret in this workspace"
           }
         },
         "security": [
@@ -5449,7 +5679,7 @@
           },
           "internal_name": {
             "type": "string",
-            "description": "Versioned vLLM-facing name (\"{serve_name}@v{version}\")."
+            "description": "vLLM-facing name (\"{serve_name}@v{version}-{tag}\", tag derived from\nmodel_id): never reused for different weights."
           },
           "status": {
             "type": "string",
@@ -5607,7 +5837,8 @@
           "id",
           "name",
           "key_prefix",
-          "created_at"
+          "created_at",
+          "kind"
         ],
         "properties": {
           "object": {
@@ -5632,6 +5863,25 @@
               "null"
             ],
             "format": "date-time"
+          },
+          "kind": {
+            "type": "string",
+            "description": "'user' for a full workspace key; 'model_access' for a key bound to one\ndeployment's inference routes (Managed Agents)."
+          },
+          "deployment_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Set on model-access keys: the only deployment this key can call."
+          },
+          "expires_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When the key stops authenticating. Absent = never."
           }
         }
       },
@@ -5996,6 +6246,21 @@
               "null"
             ],
             "description": "Workspace the key is scoped to (workspaces design). Stamped by the web\nproxy from the active Clerk org, or passed explicitly by SDK callers.\nAbsent / equal to the caller's own id => a personal key. Validated\nserver-side at mint: a workspace the caller is not a member of is\nrejected, so the stamp is a convenience, never an authority."
+          },
+          "deployment_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Mint a deployment-scoped \"model access\" key: it authenticates only\n`GET /v1/deployments/{id}` and the inference routes under it. Hand this\nto agent sandboxes and external agent hosts instead of a workspace key.\nThe deployment must belong to the minted workspace."
+          },
+          "expires_in_seconds": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Optional lifetime in seconds (60 .. 31,536,000). Absent = never expires."
           }
         }
       },
@@ -6237,7 +6502,7 @@
               "string",
               "null"
             ],
-            "description": "Locked row format (prompt | preference | completion | chat | eval). Null on\na legacy dataset until its first append locks it."
+            "description": "Row format. A stream's locked format (prompt | preference | completion |\nchat | eval); an upload records its first row's shape, which adds\nchat_no_prompt (chat rows without a `prompt`, still locked as chat), text,\nsharegpt and alpaca (no lock). Job submit refuses GRPO on chat_no_prompt,\ntext, sharegpt and alpaca rows. Null on Hugging Face / volume sources, and\non a legacy dataset until its first append locks it."
           },
           "head_row": {
             "type": "integer",
@@ -6385,7 +6650,8 @@
         "properties": {
           "cost_usd": {
             "type": "number",
-            "format": "double"
+            "format": "double",
+            "description": "GPU cost billed inside the window: each in-scope replica's billed time\n(launch to termination) that falls in the window, times its per-box\nrate. Equals the sum of the buckets' `cost_usd`."
           },
           "cost_per_request_usd": {
             "type": [
@@ -6683,26 +6949,31 @@
         "properties": {
           "total_requests": {
             "type": "integer",
-            "format": "int64"
+            "format": "int64",
+            "description": "Lifetime count of your API requests (eval calls excluded)."
           },
           "total_prompt_tokens": {
             "type": "integer",
-            "format": "int64"
+            "format": "int64",
+            "description": "Lifetime prompt tokens of your API requests (eval calls excluded)."
           },
           "total_completion_tokens": {
             "type": "integer",
-            "format": "int64"
+            "format": "int64",
+            "description": "Lifetime completion tokens of your API requests (eval calls excluded)."
           },
           "total_cost_usd": {
             "type": "number",
-            "format": "double"
+            "format": "double",
+            "description": "GPU cost accrued over the deployment's life: every replica of every\nboot, from its launch to its termination (or now), at its per-box rate.\nThis is what billing charges, before rounding to the cent; the\ndeployment's own `total_cost_usd` is the part already settled."
           },
           "avg_latency_ms": {
             "type": [
               "number",
               "null"
             ],
-            "format": "double"
+            "format": "double",
+            "description": "Mean end-to-end latency of your API requests in the past 24 hours;\nnull when there were none. The percentiles and `error_rate` cover the\nsame window."
           },
           "p50_latency_ms": {
             "type": [
@@ -6741,7 +7012,8 @@
               "number",
               "null"
             ],
-            "format": "double"
+            "format": "double",
+            "description": "Seconds during which at least one GPU box was up and billed, summed over\nevery boot (wakes included, parked time excluded). Null until a box\nlaunches."
           }
         }
       },
@@ -6816,6 +7088,11 @@
           },
           "tpot_ms": {
             "$ref": "#/components/schemas/MetricPercentiles"
+          },
+          "cost_usd": {
+            "type": "number",
+            "format": "double",
+            "description": "GPU cost billed inside this bucket: every replica's billed time (launch\nto termination) that falls in the bucket, times its per-box rate. The\nbuckets sum to `cost_efficiency.cost_usd` (before cent rounding)."
           }
         }
       },
@@ -7629,79 +7906,86 @@
         }
       },
       "DpoHyperparameters": {
-        "type": "object",
-        "properties": {
-          "learning_rate": {
-            "type": "number",
-            "format": "double"
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ParallelismHyperparameters"
           },
-          "num_epochs": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "max_steps": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "beta": {
-            "type": "number",
-            "format": "double"
-          },
-          "loss_type": {
-            "type": "string"
-          },
-          "max_length": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "max_prompt_length": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "use_unsloth": {
-            "type": "boolean"
-          },
-          "lora_rank": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "lora_alpha": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "load_in_4bit": {
-            "type": "boolean"
-          },
-          "checkpoint_every": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "checkpoint_keep": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
+          {
+            "type": "object",
+            "properties": {
+              "learning_rate": {
+                "type": "number",
+                "format": "double"
+              },
+              "num_epochs": {
+                "type": "integer",
+                "format": "int32"
+              },
+              "max_steps": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32"
+              },
+              "beta": {
+                "type": "number",
+                "format": "double"
+              },
+              "loss_type": {
+                "type": "string"
+              },
+              "max_length": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32"
+              },
+              "max_prompt_length": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32"
+              },
+              "use_unsloth": {
+                "type": "boolean"
+              },
+              "lora_rank": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32"
+              },
+              "lora_alpha": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32"
+              },
+              "load_in_4bit": {
+                "type": "boolean"
+              },
+              "checkpoint_every": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "format": "double"
+              },
+              "checkpoint_keep": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32"
+              }
+            }
           }
-        }
+        ]
       },
       "EnvironmentConfig": {
         "type": "object",
@@ -8238,19 +8522,25 @@
           },
           "max_prompt_length": {
             "type": "integer",
-            "format": "int32"
+            "format": "int32",
+            "description": "Only applies with use_unsloth (it sizes the context window with\nmax_response_length); without it a submit that sets it is a 400."
           },
           "max_response_length": {
             "type": "integer",
             "format": "int32"
           },
           "global_batch_size": {
-            "type": "integer",
-            "format": "int32"
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Not supported by GRPO: a submit that sets it is a 400. Echoed only for\na job stored with it before that check."
           },
           "seed": {
             "type": "integer",
-            "format": "int32"
+            "format": "int32",
+            "description": "Trainer random seed (GRPOConfig.seed)."
           },
           "use_unsloth": {
             "type": "boolean"
@@ -8526,6 +8816,13 @@
               "string",
               "null"
             ]
+          },
+          "attribution": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Who the failure belongs to: \"platform\" (credited), \"customer\", or\n\"pending\" (under review). Absent on jobs that failed before this field existed."
           }
         }
       },
@@ -9134,7 +9431,8 @@
                 "id",
                 "name",
                 "key_prefix",
-                "created_at"
+                "created_at",
+                "kind"
               ],
               "properties": {
                 "object": {
@@ -9159,6 +9457,25 @@
                     "null"
                   ],
                   "format": "date-time"
+                },
+                "kind": {
+                  "type": "string",
+                  "description": "'user' for a full workspace key; 'model_access' for a key bound to one\ndeployment's inference routes (Managed Agents)."
+                },
+                "deployment_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Set on model-access keys: the only deployment this key can call."
+                },
+                "expires_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time",
+                  "description": "When the key stops authenticating. Absent = never."
                 }
               }
             }
@@ -9230,7 +9547,7 @@
                     "string",
                     "null"
                   ],
-                  "description": "Locked row format (prompt | preference | completion | chat | eval). Null on\na legacy dataset until its first append locks it."
+                  "description": "Row format. A stream's locked format (prompt | preference | completion |\nchat | eval); an upload records its first row's shape, which adds\nchat_no_prompt (chat rows without a `prompt`, still locked as chat), text,\nsharegpt and alpaca (no lock). Job submit refuses GRPO on chat_no_prompt,\ntext, sharegpt and alpaca rows. Null on Hugging Face / volume sources, and\non a legacy dataset until its first append locks it."
                 },
                 "head_row": {
                   "type": "integer",
@@ -10034,6 +10351,57 @@
           }
         }
       },
+      "PaginatedList_SecretResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "data",
+          "has_more"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "object",
+                "name",
+                "created_at",
+                "updated_at"
+              ],
+              "properties": {
+                "object": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string",
+                  "description": "Environment-variable style name (`[A-Za-z_][A-Za-z0-9_]{0,63}`)."
+                },
+                "scope_host": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "updated_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "has_more": {
+            "type": "boolean"
+          }
+        }
+      },
       "PaginatedList_TrainingJobResponse": {
         "type": "object",
         "required": [
@@ -10166,6 +10534,20 @@
                     },
                     {
                       "$ref": "#/components/schemas/JobError"
+                    }
+                  ]
+                },
+                "resolved_parallelism": {
+                  "description": "The multi-GPU launch plan the worker resolved (dp, zero_stage, micro_batch_size,\ngradient_accumulation_steps, global_batch_size, precision, ...). Null for\nsingle-GPU jobs and before the worker has planned."
+                },
+                "refund": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$ref": "#/components/schemas/RefundInfo",
+                      "description": "Credit state for a platform-attributed failure; null when not applicable."
                     }
                   ]
                 },
@@ -10500,6 +10882,116 @@
           }
         }
       },
+      "ParallelismHyperparameters": {
+        "type": "object",
+        "description": "Multi-GPU training settings for sft_text and dpo jobs with gpu_count > 1.\nNames follow the Ultra-Scale Playbook. All optional.",
+        "properties": {
+          "zero_stage": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ZeroStage",
+                "description": "\"auto\" (default), 0 (data parallel), 2 or 3 (FSDP2 sharding)."
+              }
+            ]
+          },
+          "data_parallel_size": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Data-parallel replicas; derived as gpu_count / (tp x cp x pp) when absent.",
+            "minimum": 1
+          },
+          "tensor_parallel_size": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Tensor-parallel size (1 only in this release).",
+            "minimum": 1
+          },
+          "context_parallel_size": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Context-parallel size (1 only in this release).",
+            "minimum": 1
+          },
+          "pipeline_parallel_size": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Pipeline-parallel size (1 only; not available in managed training).",
+            "minimum": 1
+          },
+          "expert_parallel_size": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Expert-parallel size (1 only; not available in managed training).",
+            "minimum": 1
+          },
+          "micro_batch_size": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Samples per GPU per forward pass (playbook mbs). Default 1.",
+            "minimum": 1
+          },
+          "gradient_accumulation_steps": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Micro-batches accumulated per optimizer step. Default 1, or derived from global_batch_size.",
+            "minimum": 1
+          },
+          "global_batch_size": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Samples per optimizer step = micro_batch_size x gradient_accumulation_steps x data_parallel_size.",
+            "minimum": 1
+          },
+          "gradient_checkpointing": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Activation recomputation (default true)."
+          },
+          "precision": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "\"bf16\" (default), \"bf16_mixed\" (fp32 master weights) or \"fp32\"."
+          },
+          "cpu_offload": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Offload FSDP parameters and optimizer state to host RAM; requires zero_stage 2 or 3."
+          }
+        }
+      },
       "PinRequest": {
         "type": "object",
         "properties": {
@@ -10727,6 +11219,25 @@
           }
         }
       },
+      "PutSecretRequest": {
+        "type": "object",
+        "required": [
+          "value"
+        ],
+        "properties": {
+          "value": {
+            "type": "string",
+            "description": "The secret value. Stored encrypted; never returned by the API."
+          },
+          "scope_host": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional HTTPS host the value is scoped to (e.g. \"api.openai.com\").\nWhen set, agent sessions only attach the value to requests for that\nhost; when absent, the value is injected as an environment variable.\nHostname only: no scheme, port, path or wildcard."
+          }
+        }
+      },
       "RecommendedConfig": {
         "type": "object",
         "required": [
@@ -10796,6 +11307,26 @@
           },
           "balance_usd": {
             "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "RefundInfo": {
+        "type": "object",
+        "description": "Credit issued for a platform-attributed failure (phase 1 records the state;\nthe billing cron fills it in).",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "\"approved\" (credit on its way) | \"credited\" | \"pending\" (under review) | \"denied\""
+          },
+          "amount_usd": {
+            "type": [
+              "number",
+              "null"
+            ],
             "format": "double"
           }
         }
@@ -11037,72 +11568,111 @@
           }
         }
       },
-      "SftTextHyperparameters": {
+      "SecretResponse": {
         "type": "object",
+        "required": [
+          "object",
+          "name",
+          "created_at",
+          "updated_at"
+        ],
         "properties": {
-          "learning_rate": {
-            "type": "number",
-            "format": "double"
-          },
-          "num_epochs": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "max_steps": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "max_seq_length": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
-          },
-          "packing": {
-            "type": "boolean"
-          },
-          "dataset_text_field": {
+          "object": {
             "type": "string"
           },
-          "use_unsloth": {
-            "type": "boolean"
+          "name": {
+            "type": "string",
+            "description": "Environment-variable style name (`[A-Za-z_][A-Za-z0-9_]{0,63}`)."
           },
-          "lora_rank": {
+          "scope_host": {
             "type": [
-              "integer",
+              "string",
               "null"
-            ],
-            "format": "int32"
+            ]
           },
-          "lora_alpha": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
           },
-          "load_in_4bit": {
-            "type": "boolean"
-          },
-          "checkpoint_every": {
-            "type": [
-              "number",
-              "null"
-            ],
-            "format": "double"
-          },
-          "checkpoint_keep": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
           }
         }
+      },
+      "SftTextHyperparameters": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ParallelismHyperparameters"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "learning_rate": {
+                "type": "number",
+                "format": "double"
+              },
+              "num_epochs": {
+                "type": "integer",
+                "format": "int32"
+              },
+              "max_steps": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32"
+              },
+              "max_seq_length": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32"
+              },
+              "packing": {
+                "type": "boolean"
+              },
+              "dataset_text_field": {
+                "type": "string"
+              },
+              "use_unsloth": {
+                "type": "boolean"
+              },
+              "lora_rank": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32"
+              },
+              "lora_alpha": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32"
+              },
+              "load_in_4bit": {
+                "type": "boolean"
+              },
+              "checkpoint_every": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "format": "double"
+              },
+              "checkpoint_keep": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int32"
+              }
+            }
+          }
+        ]
       },
       "SftVideoGenHyperparameters": {
         "type": "object",
@@ -11758,6 +12328,20 @@
               },
               {
                 "$ref": "#/components/schemas/JobError"
+              }
+            ]
+          },
+          "resolved_parallelism": {
+            "description": "The multi-GPU launch plan the worker resolved (dp, zero_stage, micro_batch_size,\ngradient_accumulation_steps, global_batch_size, precision, ...). Null for\nsingle-GPU jobs and before the worker has planned."
+          },
+          "refund": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RefundInfo",
+                "description": "Credit state for a platform-attributed failure; null when not applicable."
               }
             ]
           },
@@ -12426,6 +13010,18 @@
             "description": "Days unprotected model versions and unreferenced dataset snapshots are\nkept (default 90; 0 = zero-data-retention opt-in)."
           }
         }
+      },
+      "ZeroStage": {
+        "oneOf": [
+          {
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "description": "ZeRO sharding stage: \"auto\" (data parallel when the model states fit one GPU,\notherwise stage 3), or an explicit 0, 2 or 3."
       }
     },
     "securitySchemes": {

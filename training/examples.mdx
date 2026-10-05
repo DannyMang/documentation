@@ -112,6 +112,22 @@ tokenizer = AutoTokenizer.from_pretrained(path)
 
 For standalone merged weights, push the finished model to your Hugging Face account with the `merged` artifact (see [Hugging Face](/training/huggingface)).
 
+**Serve it.** Because the checkpoint is an adapter, not a standalone model, it can't be deployed on its own: creating a deployment from this job (or from a library model saved from it) returns a `400`. Serve it one of two ways:
+
+- **Merged weights.** Add `hf_push={"repo": "your-namespace/qwen-1.5b-gsm8k", "artifact": "merged", "private": False}` to the job above. When the job finishes, Veri merges the adapter into the base model and pushes standalone weights. Deploy that repo from Hugging Face. Deployments download the repo without your Hugging Face token, so it must be public.
+
+  ```python
+  dep = client.deployments.create(
+      "your-namespace/qwen-1.5b-gsm8k",
+      "qwen-1.5b-gsm8k",
+      source="huggingface",
+      gpu={"gpu_type": "L4-24GB", "gpu_count": 1},
+  )
+  dep.wait()
+  ```
+
+- **Adapter on its base model.** Save the job as an adapter (`client.models.create_from_training_job(job.id, name="qwen-1.5b-gsm8k", artifact="adapter")`). Create a deployment of `Qwen/Qwen2.5-1.5B-Instruct` with `"serving_mode": "multi_adapter"`, then attach the adapter under an alias with `POST /v1/deployments/{id}/adapters`. Requests whose `model` is that alias are answered by the adapter, and one deployment can serve many adapters of the same base.
+
 <Note>
   For larger models, use `A100-80GB` or `H100-80GB`; on AWS these come as whole 8-GPU nodes (`gpu_count=8`). Today `gpu_count` above 1 shards one copy of the model across the GPUs: more memory, not more speed. Multi-GPU data-parallel training is planned.
 </Note>

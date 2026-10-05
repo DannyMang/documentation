@@ -1,0 +1,161 @@
+---
+title: "Multi-GPU training"
+sidebarTitle: "Multi-GPU"
+description: "Train sft_text and dpo jobs on several GPUs with data parallelism and ZeRO-3 sharding, using the Ultra-Scale Playbook knob names: zero_stage, micro_batch_size, gradient_accumulation_steps, global_batch_size, precision, cpu_offload."
+keywords: ["multi-GPU", "data parallel", "FSDP", "ZeRO-3", "zero_stage", "micro_batch_size", "global_batch_size", "gradient accumulation", "accelerate", "Ultra-Scale Playbook"]
+---
+
+Set `gpu_count` above 1 on an `sft_text` or `dpo` job and Veri runs one training process per GPU: plain data parallelism when the model's weights, gradients and optimizer states fit one GPU, and ZeRO-3 sharding (PyTorch FSDP2) when they do not. The knobs below use the vocabulary of the Hugging Face [Ultra-Scale Playbook](https://huggingface.co/spaces/nanotron/ultrascale-playbook), so what you already know transfers one to one.
+
+Everything on this page is optional. A job that sets none of these keys gets the automatic plan described under [What `"auto"` picks](#what-auto-picks). The resolved plan is printed at the top of the job log.
+
+## Knobs
+
+All keys live under `hyperparameters`, next to the method's own parameters.
+
+| Key | Default | Values | What it does |
+| --- | --- | --- | --- |
+| `zero_stage` | `"auto"` | `"auto"`, `0`, `2`, `3` | `0` keeps a full copy of the model on every GPU (data parallel, DDP). `2` shards gradients and optimizer states across GPUs and gathers parameters after every forward pass (FSDP2 with `reshard_after_forward: false`). `3` also shards the parameters and re-gathers each layer as it is needed (FSDP2 full sharding). `"auto"` picks `0` when the model states fit one GPU and `3` otherwise. Playbook: ZeRO-2, ZeRO-3. |
+| `micro_batch_size` | `1` | integer | Samples each GPU processes per forward pass (the playbook's `mbs`). The first throughput lever on multi-GPU: see [Throughput](#throughput). |
+| `gradient_accumulation_steps` | `1` | integer | Micro-batches accumulated before one optimizer step (the playbook's `grad_acc`). Derived from `global_batch_size` when that is set. |
+| `global_batch_size` | derived | integer | Samples per optimizer step, equal to `micro_batch_size x gradient_accumulation_steps x data_parallel_size`. Set it to keep the training dynamics fixed when you change `gpu_count`; Veri derives `gradient_accumulation_steps` from it. Must be a multiple of `micro_batch_size x data_parallel_size`. |
+| `data_parallel_size` | `gpu_count` | integer | Number of data-parallel replicas. In this release it must equal `gpu_count` (tensor and context parallelism are not available yet), so you can leave it unset. |
+| `gradient_checkpointing` | `true` | boolean | Activation recomputation (the playbook's "activation recomputation", also called gradient checkpointing): store only layer boundaries in the forward pass and recompute the rest in the backward pass. Costs roughly a third more compute per step and saves most activation memory. |
+| `precision` | `"bf16"` | `"bf16"`, `"bf16_mixed"`, `"fp32"` | `"bf16"` keeps weights and optimizer states in bf16 (8 bytes per parameter of model states). `"bf16_mixed"` computes in bf16 but keeps fp32 master weights and optimizer states (16 bytes per parameter), which protects very small updates from rounding away; gradients are reduced across GPUs in fp32. `"fp32"` runs everything in fp32. Playbook: mixed precision training. |
+| `cpu_offload` | `false` | boolean | Park sharded parameters and optimizer states in host RAM and stream them to the GPU as needed (FSDP2 CPU offload). Requires `zero_stage` `2` or `3` (with `"auto"` it forces `3`). Slower per step, fits much larger models. |
+| `tensor_parallel_size`, `context_parallel_size` | `1` | `1` | Accepted so configs are portable, but only `1` is available in this release. |
+| `pipeline_parallel_size`, `expert_parallel_size` | `1` | `1` | Not available in managed training. For pipeline or expert parallelism bring your own trainer with a [custom script](/training/custom-script). |
+
+`batch_size` is still accepted on `sft_text` and `dpo` as an alias of `micro_batch_size` for older configs. Prefer `micro_batch_size`: on most managed training APIs `batch_size` means samples per optimizer step, which on 4 GPUs would be four times what this key does.
+
+Not available in managed training: ZeRO-1 (use `zero_stage: 2`, which costs no extra communication), pipeline parallelism, expert parallelism, fp16, FP8.
+
+## What `"auto"` picks
+
+Before launch the worker counts the model's parameters N from its safetensors files and estimates the model states that must live on the GPUs for the whole run:
+
+| Setup | Model states |
+| --- | --- |
+| Full fine-tune, `precision: "bf16"` | 8N bytes (bf16 weights, gradients and two Adam moments) |
+| Full fine-tune, `"bf16_mixed"` or `"fp32"` | 16N bytes (fp32 master weights and moments plus bf16 copies) |
+| DPO full fine-tune | the above plus 2N for the frozen reference model |
+| LoRA (`lora_rank` set) | 2N for the frozen bf16 base plus the adapters |
+
+The budget per GPU is 70% of the GPU's memory after a 2 GiB reserve for the CUDA context and communication buffers (about 15 GB on an L4-24GB, 54 GB on an H100-80GB). If the states fit the budget the job runs data parallel (`zero_stage: 0`); otherwise it shards them with `zero_stage: 3`, which divides the trainable states by the number of GPUs. A DPO reference model is sharded as one unit and is gathered whole on every GPU during its forward pass, so it is counted in full.
+
+Worked examples, all with the default `"bf16"`:
+
+| Job | States | Plan |
+| --- | --- | --- |
+| Qwen3-0.6B SFT on L4-24GB x4 | 6 GB | `zero_stage: 0`, 6 GB per GPU |
+| Qwen3-4B SFT on L4-24GB x4 | 32 GB | `zero_stage: 3`, 8 GB per GPU (measured peak about 11 GB) |
+| Qwen3-1.7B DPO on L4-24GB x4 | 16 GB + 4 GB reference | `zero_stage: 3`, 8 GB per GPU (measured peak 12 GB) |
+| Qwen3-4B LoRA on L4-24GB x4 | 8 GB | `zero_stage: 0` |
+| Qwen3-8B SFT on L4-24GB x4 | 66 GB | `zero_stage: 3`, 16 GB per GPU: over budget, runs with a warning |
+| Qwen3-32B SFT on H100-80GB x8 | 262 GB | `zero_stage: 3`, 33 GB per GPU |
+
+When even `zero_stage: 3` does not fit, the job still launches and the log carries a warning naming the options (`lora_rank`, `cpu_offload`, more GPUs, `precision`). Activations are not part of the estimate: `micro_batch_size` and the sequence length knobs (`max_seq_length`, `max_length`) are what you lower when a job runs out of memory with the states inside the budget.
+
+## Throughput
+
+Data parallelism exchanges every gradient between GPUs once per optimizer step, so the gain depends on how much work each GPU does per step. On an AWS L4-24GB x4 (PCIe, no peer-to-peer links) training Qwen3-0.6B:
+
+| `micro_batch_size` | 1 GPU | 4 GPUs | Speedup |
+| --- | --- | --- | --- |
+| 1 | 556 tokens/s | 569 tokens/s | none: the all-reduce dominates tiny steps |
+| 8 | 1,976 tokens/s | 4,758 tokens/s | 2.4x |
+
+Raise `micro_batch_size` (or `max_seq_length`) until a GPU is busy for most of the step, and use `gradient_accumulation_steps` or `global_batch_size` to keep the optimizer batch where you want it. GPUs connected with NVLink or NVSwitch (A100-80GB and H100-80GB nodes) scale closer to linearly.
+
+Batch semantics change with `gpu_count`: the default optimizer batch is `micro_batch_size x gpu_count`, so four GPUs at the default `micro_batch_size` of 1 train on 4 samples per step, not 1. Set `global_batch_size` to pin the optimizer batch independent of the GPU count.
+
+## Examples
+
+Pin the optimizer batch across GPU counts:
+
+```python
+job = client.training_jobs.create(
+    base_model="Qwen/Qwen3-4B",
+    dataset_id=dataset.id,
+    method="sft_text",
+    hyperparameters={
+        "learning_rate": 2e-5,
+        "max_steps": 200,
+        "micro_batch_size": 4,
+        "global_batch_size": 64,   # 4 GPUs: gradient_accumulation_steps becomes 4
+    },
+    gpu_type="L4-24GB",
+    gpu_count=4,
+)
+```
+
+Force sharding and fp32 master weights for a small learning rate:
+
+```python
+hyperparameters={
+    "learning_rate": 1e-6,
+    "zero_stage": 3,
+    "precision": "bf16_mixed",
+    "micro_batch_size": 2,
+}
+```
+
+Fit a model that does not fit the GPUs even when sharded:
+
+```python
+hyperparameters={
+    "zero_stage": 3,
+    "cpu_offload": True,
+    "micro_batch_size": 1,
+    "max_seq_length": 2048,
+}
+```
+
+The same keys work in a `veri.toml` under `[method]`:
+
+```toml
+[method]
+type = "sft_text"
+micro_batch_size = 4
+global_batch_size = 64
+zero_stage = "auto"
+
+[resources]
+gpu_type = "L4-24GB"
+gpu_count = 4
+```
+
+## Validation at submit
+
+These combinations are refused with a 400 before any GPU is billed:
+
+- `data_parallel_size` not equal to `gpu_count` (`TP*CP*DP*PP=... != WORLD_SIZE=...`).
+- `global_batch_size` that is not `micro_batch_size x gradient_accumulation_steps x gpu_count` (or, without `gradient_accumulation_steps`, not a multiple of `micro_batch_size x gpu_count`).
+- `zero_stage: 1`, `pipeline_parallel_size` or `expert_parallel_size` above 1, `tensor_parallel_size` or `context_parallel_size` above 1.
+- `cpu_offload` with `zero_stage: 0`, or any sharding knob on `gpu_count: 1`.
+- `use_unsloth` or `load_in_4bit` (QLoRA) with `gpu_count` above 1, and `use_liger` with `gpu_count` above 1.
+- The multi-GPU keys on `grpo`, `grpo_harness` or `sft_video_gen`, which still run their own layouts.
+
+Everything else, including a `micro_batch_size` that does not fit, is the job's own choice and is reported as a failure below.
+
+## What the job reports
+
+- The resolved plan is the first thing in the job log: `plan: dp=4 zero_stage=3 tp=1 cp=1 mbs=1 grad_acc=1 gbs=4 precision=bf16 gradient_checkpointing=on (auto: 8.0 GB states/GPU)`, preceded by the parameter count, the budget and the decision.
+- The same plan is on the job as `resolved_parallelism`, under the knob names you submit (`data_parallel_size`, `zero_stage`, `micro_batch_size`, `gradient_accumulation_steps`, `global_batch_size`, `precision`, `gradient_checkpointing`, `cpu_offload`), plus `zero_stage_requested`, the memory `estimate` and the decision `trace`. Copy it into `hyperparameters` to pin an `"auto"` decision on the next run.
+- A failed job carries `error.attribution` (`customer`, `platform` or `pending`); platform failures are credited back. See [Who the failure belongs to](/training/managed#who-the-failure-belongs-to).
+- Progress and metrics come from rank 0 exactly as for a single GPU; `step` and `total_steps` count optimizer steps.
+- The final artifact is always a complete model directory (full safetensors for a full fine-tune, an adapter for LoRA), the same files a single-GPU job produces. Intermediate checkpoints are committed only once they are complete.
+- A failure names the GPU it started on: `rank 2/4 (node 0, local_rank 2) failed: OutOfMemoryError: CUDA out of memory ...` followed by the plan line and the traceback, with `error.code` set as below.
+
+| `error.code` | Meaning | What to do |
+| --- | --- | --- |
+| `oom` | A GPU ran out of memory | Lower `micro_batch_size` or the sequence length; set `zero_stage: 3`, `precision: "bf16"`, `cpu_offload`, or use `lora_rank` |
+| `distributed_error` | The GPUs stopped talking to each other (NCCL error, collective timeout, rendezvous failure) | Re-submit once; if it repeats on the same configuration, report the job id |
+| `training_stalled` | No progress line for the longer of 10 minutes and three times the median step time (a save in progress is given the time it needs) | Check the log tail and the rank stacks it carries; lower `micro_batch_size` or the sequence length |
+| `hardware_error` | The box failed a hardware check | Re-submit; the job is not your fault |
+
+## Where to go next
+
+- [SFT (text)](/training/sft) and [DPO](/training/dpo) for the method-specific knobs.
+- [Managed training](/training/managed) for the job lifecycle and the full failure-code table.
+- [Custom scripts](/training/custom-script) when you need pipeline or expert parallelism, or your own trainer.

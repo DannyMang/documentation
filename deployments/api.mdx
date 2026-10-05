@@ -48,7 +48,7 @@ Create a deployment from a base HF model, a completed training job, or a saved m
 | `provider` | no | Defaults to `aws` (the only serving provider live today) |
 | `self_heal_attempts` | no | `0` to `5`, default `3`: how many times Veri replaces the GPU box when the deployment's last box dies after it has served. See [Self-healing](/deployments#self-healing). |
 
-**Validation:** When `source=training_job`, the job must exist in your workspace (`404` otherwise) and be `completed` (`400` otherwise). When `source=custom_model`, the saved model must exist in your workspace (`404`) and be `ready` (`409` while it is still importing). An unsupported GPU shape is a `400`. Other errors: `402` when the workspace has no billing account yet, and `429` with code `ACTIVE_DEPLOYMENT_LIMIT` when the new replicas don't fit the workspace's active-replica limit.
+**Validation:** When `source=training_job`, the job must exist in your workspace (`404` otherwise) and be `completed` (`400` otherwise). When `source=custom_model`, the saved model must exist in your workspace (`404`) and be `ready` (`409` while it is still importing). A LoRA checkpoint is a `400` in both cases: a job trained with `lora_rank`, or a saved model made from one, holds only the adapter, which can't be served without its base model. Serve it as merged weights (`hf_push` with `"artifact": "merged"`, then deploy that repo) or attach it to a `serving_mode: "multi_adapter"` deployment of its base model. An unsupported GPU shape is a `400`. Other errors: `402` when the workspace has no billing account yet, and `429` with code `ACTIVE_DEPLOYMENT_LIMIT` when the new replicas don't fit the workspace's active-replica limit.
 
 A field that fails validation, on create or on [PATCH](#patch-v1deploymentsid), returns `400` with a stable `code` next to the message, so you can branch on it instead of matching the text:
 
@@ -73,7 +73,7 @@ A field that fails validation, on create or on [PATCH](#patch-v1deploymentsid), 
 | `invalid_vllm_image` | `vllm_image`. |
 | `invalid_trace_retention` | `trace_retention`. |
 
-Other `400`s (an unknown source, a training job that is not completed, a provider that is not enabled, a deployment that is stopped) carry only a message. The Python SDK puts the code on `VeriError.code`.
+Other `400`s (an unknown source, a training job that is not completed, a LoRA checkpoint, a provider that is not enabled, a deployment that is stopped) carry only a message. The Python SDK puts the code on `VeriError.code`.
 
 **Response** (`201`):
 
@@ -351,11 +351,14 @@ Aggregated counters across all requests:
   "total_requests": 42,
   "total_prompt_tokens": 5230,
   "total_completion_tokens": 1840,
+  "total_cost_usd": 2.6,
   "avg_latency_ms": 1240.5,
   "error_rate": 0.024,
   "uptime_seconds": 3600.0
 }
 ```
+
+`total_cost_usd` is the GPU cost accrued over the deployment's life: every replica of every boot, from its launch to its termination (or now), at its per-box rate, before rounding to the cent. `uptime_seconds` is the time at least one box was up, summed over every boot; time spent parked is not counted. See [Billing](/deployments/cost#cost-and-uptime-you-see).
 
 ## State machine
 

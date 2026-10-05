@@ -1,0 +1,36 @@
+---
+title: "Skills"
+description: "Reusable instruction files installed into agent sessions"
+keywords: ["agents", "skills", "SKILL.md", "instructions"]
+---
+
+## Overview
+
+A skill is a Markdown instruction file in the [Agent Skills](https://agentskills.io) format. Environments list skills by name; each session gets them written to `.claude/skills/<name>/SKILL.md`, where Claude Code loads them on demand.
+
+Skills are versioned. Adding a skill whose name already exists creates version `N+1`; environments pin the exact version they resolved at creation, so editing a skill never changes an existing environment version.
+
+```bash
+veri skills add pdf-processing --file ./skills/pdf.md -d "Use when the task involves PDF files" --allowed-tool Read --allowed-tool Bash
+veri skills list
+veri skills get pdf-processing --version 1
+veri skills delete pdf-processing
+```
+
+```python
+client.skills.add(
+    "pdf-processing",
+    open("skills/pdf.md").read(),
+    description="Use when the task involves PDF files",
+    allowed_tools=["Read", "Bash"],
+)
+```
+
+| Field | Meaning |
+| --- | --- |
+| `name` | `[a-z0-9][a-z0-9_-]{0,63}`. Reusing a name adds a version. |
+| `description` | One line the harness uses to decide when the skill applies. |
+| `instructions` | The SKILL.md body. At most 256 KiB per skill, and 256 KiB total per environment. |
+| `allowed_tools` | Advisory tool list written into the skill's frontmatter. |
+
+Reference a skill from an environment as `"pdf-processing"` (latest at creation time) or `"pdf-processing@2"` (pinned).

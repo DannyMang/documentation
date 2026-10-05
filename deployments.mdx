@@ -162,7 +162,7 @@ Serving usually needs **less** GPU than training the same model. A 7B you traine
 
 ## Serving newer architectures
 
-Deployments run a platform-managed vLLM version by default. A model architecture released after that version fails to start (`vllm_failed_to_start`) because vLLM doesn't recognize it yet.
+Deployments run vLLM 0.15.1 by default (the platform-managed version). A model architecture released after that version fails to start (`vllm_failed_to_start`) because vLLM doesn't recognize it yet.
 
 To serve one, pin the deployment to a newer official vLLM image:
 
@@ -185,7 +185,7 @@ How it behaves:
 - Only official upstream images are accepted: `vllm/vllm-openai:<tag>` (NVIDIA) or `vllm/vllm-openai-rocm:<tag>` (AMD). Anything else is rejected at create.
 - The image runs via Docker on the deployment's box, on every provider, and is used exactly as written: the platform never rewrites or substitutes it.
 - The image is pulled from Docker Hub when the box boots, so the boot deadline is longer than the default 20 minutes: 40 minutes plus 5 seconds per GB of the deployment's total GPU memory. The pull can still be too slow or rate limited to provision reliably: a first boot that passes the deadline fails with `watchdog_timeout`, and a wake boot re-parks (a request after the backoff, or `POST /wake`, wakes it again). Explicit images are supported as literal overrides; the supported route for a newer architecture is the platform's next validated vLLM version.
-- Without `vllm_image`, the deployment runs the platform-managed vLLM version for its provider, which never pulls at boot.
+- Without `vllm_image`, the deployment runs the platform-managed vLLM (0.15.1), which never pulls at boot.
 - `engine: vllm` only.
 - The image is set at create and immutable, like model and GPU.
 
