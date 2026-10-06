@@ -27,7 +27,7 @@ The exact versions differ by provider, because each provider delivers the stack 
 | NVIDIA driver | 580.159.04 (R580) | Pinned on the host image. |
 | CUDA runtime | 12.8 | Runs via the pinned R580 driver. |
 | PyTorch | 2.9.1 (cu128) | Inherited from the base AMI; not re-pinned by Veri. |
-| vLLM | 0.15.1 | Pinned. |
+| vLLM | 0.15.1 | Pinned for training rollouts. Serving uses a separate, newer image (vLLM 0.27.1); see [Deployments](/deployments#serving-newer-architectures). |
 | transformers | 4.56.2 | Pinned. |
 | trl | 1.7.1 | Pinned. |
 | unsloth / unsloth_zoo | 2026.7.4 | Pinned. |

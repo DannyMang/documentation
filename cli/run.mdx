@@ -1,5 +1,5 @@
 ---
-title: "veri run — Hero Verb & Project Layout"
+title: "veri run: Hero Verb & Project Layout"
 sidebarTitle: "veri run + init"
 description: "Dispatch a config to the right create command, scaffold projects, and override TOML fields from the CLI."
 keywords: ["veri run", "veri init", "kind dispatch", "TOML override", "--set"]
@@ -44,7 +44,7 @@ veri init --force
 Every config starts with a required `kind` line:
 
 ```toml
-kind = "train"    # or "deploy"
+kind = "train"    # or "deploy" or "environment"
 ```
 
 `veri run <path>` reads `kind` and routes:
@@ -53,13 +53,14 @@ kind = "train"    # or "deploy"
 | --- | --- |
 | `"train"` | `veri jobs create` |
 | `"deploy"` | `veri deployments create` |
+| `"environment"` | `veri environments create` (an [agent environment](/agents/environments): the TOML is the environment manifest) |
 
 Missing `kind` or an unknown value errors with a "did you mean" hint:
 
 ```bash
 $ veri run nokind.toml
 Error: config 'nokind.toml' is missing required `kind` field.
-Add one of: kind = "train" | "deploy"
+Add one of: kind = "train" | "deploy" | "environment"
 ```
 
 ## Override TOML fields from the CLI
@@ -72,7 +73,7 @@ veri run configs/train.toml \
   --set model.base=Qwen/Qwen3-8B \
   --set method.learning_rate=2e-6
 
-# Convenience flag (jobs only) — same as --set model.base=...:
+# Convenience flag (jobs only), same as --set model.base=...:
 veri jobs create configs/train.toml --base-model Qwen/Qwen3-8B
 ```
 
