@@ -106,6 +106,15 @@
             ]
           },
           {
+            "group": "Agents",
+            "icon": "robot",
+            "pages": [
+              "agents/environments",
+              "agents/skills",
+              "agents/sessions"
+            ]
+          },
+          {
             "group": "CLI",
             "icon": "terminal",
             "pages": [
@@ -335,6 +344,42 @@
               "PUT /v1/secrets/{name}",
               "GET /v1/secrets",
               "DELETE /v1/secrets/{name}"
+            ]
+          },
+          {
+            "group": "Environments",
+            "openapi": "api-reference/openapi.json",
+            "pages": [
+              "POST /v1/environments",
+              "GET /v1/environments",
+              "GET /v1/environments/{env_id}",
+              "POST /v1/environments/{env_id}/versions",
+              "DELETE /v1/environments/{env_id}"
+            ]
+          },
+          {
+            "group": "Skills",
+            "openapi": "api-reference/openapi.json",
+            "pages": [
+              "POST /v1/skills",
+              "GET /v1/skills",
+              "GET /v1/skills/{name}",
+              "DELETE /v1/skills/{name}"
+            ]
+          },
+          {
+            "group": "Sessions",
+            "openapi": "api-reference/openapi.json",
+            "pages": [
+              "POST /v1/sessions",
+              "GET /v1/sessions",
+              "GET /v1/sessions/{session_id}",
+              "POST /v1/sessions/{session_id}/events",
+              "GET /v1/sessions/{session_id}/events",
+              "GET /v1/sessions/{session_id}/stream",
+              "POST /v1/sessions/{session_id}/pause",
+              "POST /v1/sessions/{session_id}/resume",
+              "DELETE /v1/sessions/{session_id}"
             ]
           },
           {

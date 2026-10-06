@@ -2342,6 +2342,222 @@
         ]
       }
     },
+    "/v1/environments": {
+      "get": {
+        "tags": [
+          "Environments"
+        ],
+        "summary": "List environments",
+        "operationId": "list",
+        "responses": {
+          "200": {
+            "description": "The workspace's environments with their latest version, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedList_EnvironmentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Managed agents disabled"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Environments"
+        ],
+        "summary": "Create an environment",
+        "description": "Creates the environment and its version 1. The spec is validated (harness, model endpoint, egress hosts, env, secrets, MCP servers, skills, permissions) and stored normalized.",
+        "operationId": "create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnvironmentCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "The environment with version 1",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvironmentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid spec, unknown secret or skill, or managed agents disabled"
+          },
+          "404": {
+            "description": "model.deployment_id is not a deployment in this workspace"
+          },
+          "409": {
+            "description": "An environment with this name already exists"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/environments/{env_id}": {
+      "get": {
+        "tags": [
+          "Environments"
+        ],
+        "summary": "Get an environment",
+        "operationId": "get",
+        "parameters": [
+          {
+            "name": "env_id",
+            "in": "path",
+            "description": "Environment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "description": "Return this version instead of the latest.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The environment with its latest (or requested) version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvironmentResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in this workspace, or no such version"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Environments"
+        ],
+        "summary": "Delete an environment",
+        "description": "Soft delete: the environment disappears from lists and can no longer start sessions; existing sessions keep their pinned version.",
+        "operationId": "delete",
+        "parameters": [
+          {
+            "name": "env_id",
+            "in": "path",
+            "description": "Environment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deletion result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in this workspace"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/environments/{env_id}/versions": {
+      "post": {
+        "tags": [
+          "Environments"
+        ],
+        "summary": "Create a new environment version",
+        "description": "Validates the full spec and appends it as version latest+1. Earlier versions are immutable; sessions already pinned to them are unaffected.",
+        "operationId": "create_version",
+        "parameters": [
+          {
+            "name": "env_id",
+            "in": "path",
+            "description": "Environment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnvironmentSpecInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "The environment with the new version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvironmentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid spec or managed agents disabled"
+          },
+          "404": {
+            "description": "Not found in this workspace"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/explore/runs": {
       "get": {
         "tags": [
@@ -3772,6 +3988,425 @@
         ]
       }
     },
+    "/v1/sessions": {
+      "get": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "List sessions",
+        "operationId": "list",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The workspace's sessions, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedList_SessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Managed agents disabled"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Start a session",
+        "description": "Creates a session pinned to an environment version and starts its sandbox. The session is `provisioning` until the runtime reports `ready`; watch the stream or poll GET.",
+        "operationId": "create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "The new session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or managed agents disabled"
+          },
+          "404": {
+            "description": "Environment (or version) not in this workspace"
+          },
+          "501": {
+            "description": "No sandbox backend configured"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/sessions/{session_id}": {
+      "get": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Get a session",
+        "operationId": "get",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in this workspace"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "End a session",
+        "description": "Destroys the sandbox and its snapshots, revokes the session's model access key and marks the session ended. The transcript stays readable for 30 days. Idempotent on ended sessions.",
+        "operationId": "delete",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deletion result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in this workspace"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/sessions/{session_id}/events": {
+      "get": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Session transcript (paged)",
+        "operationId": "events",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "after_seq",
+            "in": "query",
+            "description": "Return events with seq greater than this (default 0 = from the start).",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size, 1..1000 (default 200).",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Events with seq > after_seq, oldest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedList_SessionEventRow"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in this workspace"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Send input to a session",
+        "description": "`user.message` appends the message to the transcript and starts an agent run (409 while a run is in progress or the session is paused). `user.interrupt` stops the current run.",
+        "operationId": "post_event",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionInputRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The appended event's seq and the session status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionInputResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Unknown event type, missing text, or managed agents disabled"
+          },
+          "404": {
+            "description": "Not found in this workspace"
+          },
+          "409": {
+            "description": "The session cannot take this input in its current status"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/sessions/{session_id}/pause": {
+      "post": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Pause a session",
+        "description": "Snapshots the workspace and stops the sandbox. Billing stops; resume restores the files.",
+        "operationId": "pause",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The paused session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in this workspace"
+          },
+          "409": {
+            "description": "Not pausable in its current status"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/sessions/{session_id}/resume": {
+      "post": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Resume a paused session",
+        "operationId": "resume",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The session, provisioning again until the runtime reports ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in this workspace"
+          },
+          "409": {
+            "description": "Not paused"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/sessions/{session_id}/stream": {
+      "get": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Session transcript (live SSE)",
+        "description": "Server-sent events, one per transcript event, `id` = seq and `event` = type. Reconnect with `Last-Event-ID` (or `?after_seq=`) to resume without gaps. Ends after the session's terminal status event.",
+        "operationId": "stream",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "after_seq",
+            "in": "query",
+            "description": "Return events with seq greater than this (default 0 = from the start).",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size, 1..1000 (default 200).",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "text/event-stream"
+          },
+          "404": {
+            "description": "Not found in this workspace"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/settings/integrations/huggingface": {
       "get": {
         "tags": [
@@ -3994,6 +4629,160 @@
           },
           "400": {
             "description": "model_retention_days out of range"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/skills": {
+      "get": {
+        "tags": [
+          "Skills"
+        ],
+        "summary": "List skills",
+        "operationId": "list",
+        "responses": {
+          "200": {
+            "description": "The latest version of every skill in the workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedList_SkillResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Managed agents disabled"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Skills"
+        ],
+        "summary": "Create a skill (or a new version of one)",
+        "operationId": "create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SkillCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "The new skill version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid name, empty or oversized instructions, or managed agents disabled"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/skills/{name}": {
+      "get": {
+        "tags": [
+          "Skills"
+        ],
+        "summary": "Get a skill",
+        "operationId": "get",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Skill name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "version",
+            "in": "query",
+            "description": "Return this version instead of the latest.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The latest (or requested) version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such skill or version in this workspace"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Skills"
+        ],
+        "summary": "Delete a skill (all versions)",
+        "operationId": "delete",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "description": "Skill name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deletion result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such skill in this workspace"
           }
         },
         "security": [
@@ -8008,6 +8797,31 @@
           }
         }
       },
+      "EnvironmentCreateRequest": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/EnvironmentSpecInput"
+          },
+          {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "`[a-z0-9][a-z0-9_-]{0,63}`, unique per workspace."
+              },
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          }
+        ]
+      },
       "EnvironmentRecommendation": {
         "type": "object",
         "required": [
@@ -8020,6 +8834,55 @@
           },
           "value": {
             "type": "string"
+          }
+        }
+      },
+      "EnvironmentResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "id",
+          "name",
+          "latest_version",
+          "created_by",
+          "created_at",
+          "updated_at",
+          "version"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "latest_version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "$ref": "#/components/schemas/EnvironmentVersionResponse",
+            "description": "The latest version unless `?version=` asked for another."
           }
         }
       },
@@ -8094,6 +8957,189 @@
             }
           }
         ]
+      },
+      "EnvironmentSpec": {
+        "type": "object",
+        "required": [
+          "harness",
+          "model",
+          "size",
+          "egress",
+          "allowed_hosts",
+          "env",
+          "secrets",
+          "mcp_servers",
+          "skills",
+          "permissions",
+          "idle_timeout_s"
+        ],
+        "properties": {
+          "harness": {
+            "type": "string"
+          },
+          "model": {
+            "$ref": "#/components/schemas/ModelSpec"
+          },
+          "size": {
+            "type": "string"
+          },
+          "egress": {
+            "type": "string"
+          },
+          "allowed_hosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "env": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "secrets": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "mcp_servers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/McpServerSpec"
+            }
+          },
+          "skills": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SkillPin"
+            }
+          },
+          "permissions": {
+            "$ref": "#/components/schemas/Permissions"
+          },
+          "idle_timeout_s": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "EnvironmentSpecInput": {
+        "type": "object",
+        "description": "The environment spec as submitted. Also the body of\n`POST /v1/environments/{id}/versions`.",
+        "properties": {
+          "harness": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`claude-code` (the only harness today)."
+          },
+          "model": {
+            "$ref": "#/components/schemas/ModelInput",
+            "description": "Where the harness sends model calls."
+          },
+          "size": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`small` | `standard` (default) | `large`."
+          },
+          "egress": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`restricted` (default) | `unrestricted`."
+          },
+          "allowed_hosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Extra hostnames a restricted session may reach."
+          },
+          "env": {
+            "type": "object",
+            "description": "Plain environment variables for the harness.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "secrets": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Secret names injected as environment variables named after them\n(or attached per host when the secret has a scope_host)."
+          },
+          "mcp_servers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/McpServerInput"
+            }
+          },
+          "skills": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Skill names, optionally pinned: `name` (latest) or `name@3`."
+          },
+          "permissions": {
+            "$ref": "#/components/schemas/PermissionsInput"
+          },
+          "idle_timeout_s": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Seconds without input before the session snapshots and pauses\n(60 .. 21600, default 900)."
+          }
+        }
+      },
+      "EnvironmentVersionResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "environment_id",
+          "version",
+          "spec",
+          "created_by",
+          "created_at"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "environment_id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "spec": {
+            "$ref": "#/components/schemas/EnvironmentSpec",
+            "description": "The normalized spec: defaults filled, hosts lowercased, skills pinned."
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
       },
       "EventDto": {
         "type": "object",
@@ -8862,6 +9908,51 @@
           }
         }
       },
+      "McpServerInput": {
+        "type": "object",
+        "required": [
+          "name",
+          "url"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Short identifier, `[a-z0-9][a-z0-9_-]{0,31}`; becomes the server key in\nthe harness's MCP config."
+          },
+          "url": {
+            "type": "string",
+            "description": "HTTPS URL of a streamable-HTTP MCP server."
+          },
+          "secret": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional secret name sent as `Authorization: Bearer <value>`."
+          }
+        }
+      },
+      "McpServerSpec": {
+        "type": "object",
+        "required": [
+          "name",
+          "url"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "secret": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "MeResponse": {
         "type": "object",
         "required": [
@@ -9098,6 +10189,32 @@
           }
         }
       },
+      "ModelInput": {
+        "type": "object",
+        "properties": {
+          "deployment_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "A Veri deployment in this workspace. Sessions mint a deployment-scoped\nmodel access key for it automatically. Exactly one of `deployment_id`\nand `base_url`."
+          },
+          "base_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Any OpenAI-compatible (or Anthropic-compatible, for Claude Code) HTTPS\nbase URL: your own inference service, or a provider."
+          },
+          "secret": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Name of the secret holding the API key for `base_url`. Injected by the\nsandbox egress intercept on requests to that host only."
+          }
+        }
+      },
       "ModelLineageResponse": {
         "type": "object",
         "description": "A lineage with its versions, aliases and audit trail.",
@@ -9287,6 +10404,29 @@
             "type": "integer",
             "format": "int32",
             "description": "What the sweeper actually applies to this lineage: the override if\nset, else the workspace default. 0 = eligible versions are purged by\nthe next nightly sweep."
+          }
+        }
+      },
+      "ModelSpec": {
+        "type": "object",
+        "properties": {
+          "deployment_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "base_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "secret": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
@@ -10194,6 +11334,74 @@
           }
         }
       },
+      "PaginatedList_EnvironmentResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "data",
+          "has_more"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "object",
+                "id",
+                "name",
+                "latest_version",
+                "created_by",
+                "created_at",
+                "updated_at",
+                "version"
+              ],
+              "properties": {
+                "object": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "latest_version": {
+                  "type": "integer",
+                  "format": "int32"
+                },
+                "created_by": {
+                  "type": "string"
+                },
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "updated_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "version": {
+                  "$ref": "#/components/schemas/EnvironmentVersionResponse",
+                  "description": "The latest version unless `?version=` asked for another."
+                }
+              }
+            }
+          },
+          "has_more": {
+            "type": "boolean"
+          }
+        }
+      },
       "PaginatedList_ModelResponse": {
         "type": "object",
         "required": [
@@ -10391,6 +11599,253 @@
                   "format": "date-time"
                 },
                 "updated_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "has_more": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PaginatedList_SessionEventRow": {
+        "type": "object",
+        "required": [
+          "object",
+          "data",
+          "has_more"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "session_id",
+                "seq",
+                "type",
+                "payload",
+                "created_at"
+              ],
+              "properties": {
+                "session_id": {
+                  "type": "string"
+                },
+                "seq": {
+                  "type": "integer",
+                  "format": "int64"
+                },
+                "type": {
+                  "type": "string"
+                },
+                "payload": {},
+                "payload_ref": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Object-storage key when the payload exceeded the inline cap."
+                },
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "has_more": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PaginatedList_SessionResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "data",
+          "has_more"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "object",
+                "id",
+                "environment_id",
+                "environment_version",
+                "status",
+                "awake_seconds",
+                "total_cost_usd",
+                "created_by",
+                "created_at",
+                "updated_at"
+              ],
+              "properties": {
+                "object": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "environment_id": {
+                  "type": "string"
+                },
+                "environment_version": {
+                  "type": "integer",
+                  "format": "int32"
+                },
+                "status": {
+                  "type": "string",
+                  "description": "provisioning | ready | running | paused | ended | failed"
+                },
+                "title": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "budget_usd": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "format": "double"
+                },
+                "awake_seconds": {
+                  "type": "integer",
+                  "format": "int64",
+                  "description": "Seconds the sandbox has been awake (what the session meter bills)."
+                },
+                "total_cost_usd": {
+                  "type": "number",
+                  "format": "double",
+                  "description": "Charged so far (USD)."
+                },
+                "started_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "last_active_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "paused_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "ended_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "failure_code": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "error_message": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "created_by": {
+                  "type": "string"
+                },
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "updated_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "has_more": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PaginatedList_SkillResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "data",
+          "has_more"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "object",
+                "id",
+                "name",
+                "description",
+                "instructions",
+                "allowed_tools",
+                "version",
+                "created_by",
+                "created_at"
+              ],
+              "properties": {
+                "object": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "instructions": {
+                  "type": "string"
+                },
+                "allowed_tools": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "version": {
+                  "type": "integer",
+                  "format": "int32"
+                },
+                "created_by": {
+                  "type": "string"
+                },
+                "created_at": {
                   "type": "string",
                   "format": "date-time"
                 }
@@ -10989,6 +12444,75 @@
               "null"
             ],
             "description": "Offload FSDP parameters and optimizer state to host RAM; requires zero_stage 2 or 3."
+          }
+        }
+      },
+      "PermissionRule": {
+        "type": "object",
+        "required": [
+          "tool",
+          "action"
+        ],
+        "properties": {
+          "tool": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          }
+        }
+      },
+      "PermissionRuleInput": {
+        "type": "object",
+        "required": [
+          "tool",
+          "action"
+        ],
+        "properties": {
+          "tool": {
+            "type": "string",
+            "description": "Tool pattern as the harness understands it (e.g. `Bash`,\n`Bash(git *)`, `Read`, `WebFetch`, `mcp__composio__*`)."
+          },
+          "action": {
+            "type": "string",
+            "description": "`allow` or `deny`. `ask` (human approval) is not available yet and is\nrejected."
+          }
+        }
+      },
+      "Permissions": {
+        "type": "object",
+        "required": [
+          "default",
+          "rules"
+        ],
+        "properties": {
+          "default": {
+            "type": "string"
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PermissionRule"
+            }
+          }
+        }
+      },
+      "PermissionsInput": {
+        "type": "object",
+        "properties": {
+          "default": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`allow` (default) or `deny`: what happens to tools no rule matches."
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PermissionRuleInput"
+            },
+            "description": "Evaluated top to bottom; the last matching rule wins."
           }
         }
       },
@@ -11600,6 +13124,223 @@
           }
         }
       },
+      "SessionCreateRequest": {
+        "type": "object",
+        "required": [
+          "environment_id"
+        ],
+        "properties": {
+          "environment_id": {
+            "type": "string"
+          },
+          "environment_version": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Pin a specific environment version (default: latest)."
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "budget_usd": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Spend ceiling for this session in USD. The session pauses when its\naccrued cost reaches it."
+          }
+        }
+      },
+      "SessionEventRow": {
+        "type": "object",
+        "required": [
+          "session_id",
+          "seq",
+          "type",
+          "payload",
+          "created_at"
+        ],
+        "properties": {
+          "session_id": {
+            "type": "string"
+          },
+          "seq": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "type": {
+            "type": "string"
+          },
+          "payload": {},
+          "payload_ref": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Object-storage key when the payload exceeded the inline cap."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "SessionInputRequest": {
+        "type": "object",
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "`user.message` (requires `text`) or `user.interrupt`."
+          },
+          "text": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "SessionInputResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "session_id",
+          "seq",
+          "status"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "session_id": {
+            "type": "string"
+          },
+          "seq": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "SessionResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "id",
+          "environment_id",
+          "environment_version",
+          "status",
+          "awake_seconds",
+          "total_cost_usd",
+          "created_by",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "environment_id": {
+            "type": "string"
+          },
+          "environment_version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "status": {
+            "type": "string",
+            "description": "provisioning | ready | running | paused | ended | failed"
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "budget_usd": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "awake_seconds": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Seconds the sandbox has been awake (what the session meter bills)."
+          },
+          "total_cost_usd": {
+            "type": "number",
+            "format": "double",
+            "description": "Charged so far (USD)."
+          },
+          "started_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "last_active_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "paused_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "ended_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "failure_code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "error_message": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "SftTextHyperparameters": {
         "allOf": [
           {
@@ -11741,6 +13482,101 @@
               "null"
             ],
             "format": "int32"
+          }
+        }
+      },
+      "SkillCreateRequest": {
+        "type": "object",
+        "required": [
+          "name",
+          "instructions"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "`[a-z0-9][a-z0-9_-]{0,63}`. Reusing a name creates the next version."
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "One line the harness uses to decide when the skill applies."
+          },
+          "instructions": {
+            "type": "string",
+            "description": "The SKILL.md body (Markdown). At most 256 KiB."
+          },
+          "allowed_tools": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Advisory tool allowlist written into the skill's frontmatter."
+          }
+        }
+      },
+      "SkillPin": {
+        "type": "object",
+        "required": [
+          "name",
+          "version"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "SkillResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "id",
+          "name",
+          "description",
+          "instructions",
+          "allowed_tools",
+          "version",
+          "created_by",
+          "created_at"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "instructions": {
+            "type": "string"
+          },
+          "allowed_tools": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
