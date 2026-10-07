@@ -4792,128 +4792,6 @@
         ]
       }
     },
-    "/v1/ssh_keys": {
-      "get": {
-        "tags": [
-          "SSH keys"
-        ],
-        "summary": "List SSH keys",
-        "operationId": "list",
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          {
-            "name": "after",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "A paginated list of SSH keys",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PaginatedList_SSHKeyResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      },
-      "post": {
-        "tags": [
-          "SSH keys"
-        ],
-        "summary": "Upload SSH key",
-        "operationId": "create",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateSSHKeyRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "The registered SSH key",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SSHKeyResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Request body failed validation"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
-    "/v1/ssh_keys/{key_id}": {
-      "delete": {
-        "tags": [
-          "SSH keys"
-        ],
-        "summary": "Delete SSH key",
-        "operationId": "delete",
-        "parameters": [
-          {
-            "name": "key_id",
-            "in": "path",
-            "description": "SSH key ID",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Deletion result",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DeleteResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found or not owned by the caller"
-          }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ]
-      }
-    },
     "/v1/training_jobs": {
       "get": {
         "tags": [
@@ -7096,31 +6974,6 @@
               "null"
             ],
             "description": "Which artifact to save from the source job: \"full\" (default, the\nstandalone checkpoint) or \"adapter\" (LoRA jobs only: stores the PEFT\nadapter dir as-is, without merging; the row records the job's base\nmodel)."
-          }
-        }
-      },
-      "CreateSSHKeyRequest": {
-        "type": "object",
-        "required": [
-          "name",
-          "public_key",
-          "private_key"
-        ],
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "public_key": {
-            "type": "string"
-          },
-          "private_key": {
-            "type": "string"
-          },
-          "provider": {
-            "type": [
-              "string",
-              "null"
-            ]
           }
         }
       },
@@ -11504,61 +11357,6 @@
           }
         }
       },
-      "PaginatedList_SSHKeyResponse": {
-        "type": "object",
-        "required": [
-          "object",
-          "data",
-          "has_more"
-        ],
-        "properties": {
-          "object": {
-            "type": "string"
-          },
-          "data": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "required": [
-                "object",
-                "id",
-                "name",
-                "created_at"
-              ],
-              "properties": {
-                "object": {
-                  "type": "string"
-                },
-                "id": {
-                  "type": "string"
-                },
-                "name": {
-                  "type": "string"
-                },
-                "fingerprint": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "provider": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "created_at": {
-                  "type": "string",
-                  "format": "date-time"
-                }
-              }
-            }
-          },
-          "has_more": {
-            "type": "boolean"
-          }
-        }
-      },
       "PaginatedList_SecretResponse": {
         "type": "object",
         "required": [
@@ -13053,42 +12851,6 @@
           },
           "platform_default": {
             "type": "boolean"
-          }
-        }
-      },
-      "SSHKeyResponse": {
-        "type": "object",
-        "required": [
-          "object",
-          "id",
-          "name",
-          "created_at"
-        ],
-        "properties": {
-          "object": {
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "fingerprint": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "provider": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time"
           }
         }
       },
@@ -14917,10 +14679,6 @@
     {
       "name": "Account",
       "description": "The authenticated caller's identity."
-    },
-    {
-      "name": "SSH keys",
-      "description": "Manage SSH key pairs for compute access."
     },
     {
       "name": "Settings",

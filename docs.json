@@ -383,15 +383,6 @@
             ]
           },
           {
-            "group": "SSH keys",
-            "openapi": "api-reference/openapi.json",
-            "pages": [
-              "POST /v1/ssh_keys",
-              "GET /v1/ssh_keys",
-              "DELETE /v1/ssh_keys/{key_id}"
-            ]
-          },
-          {
             "group": "Webhooks",
             "openapi": "api-reference/openapi.json",
             "pages": [
