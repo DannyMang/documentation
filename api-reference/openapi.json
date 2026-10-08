@@ -2162,6 +2162,59 @@
         ]
       }
     },
+    "/v1/deployments/{deployment_id}/threads/{thread_id}": {
+      "get": {
+        "tags": [
+          "Observability"
+        ],
+        "summary": "Get a thread",
+        "description": "One external agent thread turn by turn: every model call as an `llm` step and the tool calls between calls as `tool` steps. Message bodies come from the newest stored request trace (`bodies` says how much was found).",
+        "operationId": "thread",
+        "parameters": [
+          {
+            "name": "deployment_id",
+            "in": "path",
+            "description": "Deployment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "The X-Veri-Thread-Id the requests carried",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed thread id, or observability disabled"
+          },
+          "404": {
+            "description": "No such deployment in this workspace, or no thread requests"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/deployments/{deployment_id}/traces": {
       "get": {
         "tags": [
@@ -3692,6 +3745,252 @@
           },
           "404": {
             "description": "Lineage or version not found in the caller's workspace"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/observability/agents": {
+      "get": {
+        "tags": [
+          "Observability"
+        ],
+        "summary": "List agents",
+        "description": "Every managed agent environment (while managed agents are enabled), plus the external agents with conversations in the window. Live agents first, then by last activity.",
+        "operationId": "agents",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "description": "Window start (RFC 3339). Default: `to` minus 24 hours.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "Window end (RFC 3339). Default: now.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedList_AgentSummary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad window, or observability disabled"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/observability/conversations": {
+      "get": {
+        "tags": [
+          "Observability"
+        ],
+        "summary": "List conversations",
+        "description": "Threads and sessions with activity in the window, newest activity first, keyset paged with `after` = the previous page's `next_cursor`.",
+        "operationId": "conversations",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "description": "Window start (RFC 3339). Default: `to` minus 24 hours.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "Window end (RFC 3339). Default: now.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "agent",
+            "in": "query",
+            "description": "Only this agent (its `key`).",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "deployment_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "description": "session | thread",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "active",
+            "in": "query",
+            "description": "Only conversations live now.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "errors_only",
+            "in": "query",
+            "description": "Only conversations with errors.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Case-insensitive substring of the title, preview or thread id.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size, 1..=100 (default 50).",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "description": "`next_cursor` of the previous page.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad window, filter or cursor, or observability disabled"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/observability/overview": {
+      "get": {
+        "tags": [
+          "Observability"
+        ],
+        "summary": "Agent observability overview",
+        "description": "Totals, a zero-filled series, live counts and top tools, agents and models over the workspace's agent conversations: managed agent sessions and external agent threads (requests sent with `X-Veri-Thread-Id`).",
+        "operationId": "overview",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "description": "Window start (RFC 3339). Default: `to` minus 24 hours.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "Window end (RFC 3339). Default: now. At most 30 days after `from`.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "agent",
+            "in": "query",
+            "description": "Only this agent (its `key`).",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "deployment_id",
+            "in": "query",
+            "description": "Only this deployment's threads and the sessions whose environment\nversion serves from it.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OverviewResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad window, or observability disabled"
           }
         },
         "security": [
@@ -6158,6 +6457,30 @@
           }
         }
       },
+      "ActiveCounts": {
+        "type": "object",
+        "description": "Conversations live now, independent of the window.",
+        "required": [
+          "agents",
+          "conversations",
+          "window_minutes"
+        ],
+        "properties": {
+          "agents": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "conversations": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "window_minutes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "A thread counts as active with a request in this many minutes; a\nsession while provisioning, ready or running."
+          }
+        }
+      },
       "ActiveDeploymentEntry": {
         "type": "object",
         "required": [
@@ -6403,6 +6726,132 @@
               "$ref": "#/components/schemas/AdapterReplicaState"
             },
             "description": "Per-serving-replica load state for the CURRENT internal_name."
+          }
+        }
+      },
+      "AgentRef": {
+        "type": "object",
+        "description": "Who a conversation belongs to.",
+        "required": [
+          "key",
+          "name",
+          "kind"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "`env:<environment_id>` (managed), `agent:<X-Veri-Agent>`, or\n`deployment:<deployment_id>` for threads sent without an agent name."
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "description": "managed | external"
+          }
+        }
+      },
+      "AgentSummary": {
+        "type": "object",
+        "required": [
+          "key",
+          "kind",
+          "name",
+          "deployment_ids",
+          "active_conversations",
+          "conversations",
+          "turns",
+          "llm_calls",
+          "tool_calls",
+          "tool_errors",
+          "prompt_tokens",
+          "completion_tokens",
+          "error_rate",
+          "daily"
+        ],
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "description": "managed | external"
+          },
+          "name": {
+            "type": "string"
+          },
+          "environment_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Managed agents: the environment."
+          },
+          "deployment_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The deployments the agent's conversations ran on (managed: the one\nits environment serves from, when it is a Veri deployment)."
+          },
+          "active_conversations": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "last_seen_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Latest activity in the window."
+          },
+          "conversations": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "turns": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "llm_calls": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tool_calls": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tool_errors": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "prompt_tokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "completion_tokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "avg_latency_ms": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Mean model call latency (external agents only)."
+          },
+          "error_rate": {
+            "type": "number",
+            "format": "double"
+          },
+          "daily": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DailyCount"
+            },
+            "description": "Conversations per UTC day for the 14 days ending at `to`, oldest\nfirst, zero-filled (independent of `from`)."
           }
         }
       },
@@ -6891,6 +7340,169 @@
           }
         }
       },
+      "Conversation": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "agent",
+          "status",
+          "turns",
+          "llm_calls",
+          "tool_calls",
+          "tool_errors",
+          "errors",
+          "prompt_tokens",
+          "cached_prompt_tokens",
+          "completion_tokens",
+          "started_at",
+          "last_activity_at",
+          "span_strip",
+          "scores"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The session id, or `{deployment_id}:{thread_id}`."
+          },
+          "kind": {
+            "type": "string",
+            "description": "session | thread"
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "preview": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The first user message (200 chars)."
+          },
+          "agent": {
+            "$ref": "#/components/schemas/AgentRef"
+          },
+          "deployment_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "thread_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "session_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "environment_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "description": "thread: active | idle. session: active | paused | ended | failed."
+          },
+          "turns": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "llm_calls": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tool_calls": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tool_errors": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "errors": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "prompt_tokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "cached_prompt_tokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "completion_tokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "cost_usd": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Sessions: charged so far. Threads: null."
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "last_activity_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "span_strip": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Span"
+            },
+            "description": "Ordered, the most recent 60."
+          },
+          "scores": {
+            "$ref": "#/components/schemas/ScoreSummary"
+          }
+        }
+      },
+      "ConversationList": {
+        "type": "object",
+        "required": [
+          "object",
+          "has_more",
+          "data"
+        ],
+        "properties": {
+          "object": {
+            "type": "string",
+            "description": "Always \"list\"."
+          },
+          "has_more": {
+            "type": "boolean"
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Pass as `after` for the next page; null on the last page."
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Conversation"
+            }
+          }
+        }
+      },
       "CreateKeyRequest": {
         "type": "object",
         "required": [
@@ -7044,6 +7656,24 @@
             "propertyNames": {
               "type": "string"
             }
+          }
+        }
+      },
+      "DailyCount": {
+        "type": "object",
+        "required": [
+          "date",
+          "conversations"
+        ],
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "description": "UTC day (YYYY-MM-DD)."
+          },
+          "conversations": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       },
@@ -9761,6 +10391,91 @@
           }
         }
       },
+      "LlmStep": {
+        "type": "object",
+        "description": "One model call (one request row).",
+        "required": [
+          "request_id",
+          "model",
+          "started_at",
+          "latency_ms",
+          "prompt_tokens",
+          "cached_prompt_tokens",
+          "completion_tokens",
+          "status_code",
+          "tool_calls"
+        ],
+        "properties": {
+          "request_id": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "latency_ms": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "ttft_ms": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "prompt_tokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "cached_prompt_tokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "completion_tokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "status_code": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "finish_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "content": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The reply text; null without a stored body for this call."
+          },
+          "reasoning": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tool_calls": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ToolCallRef"
+            }
+          }
+        }
+      },
       "McpServerInput": {
         "type": "object",
         "required": [
@@ -10401,6 +11116,263 @@
           "created_at": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "OverviewResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "from",
+          "to",
+          "interval",
+          "active",
+          "totals",
+          "series",
+          "top_tools",
+          "top_agents",
+          "top_models"
+        ],
+        "properties": {
+          "object": {
+            "type": "string",
+            "description": "Always \"observability.overview\"."
+          },
+          "from": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "to": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "interval": {
+            "$ref": "#/components/schemas/MetricsInterval",
+            "description": "Series bucket width, chosen from the window: five_minutes up to 6\nhours, hour up to 7 days, day beyond."
+          },
+          "active": {
+            "$ref": "#/components/schemas/ActiveCounts"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/OverviewTotals"
+          },
+          "series": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SeriesPoint"
+            }
+          },
+          "top_tools": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TopTool"
+            },
+            "description": "Top 6 each."
+          },
+          "top_agents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TopAgent"
+            }
+          },
+          "top_models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TopModel"
+            }
+          }
+        }
+      },
+      "OverviewTotals": {
+        "type": "object",
+        "required": [
+          "conversations",
+          "turns",
+          "llm_calls",
+          "tool_calls",
+          "tool_errors",
+          "prompt_tokens",
+          "cached_prompt_tokens",
+          "completion_tokens",
+          "errors",
+          "error_rate",
+          "agents",
+          "flagged"
+        ],
+        "properties": {
+          "conversations": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "turns": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "llm_calls": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tool_calls": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tool_errors": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "prompt_tokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "cached_prompt_tokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "completion_tokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "errors": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "error_rate": {
+            "type": "number",
+            "format": "double",
+            "description": "errors / llm_calls (0 without calls)."
+          },
+          "agents": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Agents with conversations in the window."
+          },
+          "flagged": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Scores with passed = false on trace and thread targets in the window."
+          }
+        }
+      },
+      "PaginatedList_AgentSummary": {
+        "type": "object",
+        "required": [
+          "object",
+          "data",
+          "has_more"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "key",
+                "kind",
+                "name",
+                "deployment_ids",
+                "active_conversations",
+                "conversations",
+                "turns",
+                "llm_calls",
+                "tool_calls",
+                "tool_errors",
+                "prompt_tokens",
+                "completion_tokens",
+                "error_rate",
+                "daily"
+              ],
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string",
+                  "description": "managed | external"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "environment_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Managed agents: the environment."
+                },
+                "deployment_ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "The deployments the agent's conversations ran on (managed: the one\nits environment serves from, when it is a Veri deployment)."
+                },
+                "active_conversations": {
+                  "type": "integer",
+                  "format": "int64"
+                },
+                "last_seen_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time",
+                  "description": "Latest activity in the window."
+                },
+                "conversations": {
+                  "type": "integer",
+                  "format": "int64"
+                },
+                "turns": {
+                  "type": "integer",
+                  "format": "int64"
+                },
+                "llm_calls": {
+                  "type": "integer",
+                  "format": "int64"
+                },
+                "tool_calls": {
+                  "type": "integer",
+                  "format": "int64"
+                },
+                "tool_errors": {
+                  "type": "integer",
+                  "format": "int64"
+                },
+                "prompt_tokens": {
+                  "type": "integer",
+                  "format": "int64"
+                },
+                "completion_tokens": {
+                  "type": "integer",
+                  "format": "int64"
+                },
+                "avg_latency_ms": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "format": "double",
+                  "description": "Mean model call latency (external agents only)."
+                },
+                "error_rate": {
+                  "type": "number",
+                  "format": "double"
+                },
+                "daily": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DailyCount"
+                  },
+                  "description": "Conversations per UTC day for the 14 days ending at `to`, oldest\nfirst, zero-filled (independent of `from`)."
+                }
+              }
+            }
+          },
+          "has_more": {
+            "type": "boolean"
           }
         }
       },
@@ -12854,6 +13826,178 @@
           }
         }
       },
+      "ScoreResponse": {
+        "type": "object",
+        "description": "One score.",
+        "required": [
+          "object",
+          "id",
+          "evaluator_id",
+          "evaluator_version",
+          "name",
+          "target_type",
+          "value",
+          "source",
+          "status",
+          "created_at"
+        ],
+        "properties": {
+          "object": {
+            "type": "string",
+            "description": "Always \"score\"."
+          },
+          "id": {
+            "type": "string",
+            "description": "`scr_...`"
+          },
+          "evaluator_id": {
+            "type": "string"
+          },
+          "evaluator_version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string",
+            "description": "The evaluator's name at write time."
+          },
+          "target_type": {
+            "type": "string",
+            "description": "trace | thread"
+          },
+          "request_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The scored request (trace targets). Trace id = `veri-<request_id>`."
+          },
+          "deployment_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "thread_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The thread (thread targets; also stamped on trace targets whose\nrequest carried a thread id)."
+          },
+          "target_revision": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Thread targets: the last request id the score covers."
+          },
+          "experiment_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Experiment-item targets: the experiment."
+          },
+          "item_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Experiment-item targets: `<row_id>.<trial>`, or\n`<row_id>.<trial>.t<turn>` for one turn of a replayed thread."
+          },
+          "value": {
+            "description": "boolean | label string | number; null for error and skipped scores."
+          },
+          "passed": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "The evaluator version's pass rule applied to the value; null when the\nversion has no pass rule or the score carries no value."
+          },
+          "reasoning": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source": {
+            "type": "string",
+            "description": "api | sdk | human | experiment | monitor"
+          },
+          "status": {
+            "type": "string",
+            "description": "ok | error | skipped"
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Why an error / skipped score has no value."
+          },
+          "author": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The user who wrote the score."
+          },
+          "model_version_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The model version that answered the scored request, when known."
+          },
+          "monitor_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The monitor that wrote the score (source monitor)."
+          },
+          "confidence": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "The judge's probability for its verdict, 0..1; null unless a\ndecision-mode judge wrote the score."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ScoreSummary": {
+        "type": "object",
+        "required": [
+          "total",
+          "failed",
+          "evaluators"
+        ],
+        "properties": {
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "failed": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Scores with passed = false."
+          },
+          "evaluators": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Distinct evaluator names (at most 5)."
+          }
+        }
+      },
       "SecretResponse": {
         "type": "object",
         "required": [
@@ -12883,6 +14027,56 @@
           "updated_at": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "SeriesPoint": {
+        "type": "object",
+        "description": "One series bucket (zero-filled).",
+        "required": [
+          "t",
+          "conversations",
+          "llm_calls",
+          "tool_calls",
+          "errors",
+          "prompt_tokens",
+          "completion_tokens",
+          "flagged"
+        ],
+        "properties": {
+          "t": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Bucket start."
+          },
+          "conversations": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Conversations that started in this bucket (each counted once)."
+          },
+          "llm_calls": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tool_calls": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "errors": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "prompt_tokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "completion_tokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "flagged": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       },
@@ -13490,6 +14684,24 @@
           }
         }
       },
+      "Span": {
+        "type": "object",
+        "description": "One timeline segment: a model call or the tool work between two calls.",
+        "required": [
+          "kind",
+          "ms"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "llm | tool"
+          },
+          "ms": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "SupersededRow": {
         "type": "object",
         "required": [
@@ -13506,6 +14718,200 @@
             "type": "integer",
             "format": "int64",
             "description": "The correcting row (carries `supersedes = row_id`)."
+          }
+        }
+      },
+      "ThreadDetail": {
+        "type": "object",
+        "required": [
+          "object",
+          "id",
+          "deployment_id",
+          "deployment_name",
+          "thread_id",
+          "agent",
+          "status",
+          "started_at",
+          "last_activity_at",
+          "bodies",
+          "models",
+          "totals",
+          "turns",
+          "scores"
+        ],
+        "properties": {
+          "object": {
+            "type": "string",
+            "description": "Always \"thread\"."
+          },
+          "id": {
+            "type": "string",
+            "description": "`{deployment_id}:{thread_id}`."
+          },
+          "deployment_id": {
+            "type": "string"
+          },
+          "deployment_name": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": "string"
+          },
+          "agent": {
+            "$ref": "#/components/schemas/AgentRef"
+          },
+          "status": {
+            "type": "string",
+            "description": "active | idle"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "last_activity_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "bodies": {
+            "type": "string",
+            "description": "captured (the newest call's body is stored) | partial (an older\ncall's is) | none (no stored bodies: trace bodies off or purged)."
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "totals": {
+            "$ref": "#/components/schemas/ThreadTotals"
+          },
+          "tools": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "object"
+            },
+            "description": "The `tools` the agent declared, from the stored body."
+          },
+          "turns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Turn"
+            },
+            "description": "The latest 1000 model calls, oldest first, grouped into turns."
+          },
+          "scores": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScoreResponse"
+            },
+            "description": "Thread and trace scores on this thread, newest first."
+          }
+        }
+      },
+      "ThreadStep": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/LlmStep"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "kind"
+                ],
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "llm"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ToolStep"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "kind"
+                ],
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "tool"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "ThreadTotals": {
+        "type": "object",
+        "required": [
+          "turns",
+          "llm_calls",
+          "tool_calls",
+          "tool_errors",
+          "messages",
+          "prompt_tokens",
+          "cached_prompt_tokens",
+          "completion_tokens",
+          "errors",
+          "duration_ms"
+        ],
+        "properties": {
+          "turns": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "llm_calls": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tool_calls": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tool_errors": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "messages": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Transcript messages (counted from the steps without a stored body)."
+          },
+          "prompt_tokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "cached_prompt_tokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "completion_tokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "errors": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       },
@@ -13546,6 +14952,130 @@
               "string",
               "null"
             ]
+          }
+        }
+      },
+      "ToolCallRef": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "arguments": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The call's JSON arguments, as the model wrote them."
+          }
+        }
+      },
+      "ToolStep": {
+        "type": "object",
+        "description": "One tool call the agent ran between two model calls.",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "tool_call_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "arguments": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "result": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "duration_ms": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Next model call start minus this call's completion."
+          }
+        }
+      },
+      "TopAgent": {
+        "type": "object",
+        "required": [
+          "key",
+          "name",
+          "kind",
+          "conversations"
+        ],
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "description": "managed | external"
+          },
+          "conversations": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "TopModel": {
+        "type": "object",
+        "required": [
+          "name",
+          "llm_calls"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "llm_calls": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "TopTool": {
+        "type": "object",
+        "required": [
+          "name",
+          "calls",
+          "errors"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "calls": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "errors": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       },
@@ -14066,6 +15596,68 @@
           },
           "has_more": {
             "type": "boolean"
+          }
+        }
+      },
+      "Turn": {
+        "type": "object",
+        "required": [
+          "index",
+          "started_at",
+          "latency_ms",
+          "prompt_tokens",
+          "completion_tokens",
+          "llm_calls",
+          "tool_calls",
+          "steps"
+        ],
+        "properties": {
+          "index": {
+            "type": "integer",
+            "format": "int32",
+            "description": "1-based."
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "latency_ms": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "user": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reply": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "prompt_tokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "completion_tokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "llm_calls": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tool_calls": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ThreadStep"
+            }
           }
         }
       },
@@ -14687,6 +16279,10 @@
     {
       "name": "Metrics",
       "description": "Prometheus metrics export for your own observability stack."
+    },
+    {
+      "name": "Observability",
+      "description": "Agent conversations, agents and their traffic."
     },
     {
       "name": "Public runs",
