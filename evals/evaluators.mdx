@@ -1,15 +1,15 @@
 ---
 title: "Evaluators"
 sidebarTitle: "Evaluators"
-description: "Define LLM-judge, code, and human evaluators: method, scope, output type, variable bindings, versions, and scores."
-keywords: ["evaluators", "LLM judge", "LLM as a judge", "code evaluator", "human evaluator", "bindings", "scores", "thread"]
+description: "Define LLM-judge, Jev, code, and human evaluators: method, scope, output type, variable bindings, versions, and scores."
+keywords: ["evaluators", "LLM judge", "LLM as a judge", "Jev", "TypeSafe", "code evaluator", "human evaluator", "bindings", "scores", "confidence", "thread"]
 ---
 
 An evaluator is a named rule that scores a model output. Every evaluator has three independent choices:
 
 | Choice | Values |
 | --- | --- |
-| **Method** | `llm_judge`: a deployment in your workspace grades the output against your prompt. `code`: your `evaluate(args)` function returns the score. `human`: a reviewer scores it in an [annotation queue](/evals/human-review). |
+| **Method** | `llm_judge`: a deployment in your workspace grades the output against your prompt. `jev`: TypeSafe's Jev answers one typed question about the output, with probabilities. `code`: your `evaluate(args)` function returns the score. `human`: a reviewer scores it in an [annotation queue](/evals/human-review). |
 | **Scope** | `single_turn` (default): one input and one output. `thread`: a whole conversation. |
 | **Output type** | `boolean`, `categorical` (one of your labels), or `numeric` (a number in a range). |
 
@@ -65,6 +65,41 @@ How the judge runs:
 - Veri adds a fixed system instruction (grade strictly on the evidence shown), asks for a JSON verdict `{"reasoning", "score"}` with structured outputs at temperature 0, and validates the reply against your output type.
 - A reply that does not parse or is out of range becomes an **error** score, never a pass.
 
+## Jev judge
+
+A `jev` evaluator asks [TypeSafe's Jev](https://docs.typesafe.ai) one typed question about the item. Jev returns a typed answer with its probabilities instead of generated text, so there is no judge deployment to run and no verdict to parse. The question type fixes the output type:
+
+| Question type | Output type | Criteria | Value | Confidence |
+| --- | --- | --- | --- | --- |
+| `noul` | `boolean` | Optional `{"true": "...", "false": "..."}` | `true` when P(yes) is at or above `threshold` (default 0.5) | `abs(2p - 1)` |
+| `choice` | `categorical` | `{"option": "description", ...}`, 2-255 options | The chosen option | Jev's confidence |
+| `score` | `numeric` | `["lowest level", ..., "highest level"]`, 2-10 levels | The probability-weighted level, from 0 to levels - 1 (fractional, for example 1.43) | Jev's confidence |
+
+```python
+client.evaluators.create(
+    "resolved",
+    method="jev",
+    scope="thread",
+    output_type="numeric",
+    output_config={"pass_threshold": 1.5},
+    method_config={
+        "question": {
+            "type": "score",
+            "instructions": "Did the agent resolve the user's request?",
+            "criteria": ["Not at all", "Partly", "Fully"],
+        },
+    },
+)
+```
+
+- The options become the labels and the levels the range (0 to levels - 1), so `output_config` carries only the pass rule: `pass_when` (noul), `pass_labels` (choice), or `pass_threshold` and `higher_is_better` (score). To fix the order Jev reads a choice's options in, also send `output_config.labels` listing every option in that order.
+- Jev reads a **state** built from the item: by default `input` and `output` (single-turn) or `transcript` (thread), message lists reduced to role, text, and tool calls. Set `method_config.state` to name your own fields: `{"ticket": "$.metadata.ticket", "answer": "$.output"}`. Put the whole question in `instructions`; refer to state fields by name.
+- Long conversations are cut to fit TypeSafe's 32k-token budget, keeping the first turn and the most recent turns.
+- Each score keeps the answer's `probabilities` (noul `{"true": p, "false": 1 - p}`, choice per option, score per level index) and its `confidence`. Jev writes no reasoning; use an `llm_judge` evaluator when you need an explanation.
+- Jev reads text only and works best in English. Rate limits and overloads are retried; a question TypeSafe rejects becomes an **error** score.
+
+**What leaves Veri:** the state Jev reads (the trace or conversation text the evaluator selects) and your question are sent to TypeSafe, a [sub-processor](https://veri.studio/privacy). A workspace can turn third-party judges off with `PATCH /v1/workspace/settings` (`{"third_party_judges": false}`) or in the dashboard's workspace settings: new `jev` evaluators are then refused and queued Jev work is recorded as `skipped`, with nothing sent.
+
 ## Code evaluators
 
 A code evaluator is one function that receives `{input, output, expected, metadata, transcript}` (after bindings) and returns `{"score": ..., "reasoning": ...}`. The score is a boolean, a finite number, or a label string; `reasoning` is optional.
@@ -110,7 +145,7 @@ veri evaluators create tone --method human --output-type categorical \
   --instructions "Polite, specific, and no promises we cannot keep."
 ```
 
-Reviewers score human evaluators in [annotation queues](/evals/human-review). Experiments and the promotion gate take only `llm_judge` and `code` evaluators.
+Reviewers score human evaluators in [annotation queues](/evals/human-review). Experiments and the promotion gate take `llm_judge`, `jev`, and `code` evaluators.
 
 ## Spec files
 
@@ -159,7 +194,17 @@ client.scores.create("tone", target_type="trace", request_id="req_...", value="g
 page = client.scores.list(deployment_id="dep_ab12cd34", evaluator="tone")
 ```
 
-Each score records its `source` (`api`, `sdk`, `human`, or `experiment`), its author, `passed` (the version's pass rule applied to the value), and the `model_version_id` that answered the scored request, when known. `status` is `ok`, `error` (with `error`), or `skipped`.
+Each score records its `source` (`api`, `sdk`, `human`, `experiment`, or `monitor`), its author, `passed` (the version's pass rule applied to the value), and the `model_version_id` that answered the scored request, when known. `status` is `ok`, `error` (with `error`), or `skipped`. Judge scores also carry `confidence` (0 to 1) and, from Jev, `probabilities`.
+
+Filter scores by their typed value as well as by `passed`:
+
+```python
+client.scores.list(evaluator="topic", label="refund")              # a label (or "true"/"false")
+client.scores.list(evaluator="resolved", min_value=0, max_value=1)  # a numeric range; a noul's P(yes)
+client.scores.list(max_confidence=0.5)                              # judges that were unsure
+```
+
+The same filters narrow the dashboard's conversations, and a monitor with `review_below_confidence` and `review_queue_id` sends every target whose verdict falls below that confidence to an [annotation queue](/evals/human-review) for a person to check.
 
 ## Threads
 
