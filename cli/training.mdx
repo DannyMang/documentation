@@ -163,3 +163,12 @@ The download URL is only populated after the job reaches `completed`. Trying to 
     Config schemas and `--set` overrides.
   </Card>
 </CardGroup>
+
+## Resume a job from a checkpoint
+
+```bash
+veri jobs resume job_abc123                       # newest ready checkpoint
+veri jobs resume job_abc123 -c job_abc123@400 --max-steps 2000
+```
+
+Continues a finished managed job from one of its intermediate checkpoints as a new job, reusing its model, dataset, method, hyperparameters, GPU count and reward functions. See [Checkpoints and resume](/training/checkpoints) and [`veri checkpoints`](/cli/checkpoints).

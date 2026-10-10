@@ -5,12 +5,20 @@ description: "Recent product and platform changes in Veri"
 keywords: ["changelog", "releases", "platform updates"]
 ---
 
+## 2026-10-09: volume-backed training, intermediate checkpoints, resume
+
+- A dataset connected from a volume (`datasets.from_volume`) now trains: the file is downloaded to the training machine when the job starts, on every provider. The connect call checks the file exists (404 otherwise) and refuses paths with `..`.
+- A job-level `volume` is a whole-volume read-only mount at `/mnt/<name>` (custom scripts also get `VERI_VOLUME_DIR`). It is behind a feature flag; until it is on, a non-blank `volume` is refused at submit with a message that points at `from_volume`.
+- Volume bookkeeping: sizes are measured every hour (the `veri volumes list` size column and monthly storage billing are now real), a re-upload to an existing path replaces its size instead of adding to it, and volume names are unique per workspace.
+- Intermediate checkpoints (behind a feature flag): the default cadence is `checkpoint_every` 0.1 for LoRA and QLoRA jobs and 0.25 for full fine-tunes; uploads no longer race the trainer's own cleanup; periodic saves turn themselves off with a `checkpoint_disabled_disk` event when three checkpoints would not fit on the machine; every commit, skipped upload and disabled save is on the job's events. Checkpoints of finished jobs are kept for 7 days.
+- `resume_from` on job create, `veri jobs resume`, and `training_jobs.resume()` continue a finished job from one of its checkpoints as a new job. See [Checkpoints and resume](/training/checkpoints).
+
 ## 2026-10-09: training jobs that cannot run are refused at submit
 
 A training job that could not work is now refused with a `400` that says what to change, instead of being accepted and then failing on the GPU or silently ignoring a field:
 
 - `checkpoint_destination` accepts only Veri storage (`{"type": "veri"}`, or omit it). Another type (`s3`, `gs`, `az`), a `uri` or `credentials` is refused, and the destination is no longer stored. Get the weights with `veri jobs download` (or `GET /v1/training_jobs/{id}/model`), or push them to Hugging Face with `hf_push`.
-- `environments`, a job-level `volume`, and a dataset that reads from a volume are refused (volume-backed training is not available yet).
+- `environments` is refused. A job-level `volume` is refused until the whole-volume mount flag is on; a dataset that reads from a volume trains (see above).
 - `load_in_4bit` without `lora_rank`, a hyperparameter value of the wrong type (for example `"lora_rank": "8"`), an unknown `job_type`, and the `sft_video_gen` method are refused.
 
 Multi-adapter deployments (beta): a request for an adapter that no replica has loaded yet (while it attaches, or right after a flip or rollback) now gets `503` with `Retry-After: 5` and code `upstream_unavailable`, instead of a `400` from a replica that does not have it.

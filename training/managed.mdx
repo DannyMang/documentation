@@ -88,7 +88,11 @@ Credits appear on the job as `refund` with `status` (`approved`, `credited`, `pe
 
 ## Checkpoints
 
-Every managed job saves its trained weights as a final artifact when training completes. Intermediate checkpoints (saving weights while the job runs) are not available yet, so a job that fails or is cancelled before it completes leaves no weights to download.
+Every managed job saves its trained weights as a final artifact when training completes. Managed jobs can also save **intermediate checkpoints** while they run, so a job that fails or is cancelled at hour 19 of 20 still leaves weights (and the optimizer state) to download or to continue training from with `resume_from`. See [Checkpoints and resume](/training/checkpoints) for the knobs (`checkpoint_every`, `checkpoint_keep`), what a checkpoint holds, retention, and how to resume.
+
+<Info>
+  Intermediate checkpoints are rolling out behind a feature flag. Until it is enabled for your workspace, jobs write only the final artifact, the `veri checkpoints` commands report the feature as unavailable, and `resume_from` is refused at submit.
+</Info>
 
 ## Submitting a job
 

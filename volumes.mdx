@@ -1,18 +1,34 @@
 ---
 title: "Volumes"
-description: "Named persistent storage for your files on Veri"
-keywords: ["volumes", "storage", "persistent storage", "veri volumes"]
+description: "Named persistent storage for your files on Veri, readable from training jobs"
+keywords: ["volumes", "storage", "persistent storage", "veri volumes", "mount"]
 ---
 
 ## Overview
 
 Veri Volumes are named persistent storage in your workspace. You create a volume, upload files or whole directories to it, list what it holds, and delete single files or the whole volume when you no longer need them.
 
-Mounting volumes into training jobs is not available yet: to train on your own data, [upload it as a dataset](/training/datasets#upload-a-jsonl-file).
+A training job reads a volume in one of two ways:
+
+- **One file as a dataset.** `datasets.from_volume(volume, path)` connects a file inside the volume as a dataset. The file is downloaded to the training machine when the job starts, like an uploaded dataset. This works today for every provider.
+- **The whole volume mounted.** A job-level `volume` copies the entire volume to `/mnt/<name>` on the training machine before training starts, read-only. Custom scripts see it at the same path and in `VERI_VOLUME_DIR`. This is coming soon: until it is enabled, a job with `volume` set is refused at submit with a message that points at `from_volume`.
+
+Volumes are read-only on the training machine. A job never writes back to a volume; trained weights go to the job's own artifact and checkpoints.
+
+## When to use a Volume
+
+Pick a Volume when any of the following is true:
+
+- You expect to run more than one training job against the same dataset.
+- Your dataset is larger than a few GB.
+- Your dataset isn't public and isn't on Hugging Face.
+- A custom script needs more than one input file.
+
+For one-off experiments against small public data, the dataset upload (`veri datasets upload`) or Hugging Face connect (`veri datasets connect-hf`) paths are simpler.
 
 ## Billing
 
-Volume storage is measured from regular usage snapshots and billed from your account balance when applicable.
+Volume storage is measured every hour and billed monthly: 512 GiB per workspace is free, and storage above that is $0.085 per GiB-month, averaged over the month. Copying a volume into a training job is not charged separately; the job pays for its GPU time while the copy runs.
 
 ## Quickstart
 
@@ -23,7 +39,7 @@ Volume storage is measured from regular usage snapshots and billed from your acc
 veri volumes create my-corpus
 ```
 
-The name must match `^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$`. Re-running with the same name is idempotent — it returns the existing volume.
+The name must match `^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$` and is unique within your workspace. Re-running with the same name is idempotent: it returns the existing volume.
 </Step>
 
 <Step title="Upload files">
@@ -31,16 +47,59 @@ The name must match `^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$`. Re-running with the sam
 veri volumes upload my-corpus ./train.jsonl
 ```
 
-Files larger than 5 GiB are uploaded with multipart automatically. A progress bar shows transfer rate and ETA.
+Files larger than 5 GiB are uploaded with multipart automatically. A progress bar shows transfer rate and ETA. Uploading to a path that already exists replaces the file.
 
-For a directory, use `upload-dir` — up to 8 files transfer concurrently:
+For a directory, use `upload-dir`; up to 8 files transfer concurrently:
 
 ```bash
 veri volumes upload-dir my-corpus ./training-data --to /data
 ```
 </Step>
 
+<Step title="Train on a file in the volume">
+```python
+from veri_sdk import Client
+
+client = Client()
+dataset = client.datasets.from_volume(volume="my-corpus", path="/train.jsonl")
+job = client.training_jobs.create(
+    base_model="Qwen/Qwen2.5-0.5B-Instruct",
+    dataset_id=dataset.id,
+    output_name="my-run",
+    method="sft_text",
+    gpu_type="L4-24GB",
+    gpu_count=1,
+)
+```
+
+`from_volume` checks that the file exists when you connect it (a missing file is a 404, a path with `..` is a 400), so a typo fails before a GPU is rented. When the job starts, the training machine downloads that one file and trains on it.
+</Step>
+
 </Steps>
+
+## Mounting a whole volume
+
+A job-level `volume` (coming soon) copies every file of the volume to `/mnt/<name>` before training starts:
+
+```python
+job = client.training_jobs.create(
+    job_type="custom_script",
+    script={"base_image": "...", "code_artifact_id": "...", "entrypoint": "python train.py"},
+    volume="my-corpus",
+    output_name="my-run",
+    gpu_type="L4-24GB",
+    gpu_count=1,
+)
+```
+
+What the training machine does:
+
+1. Asks the control plane for the volume's file list, in pages, with a short-lived download link per file. No cloud credentials reach the machine.
+2. Checks that the volume fits on the local disk. If it would use more than 80% of the free space, the job fails right away with `volume_too_large_for_node` instead of filling the disk mid-run. Local disk is about 150 GB on AWS, 200 GB on GCP, 100 GB on Vast and 720 GiB on DigitalOcean.
+3. Downloads the files 16 at a time into `/mnt/<name>`, checks every file's size against the list (a mismatch fails the job with `volume_sync_incomplete`), and makes the tree read-only.
+4. For a custom script, bind-mounts `/mnt/<name>` into the container read-only and sets `VERI_VOLUME_DIR=/mnt/<name>`. A managed job whose dataset was connected from the same volume reads the file from the mount.
+
+The copy takes roughly a minute per 10 GB on a 1 Gbps link. A volume dataset (`from_volume`) and a job-level `volume` must name the same volume; naming different ones is refused at submit.
 
 ## Deletion
 
@@ -48,9 +107,9 @@ veri volumes upload-dir my-corpus ./training-data --to /data
 veri volumes delete my-corpus
 ```
 
-Without `--yes`, the CLI prompts for the volume name as a confirmation and shows the file count + total bytes that will be deleted. The DB row is dropped immediately; the S3 prefix is cleaned up by a background reconciler within a minute.
+Without `--yes`, the CLI prompts for the volume name as a confirmation and shows the file count and total bytes that will be deleted. The row is dropped immediately; the stored objects are cleaned up by a background job within a few minutes.
 
-There is no time-based garbage collection. Volumes stay until you delete them — the monthly billing meter is what keeps storage bills aligned with what you actually use.
+There is no time-based garbage collection. Volumes stay until you delete them; the monthly billing meter is what keeps storage bills aligned with what you actually use.
 
 ## API + CLI references
 

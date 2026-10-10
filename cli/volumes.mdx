@@ -5,7 +5,7 @@ description: "Create, upload, list, and delete persistent storage volumes."
 keywords: ["veri volumes", "storage", "upload", "multipart"]
 ---
 
-The `veri volumes` group manages persistent named storage in your workspace. Mounting volumes into training jobs is not available yet. Conceptual overview lives in the [Volumes](/volumes) guide.
+The `veri volumes` group manages persistent named storage in your workspace. A training job reads a volume either as one file connected with `datasets.from_volume` (downloaded at job start) or, coming soon, as a whole-volume read-only mount at `/mnt/<name>` through the job-level `volume` field. Conceptual overview lives in the [Volumes](/volumes) guide.
 
 ## Commands
 
@@ -26,7 +26,7 @@ The `veri volumes` group manages persistent named storage in your workspace. Mou
 veri volumes create my-corpus
 ```
 
-Names must match `^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$`. Re-running with the same name returns the existing volume — no error.
+Names must match `^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$`. Re-running with the same name returns the existing volume: no error.
 
 ## Upload files
 
@@ -50,7 +50,7 @@ For a directory:
 veri volumes upload-dir my-corpus ./training-data --to /data
 ```
 
-Up to 8 files transfer concurrently. The progress bar reports cumulative bytes across all files. A per-file failure aborts the batch — you can safely re-run since S3 PUT is idempotent on the same key.
+Up to 8 files transfer concurrently. The progress bar reports cumulative bytes across all files. A per-file failure aborts the batch. You can safely re-run: an upload to the same path replaces the file.
 
 ## List + inspect
 
