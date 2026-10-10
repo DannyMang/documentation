@@ -6827,7 +6827,7 @@
             }
           },
           "400": {
-            "description": "The job was rejected: an unknown or unpriced gpu_type/provider/region, an unknown job_type, a method that is unknown or not available (sft_video_gen, grpo_agentic) or without the reward it needs, environments, a volume or a volume-sourced dataset, a checkpoint_destination other than Veri storage, load_in_4bit without lora_rank, invalid or wrongly typed hyperparameters, or an unsupported dataset format"
+            "description": "The job was rejected: an unknown or unpriced gpu_type/provider/region, an unknown job_type, a method that is unknown or not available (sft_video_gen, grpo_agentic) or without the reward it needs, environments, a job-level volume, a checkpoint_destination other than Veri storage, load_in_4bit without lora_rank, invalid or wrongly typed hyperparameters, or an unsupported dataset format"
           },
           "402": {
             "description": "No billing account is linked to the workspace"
@@ -20006,7 +20006,14 @@
               "string",
               "null"
             ],
-            "description": "Not available yet: volume-backed training is not implemented, so a\nnon-blank volume is rejected with a 400. Pass the data as dataset_id."
+            "description": "A volume to mount read-only at /mnt/<name> on the training machine\n(custom scripts see it there and in VERI_VOLUME_DIR). Coming soon:\nbehind VERI_FEATURE_VOLUME_MOUNTS, a non-blank value is a 400 until\nthe flag is on. To train on one file in a volume, connect it as a\ndataset (`datasets.from_volume`) instead."
+          },
+          "resume_from": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Continue training from an intermediate checkpoint of an earlier job:\na checkpoint id (`ckpt_...`) or `<job_id>@<step>`. The checkpoint must\nbe ready and resumable and its job finished; method, base_model,\ndataset, LoRA settings and gpu_count must match the source job, and\nthe source job's reward functions are inherited (send none).\nmax_steps and num_epochs may change. The result is a NEW job with its\nown id and billing."
           },
           "region": {
             "type": [
