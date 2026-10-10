@@ -1,8 +1,19 @@
 ---
+noindex: true
 title: "Changelog"
 description: "Recent product and platform changes in Veri"
 keywords: ["changelog", "releases", "platform updates"]
 ---
+
+## 2026-10-09: training jobs that cannot run are refused at submit
+
+A training job that could not work is now refused with a `400` that says what to change, instead of being accepted and then failing on the GPU or silently ignoring a field:
+
+- `checkpoint_destination` accepts only Veri storage (`{"type": "veri"}`, or omit it). Another type (`s3`, `gs`, `az`), a `uri` or `credentials` is refused, and the destination is no longer stored. Get the weights with `veri jobs download` (or `GET /v1/training_jobs/{id}/model`), or push them to Hugging Face with `hf_push`.
+- `environments`, a job-level `volume`, and a dataset that reads from a volume are refused (volume-backed training is not available yet).
+- `load_in_4bit` without `lora_rank`, a hyperparameter value of the wrong type (for example `"lora_rank": "8"`), an unknown `job_type`, and the `sft_video_gen` method are refused.
+
+Multi-adapter deployments (beta): a request for an adapter that no replica has loaded yet (while it attaches, or right after a flip or rollback) now gets `503` with `Retry-After: 5` and code `upstream_unavailable`, instead of a `400` from a replica that does not have it.
 
 ## Multi-GPU training for SFT and DPO
 
@@ -13,5 +24,4 @@ Behaviour changes to know about:
 - The default optimizer batch on a multi-GPU job is `micro_batch_size x gpu_count` (standard data parallelism). Set `global_batch_size` to pin it.
 - `batch_size` on `sft_text` and `dpo` stays accepted as an alias of `micro_batch_size` and is now type-checked: `0`, `"4"` or `2.0` are refused at submit instead of failing on the GPU.
 - `use_unsloth` and `load_in_4bit` with `gpu_count` above 1 are refused at submit (they were refused by the SDK only).
-- Intermediate checkpoints of managed jobs are now uploaded while the job runs (they were saved on the box but never uploaded).
 - New failure codes: `distributed_error`, `training_stalled`, `hardware_error`.

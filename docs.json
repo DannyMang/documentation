@@ -68,7 +68,9 @@
               "training/multi-gpu",
               "training/wandb",
               "training/huggingface",
-              "training/sharing"
+              "training/sharing",
+              "training/examples",
+              "training/api"
             ]
           },
           {
@@ -84,14 +86,13 @@
                 "group": "Providers",
                 "pages": [
                   "deployments/providers",
-                  "deployments/providers/aws",
-                  "deployments/providers/gcp",
-                  "deployments/providers/digitalocean",
-                  "deployments/providers/huggingface"
+                  "deployments/providers/aws"
                 ]
               },
               "deployments/cost",
-              "deployments/openai-compat"
+              "deployments/openai-compat",
+              "deployments/examples",
+              "deployments/api"
             ]
           },
           {
@@ -177,9 +178,7 @@
           {
             "group": "Custom training scripts",
             "pages": [
-              "demos/prime-rl-reverse-text-rft",
-              "demos/verl-gsm8k-ppo",
-              "demos/slime-glm-4-7-flash-8xh100"
+              "demos/prime-rl-reverse-text-rft"
             ]
           },
           {
