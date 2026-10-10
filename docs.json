@@ -207,9 +207,25 @@
               "GET /v1/training_jobs/{job_id}",
               "POST /v1/training_jobs/{job_id}/cancel",
               "DELETE /v1/training_jobs/{job_id}",
+              "GET /v1/training_jobs/{job_id}/logs",
+              "GET /v1/training_jobs/{job_id}/logs/full",
               "GET /v1/training_jobs/{job_id}/events",
               "GET /v1/training_jobs/{job_id}/metrics",
-              "GET /v1/training_jobs/{job_id}/model"
+              "GET /v1/training_jobs/{job_id}/model",
+              "GET /v1/training_jobs/{job_id}/rewards/{index}/source",
+              "GET /v1/training_jobs/{job_id}/trajectories",
+              "GET /v1/training_jobs/{job_id}/trajectories/{trajectory_id}/download",
+              "POST /v1/training_jobs/{job_id}/publish",
+              "DELETE /v1/training_jobs/{job_id}/publish"
+            ]
+          },
+          {
+            "group": "Public runs",
+            "openapi": "api-reference/openapi.json",
+            "pages": [
+              "GET /v1/public/runs",
+              "GET /v1/public/runs/{run_id}",
+              "GET /v1/public/runs/{run_id}/metrics"
             ]
           },
           {
@@ -218,15 +234,17 @@
             "pages": [
               "POST /v1/datasets",
               "POST /v1/datasets/connect",
-              "POST /v1/datasets/connect/validate",
               "GET /v1/datasets",
               "GET /v1/datasets/{dataset_id}",
+              "PATCH /v1/datasets/{dataset_id}",
               "DELETE /v1/datasets/{dataset_id}",
+              "GET /v1/datasets/{dataset_id}/rows",
               "POST /v1/datasets/{dataset_id}/rows",
               "POST /v1/datasets/{dataset_id}/tombstones",
               "GET /v1/datasets/{dataset_id}/snapshots",
               "POST /v1/datasets/{dataset_id}/snapshots",
-              "GET /v1/datasets/{dataset_id}/snapshots/{a}/diff/{b}"
+              "GET /v1/datasets/{dataset_id}/snapshots/{a}/diff/{b}",
+              "POST /v1/datasets/{dataset_id}/import-traces"
             ]
           },
           {
@@ -236,15 +254,42 @@
               "POST /v1/deployments",
               "GET /v1/deployments",
               "GET /v1/deployments/{deployment_id}",
+              "PATCH /v1/deployments/{deployment_id}",
               "POST /v1/deployments/{deployment_id}/chat/completions",
+              "POST /v1/deployments/{deployment_id}/messages",
+              "POST /v1/deployments/{deployment_id}/messages/count_tokens",
               "GET /v1/deployments/{deployment_id}/metrics",
               "GET /v1/deployments/{deployment_id}/metrics/timeseries",
               "GET /v1/deployments/{deployment_id}/metrics/engine-timeseries",
               "GET /v1/deployments/{deployment_id}/requests",
               "GET /v1/deployments/{deployment_id}/traces",
               "GET /v1/deployments/{deployment_id}/traces/{trace_id}",
+              "GET /v1/deployments/{deployment_id}/replicas",
+              "POST /v1/deployments/{deployment_id}/replicas/{replica_id}/drain",
+              "POST /v1/deployments/{deployment_id}/wake",
               "POST /v1/deployments/{deployment_id}/stop",
               "DELETE /v1/deployments/{deployment_id}"
+            ]
+          },
+          {
+            "group": "Adapters",
+            "openapi": "api-reference/openapi.json",
+            "pages": [
+              "GET /v1/deployments/{deployment_id}/adapters",
+              "POST /v1/deployments/{deployment_id}/adapters",
+              "PATCH /v1/deployments/{deployment_id}/adapters/{serve_name}",
+              "DELETE /v1/deployments/{deployment_id}/adapters/{serve_name}",
+              "POST /v1/deployments/{deployment_id}/adapters/{serve_name}/rollback"
+            ]
+          },
+          {
+            "group": "Observability",
+            "openapi": "api-reference/openapi.json",
+            "pages": [
+              "GET /v1/observability/overview",
+              "GET /v1/observability/agents",
+              "GET /v1/observability/conversations",
+              "GET /v1/deployments/{deployment_id}/threads/{thread_id}"
             ]
           },
           {
@@ -268,10 +313,10 @@
             "pages": [
               "GET /v1/models",
               "POST /v1/models/register",
-              "POST /v1/models/import",
+              "POST /v1/models",
               "GET /v1/models/{id}",
+              "PATCH /v1/models/{id}",
               "DELETE /v1/models/{id}",
-              "POST /v1/models/{id}/presigned-upload",
               "POST /v1/models/{model_id}/push-to-hf",
               "GET /v1/models/{model_id}/hf-exports",
               "GET /v1/hf_exports/{export_id}",
@@ -280,8 +325,70 @@
               "POST /v1/models/{name}/aliases/{alias}",
               "POST /v1/models/{name}/aliases/{alias}/rollback",
               "POST /v1/models/{name}/versions/{version}/pin",
+              "GET /v1/models/{name}/gate",
+              "PATCH /v1/models/{name}/gate",
+              "POST /v1/models/{name}/versions/{version}/evaluate",
               "GET /v1/models/{name}/retention",
               "PATCH /v1/models/{name}/retention"
+            ]
+          },
+          {
+            "group": "Evaluators",
+            "openapi": "api-reference/openapi.json",
+            "pages": [
+              "POST /v1/evaluators",
+              "GET /v1/evaluators",
+              "GET /v1/evaluators/{id_or_name}",
+              "POST /v1/evaluators/{id_or_name}/versions",
+              "DELETE /v1/evaluators/{id_or_name}"
+            ]
+          },
+          {
+            "group": "Scores",
+            "openapi": "api-reference/openapi.json",
+            "pages": [
+              "POST /v1/scores",
+              "GET /v1/scores"
+            ]
+          },
+          {
+            "group": "Experiments",
+            "openapi": "api-reference/openapi.json",
+            "pages": [
+              "POST /v1/experiments",
+              "GET /v1/experiments",
+              "GET /v1/experiments/{experiment_id}",
+              "GET /v1/experiments/{experiment_id}/items",
+              "GET /v1/experiments/{experiment_id}/diff/{baseline_id}",
+              "POST /v1/experiments/{experiment_id}/cancel"
+            ]
+          },
+          {
+            "group": "Annotation queues",
+            "openapi": "api-reference/openapi.json",
+            "pages": [
+              "POST /v1/annotation-queues",
+              "GET /v1/annotation-queues",
+              "GET /v1/annotation-queues/{id_or_name}",
+              "PATCH /v1/annotation-queues/{id_or_name}",
+              "DELETE /v1/annotation-queues/{id_or_name}",
+              "POST /v1/annotation-queues/{id_or_name}/items",
+              "GET /v1/annotation-queues/{id_or_name}/items",
+              "POST /v1/annotation-queues/{id_or_name}/items/next",
+              "POST /v1/annotation-queues/{id_or_name}/items/{item_id}/complete",
+              "POST /v1/annotation-queues/{id_or_name}/items/{item_id}/skip",
+              "POST /v1/annotation-queues/{id_or_name}/items/{item_id}/release"
+            ]
+          },
+          {
+            "group": "Monitors",
+            "openapi": "api-reference/openapi.json",
+            "pages": [
+              "POST /v1/monitors",
+              "GET /v1/monitors",
+              "GET /v1/monitors/{id}",
+              "PATCH /v1/monitors/{id}",
+              "DELETE /v1/monitors/{id}"
             ]
           },
           {
@@ -299,12 +406,29 @@
             ]
           },
           {
+            "group": "GPU",
+            "openapi": "api-reference/openapi.json",
+            "pages": [
+              "GET /v1/gpu/catalog",
+              "GET /v1/gpu/availability",
+              "GET /v1/gpu/availability/cached"
+            ]
+          },
+          {
             "group": "Billing",
             "openapi": "api-reference/openapi.json",
             "pages": [
               "GET /v1/billing/balance",
               "GET /v1/billing/transactions",
-              "GET /v1/billing/burn_rate"
+              "GET /v1/billing/burn_rate",
+              "POST /v1/credits/redeem"
+            ]
+          },
+          {
+            "group": "Metrics",
+            "openapi": "api-reference/openapi.json",
+            "pages": [
+              "GET /v1/metrics/export"
             ]
           },
           {
@@ -312,7 +436,9 @@
             "openapi": "api-reference/openapi.json",
             "pages": [
               "GET /v1/settings/retention",
-              "PUT /v1/settings/retention"
+              "PUT /v1/settings/retention",
+              "GET /v1/workspace/settings",
+              "PATCH /v1/workspace/settings"
             ]
           },
           {
@@ -325,6 +451,13 @@
               "GET /v1/settings/integrations/huggingface",
               "PUT /v1/settings/integrations/huggingface",
               "DELETE /v1/settings/integrations/huggingface"
+            ]
+          },
+          {
+            "group": "Account",
+            "openapi": "api-reference/openapi.json",
+            "pages": [
+              "GET /v1/me"
             ]
           },
           {
