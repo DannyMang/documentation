@@ -1,0 +1,91 @@
+---
+title: "Checkpoints and resume"
+description: "Save intermediate checkpoints while a managed job runs, download them, and continue training from one as a new job."
+keywords: ["checkpoints", "resume", "resume_from", "checkpoint_every", "checkpoint_keep", "optimizer state"]
+---
+
+<Info>
+  Intermediate checkpoints are rolling out behind a feature flag. Until it is enabled for your workspace, jobs write only the final artifact, `veri checkpoints` reports the feature as unavailable, and `resume_from` is refused at submit.
+</Info>
+
+## What a checkpoint is
+
+A managed job (`grpo`, `grpo_harness`, `sft_text`, `dpo`) saves a **checkpoint** at a fixed cadence while it trains: the model weights (or the LoRA adapter), plus the optimizer and scheduler state, the RNG state and the trainer state. That is everything needed to continue training exactly where it stopped. Each checkpoint is uploaded in the background while training goes on, and becomes visible only once every file is stored.
+
+Checkpoints are addressed by an id (`ckpt_...`) or by `<job_id>@<step>`, where `step` is the trainer's global step.
+
+## Turning it on and tuning it
+
+Two hyperparameters on every managed method:
+
+| Hyperparameter | Default | Meaning |
+| --- | --- | --- |
+| `checkpoint_every` | `0.1` for LoRA and QLoRA jobs, `0.25` for full fine-tunes | How often to save. A value between 0 and 1 is a **fraction of the run** (`0.1` is ten checkpoints, whatever the run length). A value of 1 or more is a **literal step count** and must be a whole number. `0` turns intermediate checkpoints off. |
+| `checkpoint_keep` | `3` | How many checkpoints to keep in storage per job. Older ones are deleted as new ones are written. `0` keeps every checkpoint. |
+
+```python
+job = client.training_jobs.create(
+    base_model="Qwen/Qwen3-4B",
+    dataset_id=dataset.id,
+    method="sft_text",
+    hyperparameters={"max_steps": 1000, "checkpoint_every": 0.1, "checkpoint_keep": 3},
+    output_name="qwen3-4b-sft",
+    gpu_type="H100-80GB",
+    gpu_count=1,
+)
+```
+
+Why the defaults differ: an adapter checkpoint is a few hundred megabytes and costs nothing noticeable to write, so ten per run is cheap insurance. A full fine-tune checkpoint is about 6 bytes per parameter (24 GB for a 4B model), and writing it pauses training for a couple of minutes on a cloud root disk; four per run keeps that overhead bounded while a failure still costs at most a quarter of the run. Set `checkpoint_every` yourself to change either.
+
+Each save keeps one checkpoint on the training machine's local disk and uploads a copy. Uploads run in the background, one at a time with the newest save waiting next; on a slow link an intermediate save can be skipped in favour of a newer one, which the job's events report as `checkpoint_upload_skipped`. If three checkpoints would not fit on the local disk (a large full fine-tune on a provider with a small disk), the job turns periodic saves off and records `checkpoint_disabled_disk`; the final artifact is still saved.
+
+## Working with checkpoints
+
+```bash
+veri checkpoints list job_abc123
+veri checkpoints get job_abc123 job_abc123@400
+veri checkpoints download job_abc123 job_abc123@400 --output ./ckpt
+```
+
+`download` fetches the model and tokenizer files by default, which load with `from_pretrained`. Pass `--artifact resumable` to include the optimizer and trainer state (roughly two thirds of a full fine-tune checkpoint's bytes), or `--artifact adapter` for the LoRA adapter files only.
+
+Each checkpoint carries the loss or reward logged at its step (`metrics`), so picking the best step is a `list` call.
+
+## Resuming a job
+
+A job that failed, was cancelled, or simply stopped at `max_steps` can be continued from one of its checkpoints as a **new job**:
+
+```bash
+veri jobs resume job_abc123                       # newest ready checkpoint
+veri jobs resume job_abc123 -c job_abc123@400 --max-steps 2000
+veri jobs resume job_abc123 --provider vast       # continue on another provider
+```
+
+```python
+job2 = client.training_jobs.resume("job_abc123", max_steps=2000)
+# or, with full control over the request:
+job2 = client.training_jobs.create(
+    base_model="Qwen/Qwen3-4B",
+    dataset_id=dataset.id,
+    method="sft_text",
+    hyperparameters={"max_steps": 2000},
+    output_name="qwen3-4b-sft-continued",
+    gpu_type="H100-80GB",
+    gpu_count=1,
+    resume_from="job_abc123@400",
+)
+```
+
+The new job has its own id, logs and bill. When it starts, the training machine downloads the checkpoint and the trainer continues from it: the global step, the optimizer, the learning-rate schedule and the data order all pick up where they stopped, so the loss curve continues rather than restarting.
+
+What must stay the same, because the checkpoint only fits the run it came from: `method`, `base_model`, the dataset (and its snapshot), the LoRA settings (`lora_rank`, `lora_alpha`, `lora_dropout`, `load_in_4bit`) and `gpu_count`. The source job's reward functions are reused automatically; do not send new ones. What may change: `max_steps` or `num_epochs` (raise them to train further), `output_name`, the provider, region and GPU type. The source job must have finished, and the checkpoint must still be ready. A request that breaks any rule is refused at submit with the reason.
+
+GRPO jobs regenerate their rollouts after a resume. A step-count `checkpoint_every` is aligned to a generation boundary automatically so the continued run matches an uninterrupted one.
+
+## Retention
+
+Rotation keeps the newest `checkpoint_keep` checkpoints of a running job. After a job finishes, its remaining checkpoints are kept for 7 days and then deleted, unless a resumed job that has not finished yet points at one. The final artifact is unaffected and stays with the job. Rolling checkpoints are not billed.
+
+## Custom scripts
+
+A custom script has no trainer for Veri to hook, so it uses a directory contract instead: write a `checkpoint-<step>` directory into `$VERI_CHECKPOINT_DIR` and Veri uploads it once it stops changing (and once more when the script exits). On a multi-node job only node 0 uploads. Custom-script checkpoints are downloadable like managed ones; `resume_from` applies to managed jobs only.

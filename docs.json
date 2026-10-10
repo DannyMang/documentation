@@ -49,6 +49,7 @@
               "training/custom-script",
               "training/base-images",
               "training/managed",
+              "training/checkpoints",
               "training/harness",
               {
                 "group": "Providers",
@@ -123,6 +124,7 @@
               "cli/run",
               "cli/datasets",
               "cli/training",
+              "cli/checkpoints",
               "cli/deployments",
               "cli/volumes",
               "cli/mcp",

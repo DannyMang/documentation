@@ -1,0 +1,51 @@
+---
+title: "veri checkpoints"
+sidebarTitle: "Checkpoints"
+description: "List, inspect and download a job's intermediate checkpoints, and resume a job from one."
+keywords: ["veri checkpoints", "resume", "veri jobs resume", "checkpoint download"]
+---
+
+The `veri checkpoints` group reads the intermediate checkpoints a managed job saved while it ran; `veri jobs resume` continues a finished job from one of them as a new job. Conceptual overview, knobs and retention live in [Checkpoints and resume](/training/checkpoints).
+
+<Info>
+  Intermediate checkpoints are rolling out behind a feature flag. Until it is enabled for your workspace these commands report the feature as unavailable.
+</Info>
+
+## Commands
+
+| Command | Purpose |
+| --- | --- |
+| `veri checkpoints list <job_id>` | The job's checkpoints, newest step first (id, step, payload, size, files, metrics). |
+| `veri checkpoints get <job_id> <checkpoint>` | One checkpoint. `<checkpoint>` is an id or `<job_id>@<step>`. |
+| `veri checkpoints download <job_id> <checkpoint> [--output DIR] [--artifact weights\|resumable\|adapter]` | Download a checkpoint into `DIR/<checkpoint_id>/`. |
+| `veri jobs resume <job_id> [-c <checkpoint>] [--max-steps N] [--num-epochs N] [--output-name NAME] [--provider P] [--region R] [--gpu-type G] [-f]` | Continue a finished job from a checkpoint as a new job. |
+
+## List and inspect
+
+```bash
+$ veri checkpoints list job_abc123
+┃ id               ┃ step ┃ payload   ┃ size     ┃ files ┃ pinned ┃ created_at           ┃
+┃ ckpt_8f2a1c0d9e7 ┃ 400  ┃ resumable ┃ 24.1 GB  ┃ 9     ┃        ┃ 2026-10-09T18:40:02Z ┃
+┃ ckpt_5b7e3a2f1c4 ┃ 300  ┃ resumable ┃ 24.1 GB  ┃ 9     ┃        ┃ 2026-10-09T18:12:51Z ┃
+```
+
+`payload` is `resumable` for a managed job's saves (weights plus optimizer, scheduler and trainer state) and `weights` for a custom script's directories.
+
+## Download
+
+```bash
+veri checkpoints download job_abc123 job_abc123@400 --output ./ckpt
+veri checkpoints download job_abc123 job_abc123@400 --output ./ckpt --artifact resumable
+```
+
+`weights` (the default) is the model and tokenizer, loadable with `from_pretrained`. `resumable` adds the optimizer and trainer state, about two thirds of a full fine-tune checkpoint's bytes. `adapter` is the LoRA adapter files only.
+
+## Resume
+
+```bash
+veri jobs resume job_abc123                          # newest ready resumable checkpoint
+veri jobs resume job_abc123 -c job_abc123@400 --max-steps 2000
+veri jobs resume job_abc123 --provider digitalocean --gpu-type H100-80GB
+```
+
+The new job reuses the source job's base model, dataset, method, hyperparameters, GPU count and reward functions; the options are the knobs that may change. The API refuses a mismatch with the reason. `-f` follows the new job's logs.
