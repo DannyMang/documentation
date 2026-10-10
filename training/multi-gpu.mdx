@@ -107,11 +107,11 @@ hyperparameters={
     "zero_stage": 3,
     "cpu_offload": True,
     "micro_batch_size": 1,
-    "max_seq_length": 2048,
+    "max_seq_length": 2048,   # sft_text; on dpo the sequence knob is max_length
 }
 ```
 
-The same keys work in a `veri.toml` under `[method]`:
+The same keys work in a `veri run` config file (for example `configs/train.toml`) under `[method]`:
 
 ```toml
 [method]
@@ -134,7 +134,7 @@ These combinations are refused with a 400 before any GPU is billed:
 - `zero_stage: 1`, `pipeline_parallel_size` or `expert_parallel_size` above 1, `tensor_parallel_size` or `context_parallel_size` above 1.
 - `cpu_offload` with `zero_stage: 0`, or any sharding knob on `gpu_count: 1`.
 - `use_unsloth` or `load_in_4bit` (QLoRA) with `gpu_count` above 1, and `use_liger` with `gpu_count` above 1.
-- The multi-GPU keys on `grpo`, `grpo_harness` or `sft_video_gen`, which still run their own layouts.
+- The multi-GPU keys on `grpo` or `grpo_harness`, which still run their own layouts.
 
 Everything else, including a `micro_batch_size` that does not fit, is the job's own choice and is reported as a failure below.
 
@@ -144,7 +144,7 @@ Everything else, including a `micro_batch_size` that does not fit, is the job's 
 - The same plan is on the job as `resolved_parallelism`, under the knob names you submit (`data_parallel_size`, `zero_stage`, `micro_batch_size`, `gradient_accumulation_steps`, `global_batch_size`, `precision`, `gradient_checkpointing`, `cpu_offload`), plus `zero_stage_requested`, the memory `estimate` and the decision `trace`. Copy it into `hyperparameters` to pin an `"auto"` decision on the next run.
 - A failed job carries `error.attribution` (`customer`, `platform` or `pending`); platform failures are credited back. See [Who the failure belongs to](/training/managed#who-the-failure-belongs-to).
 - Progress and metrics come from rank 0 exactly as for a single GPU; `step` and `total_steps` count optimizer steps.
-- The final artifact is always a complete model directory (full safetensors for a full fine-tune, an adapter for LoRA), the same files a single-GPU job produces. Intermediate checkpoints are committed only once they are complete.
+- The final artifact is always a complete model directory (full safetensors for a full fine-tune, an adapter for LoRA), the same files a single-GPU job produces.
 - A failure names the GPU it started on: `rank 2/4 (node 0, local_rank 2) failed: OutOfMemoryError: CUDA out of memory ...` followed by the plan line and the traceback, with `error.code` set as below.
 
 | `error.code` | Meaning | What to do |

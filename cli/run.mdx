@@ -17,20 +17,27 @@ veri init my-project
 veri init
 ```
 
-`veri init NAME` writes 9 files into `./NAME`. With no `NAME`, scaffolds into the current directory.
+`veri init NAME` writes 8 files into `./NAME`. With no `NAME`, scaffolds into the current directory.
 
 ```
 my-project/
-├── veri.toml                  # project defaults: gpu_type, gpu_count, base_model
+├── veri.toml                  # project marker: [project] name
 ├── reward.py                  # TRL-style reward function stub
 ├── configs/
-│   ├── train.toml             # kind = "train"
+│   ├── train.toml             # kind = "train": GRPO on GSM8K, L4-24GB x1
 │   └── deploy.toml            # kind = "deploy"
 ├── datasets/
 │   └── README.md
 ├── AGENTS.md                  # directory contract for coding agents
 ├── CLAUDE.md                  # one-liner: "See AGENTS.md."
 └── .gitignore
+```
+
+The scaffolded `configs/train.toml` trains on a dataset named `gsm8k-train`. Register it once, then validate the config:
+
+```bash
+veri datasets connect-hf openai/gsm8k --config main --split train --map question=prompt --name gsm8k-train
+veri run configs/train.toml --dry-run
 ```
 
 By default `init` refuses to write into a non-empty directory. Use `--force` to scaffold alongside existing files (existing files are preserved):
@@ -55,12 +62,11 @@ kind = "train"    # or "deploy" or "environment"
 | `"deploy"` | `veri deployments create` |
 | `"environment"` | `veri environments create` (an [agent environment](/agents/environments): the TOML is the environment manifest) |
 
-Missing `kind` or an unknown value errors with a "did you mean" hint:
+A missing `kind` errors and lists the valid values; an unknown value also prints a "did you mean" hint:
 
 ```bash
 $ veri run nokind.toml
-Error: config 'nokind.toml' is missing required `kind` field.
-Add one of: kind = "train" | "deploy" | "environment"
+Error: config 'nokind.toml' is missing required `kind` field. Add one of: kind = "train" | "deploy" | "environment"
 ```
 
 ## Override TOML fields from the CLI
@@ -79,26 +85,28 @@ veri jobs create configs/train.toml --base-model Qwen/Qwen3-8B
 
 ### Type coercion
 
-Values parse as TOML scalars: `true` / `false`, integers, floats, ISO timestamps, quoted strings. To force a string on a numeric-looking value, use `--set-string`:
+Values parse as Python literals: integers, floats, `true` / `false`, quoted strings and lists. Anything else (including dates) stays a plain string. To force a string on a numeric-looking value, use `--set-string`:
 
 ```bash
-veri jobs create configs/train.toml --set-string job.name=2026-05-12
+veri jobs create configs/train.toml --set-string job.output_model=20260512
 ```
+
+Without `--set-string`, `20260512` is sent as an integer and the API rejects it (`output_name: invalid type: integer`).
 
 ### Repeated flags build a list
 
 ```bash
-veri jobs create configs/train.toml --set tags=experiment --set tags=v2
-# Results in tags = ["experiment", "v2"]
+veri jobs create configs/train.toml --set reward.files=../correctness.py --set reward.files=../format.py
+# Results in reward.files = ["../correctness.py", "../format.py"]
 ```
 
 ### Conflict detection
 
-The merger rejects setting a scalar and a sub-key at the same path:
+The merger rejects a scalar where the config already has a table, and a sub-key under a path another `--set` made a scalar:
 
 ```bash
-$ veri jobs create train.toml --set model=foo --set model.base=bar
-Error: --set conflict: 'model' is set as a scalar; can't also set sub-key 'model.base'
+$ veri jobs create configs/train.toml --set model=foo --set model.base=bar
+Error: --set conflict: 'model' is already a table; can't overwrite with a scalar
 ```
 
 ### Convenience long-flags
@@ -112,6 +120,7 @@ These flags are sugar over `--set` on `veri jobs create`:
 | `--gpu-count N` | `--set resources.gpu_count=N` |
 | `--dataset X` | `--set dataset.id=X` |
 | `--reward X` | `--set reward.file=X` |
+| `--region X` | `--set resources.region=X` |
 
 `veri deployments create <config>` expands its flags the same way (`--name`, `--gpu-type`, `--gpu-count`, `--from-hf`, `--from-model`, and the replica and scaling flags); see [Create from a config](/cli/deployments#create-from-a-config).
 
@@ -120,35 +129,32 @@ These flags are sugar over `--set` on `veri jobs create`:
 ### `veri.toml` (project root)
 
 ```toml
+# Project marker. Every config under configs/ is self-contained: the CLI
+# does not read defaults from this file.
+
 [project]
 name = "my-project"
-
-[defaults]
-gpu_type = "L4-24GB"    # the genuine 1-GPU node on aws (the default provider)
-gpu_count = 1
-base_model = "Qwen/Qwen3-4B"
 ```
 
-### `configs/train.toml`
+### `configs/train.toml` {#configs-train-toml}
 
 ```toml
 kind = "train"
 
 [job]
-name = "first-run"
-output_model = "tuned-model"
+output_model = "my-tuned-model"
 
 [model]
 base = "Qwen/Qwen3-4B"
 
 [dataset]
-id = "ds_abc123"
+id = "gsm8k-train"      # a registered dataset's name or id
 
 [reward]
-file = "./reward.py"    # resolves against this config file's directory
+file = "../reward.py"   # resolves against this config file's directory
 
 [method]
-type = "grpo"           # grpo | sft_text | dpo | sft_video_gen (grpo_agentic is being rebuilt; not currently available)
+type = "grpo"           # grpo | sft_text | dpo (grpo_agentic is being rebuilt; not currently available)
 learning_rate = 1e-6
 max_steps = 100
 rollouts_per_prompt = 4
@@ -157,23 +163,20 @@ max_response_length = 512
 [resources]
 gpu_type = "L4-24GB"
 gpu_count = 1
-
-[checkpoint]
-destination = "veri"    # or { type = "s3", uri = "s3://..." }
 ```
 
 <Note>
-  `[dataset].id` must reference an already-registered dataset: upload first with `veri datasets upload`, then paste the returned id into the config. `[reward].file` is a local path (relative paths resolve against the config file's directory); the file's source is attached to the job at submit. Multi-reward: `files = ["a.py", "b.py"]` plus optional `weights = [1.0, 0.5]`.
+  `[dataset].id` must reference an already-registered dataset, by name or id: register it first with `veri datasets upload` or `veri datasets connect-hf`. The trained model is saved to Veri storage. `[reward].file` is a local path (relative paths resolve against the config file's directory); the file's source is attached to the job at submit. Multi-reward: `files = ["a.py", "b.py"]` plus optional `weights = [1.0, 0.5]`.
 </Note>
 
-### `configs/deploy.toml`
+### `configs/deploy.toml` {#configs-deploy-toml}
 
 ```toml
 kind = "deploy"
 
 [deployment]
 name = "my-endpoint"
-model = "job_abc"           # training job id, HF repo, or saved model id
+model = "3f9c2a7b1d4e"      # training job id, HF repo, or saved model id
 source = "training_job"     # training_job | huggingface | custom_model
 
 [resources]
@@ -201,14 +204,16 @@ It prints the resolved GPU config plus a cost estimate (illustrative values):
 ```bash
 $ veri run configs/train.toml --dry-run
 Dry run — no job submitted.
-┏━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┓
-┃ gpu_type  ┃ gpu_count ┃ provider ┃ duration_minutes ┃ rate_usd_per_hour ┃ estimated_cost_usd ┃ markup ┃
-┡━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━┩
-│ A100-80GB │ 1         │ aws      │ 100.0            │ 1.79              │ 3.88               │ 1.3    │
-└───────────┴───────────┴──────────┴──────────────────┴───────────────────┴────────────────────┴────────┘
+┏━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┓
+┃ gpu_type ┃ gpu_count ┃ provider ┃ duration_minutes ┃ rate_usd_per_hour ┃ estimated_cost_usd ┃
+┡━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━┩
+│ L4-24GB  │ 1         │ aws      │ 100.0            │ 1.05              │ 1.75               │
+└──────────┴───────────┴──────────┴──────────────────┴───────────────────┴────────────────────┘
 ```
 
-Add `--format json` for the same fields as a JSON object (`gpu_type`, `gpu_count`, `provider`, `duration_minutes`, `rate_usd_per_hour`, `estimated_cost_usd`, `markup`).
+Add `--format json` for the same fields as a JSON object (`gpu_type`, `gpu_count`, `provider`, `duration_minutes`, `rate_usd_per_hour`, `estimated_cost_usd`).
+
+The estimate does not check the GPU shape or the dataset: submitting is what validates them.
 
 ## What's next
 

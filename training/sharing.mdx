@@ -54,7 +54,7 @@ curl -X POST https://api.veri.studio/v1/training_jobs/$JOB_ID/publish \
 
 Public data is also readable without authentication, which is what the public page uses:
 
-- `GET /v1/public/runs` — published runs, newest first, cursor-paginated with `limit` and `before`.
+- `GET /v1/public/runs`: published runs, newest first, cursor-paginated with `limit` and `before` (pass the response's `next_cursor`). Failed and cancelled runs are left off this feed and off Explore; their public page stays reachable by direct link until you unpublish.
 - `GET /v1/public/runs/{job_id}` — one published run.
 - `GET /v1/public/runs/{job_id}/metrics` — its per-step metrics, same shape as the private metrics endpoint.
 

@@ -53,7 +53,7 @@ Set `requires_reference: true` when the evaluator compares against `expected`: i
 veri evaluators create helpful \
   --method llm_judge --output-type numeric \
   --output-config '{"min": 1, "max": 5, "pass_threshold": 4}' \
-  --judge-deployment dep_ab12cd34 \
+  --judge-deployment 4f2a9c1e7b3d \
   --prompt-file helpful.txt
 ```
 
@@ -61,9 +61,31 @@ The prompt is a template: `{{input}}`, `{{output}}`, and any other variable name
 
 How the judge runs:
 
-- The judge is a deployment in your workspace (`--judge-deployment`; `--judge-model` picks a model or adapter on it). An experiment pins the judge's served model when it starts.
+- The judge is a deployment in your workspace (`--judge-deployment`; `--judge-model` picks a model on it, or an adapter on a [multi-adapter fleet (beta)](/deployments/api#multi-adapter-fleets)). An experiment pins the judge's served model when it starts.
 - Veri adds a fixed system instruction (grade strictly on the evidence shown), asks for a JSON verdict `{"reasoning", "score"}` with structured outputs at temperature 0, and validates the reply against your output type.
 - A reply that does not parse or is out of range becomes an **error** score, never a pass.
+
+### Decision mode
+
+Set `"mode": "decision"` in `method_config` and the judge answers with exactly one label instead of a reasoned verdict: `yes` or `no` for a boolean, one of your labels for a categorical, or one integer for a numeric scale. Veri constrains the reply to those labels and stores the chosen label's probability (read from the first token's log probabilities and renormalized over the labels) as the score's `confidence`, from 0 to 1. A one-label answer is faster, cheaper, and more repeatable than a reasoned verdict; its score has no `reasoning`. There is no CLI flag for the mode: set it in a [spec file](#spec-files) or the API request.
+
+```json on-topic.json
+{
+  "name": "on-topic",
+  "method": "llm_judge",
+  "output_type": "boolean",
+  "method_config": {
+    "mode": "decision",
+    "prompt": "Does the answer stay on the user's question?\nQuestion: {{input}}\nAnswer: {{output}}"
+  }
+}
+```
+
+```bash
+veri evaluators create --file on-topic.json --judge-deployment 4f2a9c1e7b3d
+```
+
+A numeric scale in decision mode needs integer `min` and `max` at most 10 apart: `1` to `5` works, while `0` to `100` or `0.5` to `5` is refused with `400`. Use the default mode, `reasoned`, for wider or fractional scales. `confidence` is empty when the judge's reply carries no usable log probabilities.
 
 ## Jev judge
 
@@ -189,12 +211,12 @@ A score is one evaluator result on one target. Scores are immutable: a second sc
 Your own harness can post verdicts on production traffic, and they show up on the trace in the dashboard and in `veri datasets import-traces --score-evaluator`:
 
 ```python
-client.scores.create("tone", target_type="trace", request_id="req_...", value="good",
+client.scores.create("tone", target_type="trace", request_id="9b1f2c4a7d01", value="good",
                      reasoning="friendly and specific")
-page = client.scores.list(deployment_id="dep_ab12cd34", evaluator="tone")
+page = client.scores.list(deployment_id="4f2a9c1e7b3d", evaluator="tone")
 ```
 
-Each score records its `source` (`api`, `sdk`, `human`, `experiment`, or `monitor`), its author, `passed` (the version's pass rule applied to the value), and the `model_version_id` that answered the scored request, when known. `status` is `ok`, `error` (with `error`), or `skipped`. Judge scores also carry `confidence` (0 to 1) and, from Jev, `probabilities`.
+Each score records its `source` (`api`, `sdk`, `human`, `experiment`, or `monitor`), its author, `passed` (the version's pass rule applied to the value), and the `model_version_id` that answered the scored request, when known. `status` is `ok`, `error` (with `error`), or `skipped`. A [monitor's](/evals#monitors) scores also carry its `monitor_id`. Judge scores also carry `confidence` (0 to 1) and, from Jev, `probabilities`.
 
 Filter scores by their typed value as well as by `passed`:
 

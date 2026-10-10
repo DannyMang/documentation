@@ -26,7 +26,7 @@ skills = ["pdf-processing", "git-hygiene@2"]
 idle_timeout_s = 900
 
 [model]
-deployment_id = "dep1a2b3c4d5e"  # a Veri deployment, OR:
+deployment_id = "1a2b3c4d5e6f"   # a Veri deployment id, OR:
 # base_url = "https://api.openai.com/v1"
 # secret = "OPENAI_API_KEY"      # sent only to that host
 
@@ -34,9 +34,9 @@ deployment_id = "dep1a2b3c4d5e"  # a Veri deployment, OR:
 LOG_LEVEL = "info"
 
 [[mcp_servers]]
-name = "composio"
-url = "https://mcp.composio.dev/sse"
-secret = "COMPOSIO_KEY"
+name = "tools"
+url = "https://example.com/mcp"  # your MCP server
+secret = "TOOLS_TOKEN"
 
 [permissions]
 default = "allow"                # allow | deny
@@ -59,7 +59,7 @@ from veri_sdk import Client
 client = Client()
 env = client.environments.create(
     "coder",
-    model={"deployment_id": "dep1a2b3c4d5e"},
+    model={"deployment_id": "1a2b3c4d5e6f"},
     secrets=["GITHUB_TOKEN"],
     skills=["pdf-processing"],
     permissions={"default": "allow", "rules": [{"tool": "Bash(rm *)", "action": "deny"}]},
@@ -75,9 +75,9 @@ env["version"]["spec"]   # the normalized spec that sessions will run
 | `model` | Exactly one of `deployment_id` (a Veri deployment in this workspace; each session gets a short-lived [model access key](/secrets#model-access-keys) automatically) or `base_url` plus an optional `secret` holding its API key. |
 | `size` | Sandbox CPU and memory tier. |
 | `egress` | `restricted` allows only the built-in hosts (Veri API, GitHub, npm, PyPI), your `allowed_hosts`, the model host and every MCP host, over HTTPS. `unrestricted` is open internet. |
-| `env` | Plain environment variables. Names the runtime owns (`ANTHROPIC_*`, `OPENAI_*`, `VERI_*`) are rejected. |
+| `env` | Plain environment variables. The eight names the runtime sets are rejected as `env` keys and in `secrets`: `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_API_KEY`, `VERI_API_KEY`, `VERI_API_URL`, `VERI_SESSION_ID`. Other names with those prefixes are fine. |
 | `secrets` | [Secret](/secrets) names. A secret without `scope_host` becomes an environment variable; one with `scope_host` is attached only to requests for that host and never enters the sandbox. |
-| `mcp_servers` | Streamable-HTTP MCP servers written into the harness's MCP config. `secret` is sent as a bearer token. |
+| `mcp_servers` | Streamable-HTTP MCP servers written into the harness's MCP config. The URL must be HTTPS and resolve to a public address when you create the environment. `secret` is sent as a bearer token. |
 | `skills` | [Skills](/agents/skills) by name (latest) or `name@N`. The resolved versions are pinned in the spec. |
 | `permissions` | Tool rules in the harness's own syntax, evaluated top to bottom with the last match winning. `ask` (human approval) is not available yet. |
 | `idle_timeout_s` | Seconds without input before the session snapshots its workspace and pauses (60 to 21600). |

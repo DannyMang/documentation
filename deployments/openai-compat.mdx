@@ -8,7 +8,7 @@ keywords: ["OpenAI compatible", "LangChain", "LlamaIndex", "interop", "chat comp
 A Veri deployment exposes the OpenAI Chat Completions API at `https://api.veri.studio/v1/deployments/{deployment_id}`. Anything that already speaks OpenAI works — point `base_url` at the deployment and pass your Veri API key.
 
 <Note>
-  Use the full URL `https://api.veri.studio/v1/deployments/{dep.id}` as `base_url`. The OpenAI client appends `/chat/completions` for you. The `dep.endpoint_url` field on the SDK response is the absolute chat URL (it already ends in `/chat/completions`), authenticated with your Veri API key: use it for direct curl-style calls, not as the OpenAI SDK's `base_url`. BYOC (`huggingface`) deployments report the endpoint URL under your own Hugging Face account instead.
+  Use the full URL `https://api.veri.studio/v1/deployments/{dep.id}` as `base_url`. The OpenAI client appends `/chat/completions` for you. The `dep.endpoint_url` field on the SDK response is the absolute chat URL (it already ends in `/chat/completions`), authenticated with your Veri API key: use it for direct curl-style calls, not as the OpenAI SDK's `base_url`.
 </Note>
 
 ## What works
@@ -18,7 +18,7 @@ Basic chat with one or more messages, returning a completion. Works in:
 - **OpenAI Python SDK**
 - **OpenAI Node SDK**
 - **LangChain** (`ChatOpenAI(base_url=...)`)
-- **LlamaIndex** (`OpenAI(api_base=...)`)
+- **LlamaIndex** (`OpenAILike(api_base=..., is_chat_model=True)`)
 - **Vercel AI SDK**
 - **curl** with the standard OpenAI request shape
 - Anything else that targets `/chat/completions`
@@ -83,7 +83,7 @@ Caveats:
 }
 ```
 
-On a single-model deployment the `model` field accepts any string: the proxy rewrites it to the deployment's served name (its `name`) before forwarding, so the response's `model` is the served name rather than whatever you sent. On a multi-adapter fleet (see [Model versions](/deployments/model-versions)) `model` selects the adapter to route to, and an unknown name is rejected with the list of valid names.
+On a single-model deployment the `model` field accepts any string: the proxy rewrites it to the deployment's served name (its `name`) before forwarding, so the response's `model` is the served name rather than whatever you sent. On a [multi-adapter fleet (beta)](/deployments/api#multi-adapter-fleets) (see also [Model versions](/deployments/model-versions)) `model` selects the adapter to route to, and an unknown name is rejected with the list of valid names.
 
 ## Response shape
 
@@ -137,13 +137,16 @@ print(result.content)
 
 ## LlamaIndex example
 
-```python
-from llama_index.llms.openai import OpenAI as LlamaOpenAI
+LlamaIndex's `OpenAI` class only accepts OpenAI model names, so use `OpenAILike` (`pip install llama-index-llms-openai-like`):
 
-llm = LlamaOpenAI(
+```python
+from llama_index.llms.openai_like import OpenAILike
+
+llm = OpenAILike(
     api_base=f"https://api.veri.studio/v1/deployments/{dep.id}",
     api_key="vk_your_api_key",
     model=dep.name,
+    is_chat_model=True,
     temperature=0.7,
 )
 
@@ -172,8 +175,8 @@ Not supported — Veri serves chat completions only, not embeddings. Use a dedic
   <Card title="Deployments API" icon="play" href="/api-reference/introduction">
     `create` / `chat` / `stop` endpoint reference.
   </Card>
-  <Card title="Deployment analytics demo" icon="book" href="/deployments/observability">
-    Planned walkthrough for request, token, latency, and replica metrics.
+  <Card title="Deployment observability" icon="book" href="/deployments/observability">
+    Request, token, latency, and replica metrics.
   </Card>
   <Card title="Hosting & GPU sizing" icon="server" href="/deployments/hosting">
     Pick the right GPU for the model.

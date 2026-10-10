@@ -63,10 +63,10 @@ Sixty steps is a fast smoke test, same as the notebook. For a real run, remove `
 
 ## Watch it train in W&B
 
-If your [W&B account is connected](/training/wandb) (`veri wandb set`, one time), this job streams the notebook's loss curve to your W&B project live, and the finished job carries the run link:
+If your [W&B account is connected](/training/wandb) (`veri wandb set`, one time), this job streams the notebook's loss curve to your W&B project live, and the finished job carries the run link (re-fetch the job: `wait()` does not refresh it):
 
 ```python
-print(job.wandb_run_url)  # https://wandb.ai/<you>/veri-training/runs/<job-id>
+print(client.training_jobs.get(job.id).wandb_run_url)  # https://wandb.ai/<you>/veri-training/runs/<run-id>
 ```
 
 The dashboard's job page shows the same link as a "View in W&B" button. Not connected? Metrics still stream to Veri's native charts on the job page.
@@ -96,7 +96,7 @@ steps_per_epoch      = dataset_size / effective_batch_size
 effective_batch_size = per_device_batch × grad_accum × num_gpus
 ```
 
-For this demo, FineTome-100k has about 100,000 examples and an effective batch of `2 × 4 × 1 = 8`, so one epoch is about `100,000 / 8 = 12,500` steps. The `max_steps: 60` smoke test is roughly 0.5% of that, which is why switching to `num_epochs: 1` is a much longer (and more expensive) run.
+For this demo, FineTome-100k has about 100,000 examples. The job sets no batch keys, so Veri's defaults apply (a micro batch of 1, no gradient accumulation) and the effective batch is `1 × 1 × 1 = 1`: one epoch is about `100,000` steps. The `max_steps: 60` smoke test is well under 0.1% of that, which is why switching to `num_epochs: 1` is a much longer (and more expensive) run. To train with the notebook's effective batch of 8, add `"micro_batch_size": 2` and `"gradient_accumulation_steps": 4` to `hyperparameters` (one epoch is then about 12,500 steps).
 
 ### Sequence length, by example
 

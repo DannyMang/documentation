@@ -8,7 +8,7 @@ keywords: ["veri jobs", "training", "GRPO", "reward file", "checkpoint download"
 Training a model on Veri is a single CLI step: submit a job with `veri jobs create` (or `veri run`). GRPO jobs carry their reward function as a local Python file, attached to the job at submit. Once submitted, manage the job through completion with `list / get / cancel / download`.
 
 <Tip>
-  For a script-driven flow, you can also use `veri train <file.py>`: it reads a `@training_job(...)`-decorated function from the file, attaches the decorated function's source as the job's reward, resolves the dataset, and submits the job in one call. See [`veri run`](/cli/run) for the full decorator + TOML reference.
+  For a script-driven flow, you can also use `veri train <file.py>`: it reads a `@training_job(...)`-decorated function from the file, attaches the decorated function's source as the job's reward, resolves the dataset, and submits the job in one call. See the [managed GRPO quickstart](/demos/managed-grpo-quickstart) for the decorator and [`veri run`](/cli/run) for the TOML reference.
 </Tip>
 
 ## Reward files
@@ -17,13 +17,13 @@ A `method=grpo` job needs a reward function (see [Reward functions](/training/re
 
 ```toml
 [reward]
-file = "./reward.py"    # resolves against the config file's directory
+file = "../reward.py"   # resolves against the config file's directory (configs/)
 ```
 
-Or pass it from the command line (this overrides `reward.file` in the config):
+Or pass it from the command line (this overrides `reward.file` in the config). With a config file, a relative `--reward` path also resolves against the config file's directory:
 
 ```bash
-veri jobs create configs/train.toml --reward ./reward.py
+veri jobs create configs/train.toml --reward ../reward.py
 ```
 
 Before submitting, the CLI runs an AST-only structural check on each reward file:
@@ -37,7 +37,7 @@ Multiple weighted rewards:
 
 ```toml
 [reward]
-files = ["./correctness.py", "./format.py"]
+files = ["../correctness.py", "../format.py"]
 weights = [1.0, 0.5]
 ```
 
@@ -51,6 +51,8 @@ Limits: up to 8 files, 256 KiB each. The server re-validates at submit and rejec
 | `list` | List jobs. |
 | `get <id>` | Show one job. |
 | `cancel <id>` | Cancel a running job. |
+| `logs <id> [-f]` | Print the job's logs; `-f` follows the live stream. |
+| `estimate <config>` | Estimate the cost of a config without submitting. |
 | `download <id>` | Download the completed checkpoint. |
 | `delete <id>` | Permanently delete a finished job and its stored checkpoint files. |
 
@@ -75,13 +77,13 @@ JOB_ID=$(veri jobs create configs/train.toml --quiet)
 ```bash
 veri jobs create \
   --base-model "Qwen/Qwen3-4B" \
-  --dataset ds_abc \
+  --dataset gsm8k-train \
   --reward ./reward.py \
   --gpu-type L4-24GB \
   --gpu-count 1
 ```
 
-Inline form requires `--base-model` AND `--dataset`. Pass `--reward` for `grpo`; omit for `sft_video_gen`.
+Inline form requires `--base-model` AND `--dataset` (a registered dataset's name or id). Inline jobs always use `grpo`, so `--reward` is required too; for another method, use a config file with `[method] type`.
 
 ### Override config values
 
@@ -100,9 +102,9 @@ The convenience flags `--base-model`, `--gpu-type`, `--gpu-count`, `--dataset`, 
 veri jobs list                              # most recent 20
 veri jobs list --status running             # filter
 veri jobs list --method grpo
-veri jobs get job_abc
-veri jobs cancel job_abc
-veri jobs delete job_abc                    # finished jobs only; removes the stored checkpoint
+veri jobs get 3f9c2a7b1d4e
+veri jobs cancel 3f9c2a7b1d4e
+veri jobs delete 3f9c2a7b1d4e               # finished jobs only; removes the stored checkpoint
 ```
 
 `list` supports `--limit`, `--after`, `--status`, `--method`. All commands accept `--format json`.
@@ -112,8 +114,8 @@ veri jobs delete job_abc                    # finished jobs only; removes the st
 `veri jobs logs` prints everything the job has logged so far (bootstrap and worker output) and exits. Pass `-f`/`--follow` to attach to the live stream until the job reaches a terminal state:
 
 ```bash
-veri jobs logs job_abc                    # full log so far
-veri jobs logs job_abc -f                 # follow until completed/failed/cancelled
+veri jobs logs 3f9c2a7b1d4e               # full log so far
+veri jobs logs 3f9c2a7b1d4e -f            # follow until completed/failed/cancelled
 veri jobs create configs/train.toml -f    # submit + follow in one step
 ```
 
@@ -122,15 +124,18 @@ Ctrl+C while following detaches; the job keeps running. Cancel explicitly with `
 For scripting, poll status instead:
 
 ```bash
-while [ "$(veri jobs get $JOB_ID --format json | jq -r .status)" = "running" ]; do
+while :; do
+  STATUS=$(veri jobs get $JOB_ID --format json | jq -r .status)
+  case "$STATUS" in completed|failed|cancelled) break ;; esac
   sleep 30
 done
+echo "$STATUS"
 ```
 
 ### Download a completed checkpoint
 
 ```bash
-veri jobs download job_abc --output-dir ./checkpoints
+veri jobs download 3f9c2a7b1d4e --output-dir ./checkpoints
 ```
 
 The download URL is only populated after the job reaches `completed`. Trying to download an in-flight job exits `1` with a clear message.
