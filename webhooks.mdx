@@ -1,6 +1,6 @@
 ---
 title: "Webhooks"
-description: "Signed HTTP notifications for deployment and training job lifecycle events"
+description: "Signed HTTP notifications for lifecycle events: deployments, training jobs, models, datasets, evals and agent sessions"
 keywords: ["webhooks", "events", "notifications", "standard webhooks", "signature verification"]
 ---
 
@@ -34,11 +34,18 @@ Omit `event_types` (or pass `[]`) to subscribe to all event types. Endpoint URLs
 | `deployment.scaled_to_zero` | An idle deployment with `min_replicas: 0` is parked, or a `min_replicas: 0` deployment lost its last GPU box with self-healing used up or off (`failure_code: replica_lost`). The deployment wakes on the next request. |
 | `job.completed` | A training job finishes successfully. |
 | `job.failed` | A training job fails (worker error, provisioning failure, timeout watchdogs, cancellation is not included). |
+| `model.ready` | A model in your [model library](/deployments/custom-models) becomes ready: saved from a training job, or a Hugging Face import finished. |
+| `dataset.ready` | A new dataset is usable: an upload passed validation, a Hugging Face dataset was connected, or a dataset stream was created. A re-upload that matches an existing dataset does not fire it. |
 | `dataset.rows_appended` | Rows land on a [dataset stream](/training/dataset-streams). One event per append batch, never per row. |
 | `dataset.snapshot_created` | A stream snapshot is cut: manually, by an `@latest` pin at job submit, or by the auto-snapshot rule. |
 | `experiment.completed` | An [experiment](/evals/experiments) completes, with its verdict and per-evaluator aggregates. |
 | `annotation.completed` | A reviewer completes an item in an [annotation queue](/evals/human-review). |
-| `webhook.test` | You called `POST /v1/webhooks/{id}/test`. Delivered only to that endpoint, regardless of its subscription filter. |
+| `score.failed` | A monitor's evaluation of live traffic ended in an `error` score (see [Monitors](/evals#monitors)). |
+| `session.started` | An agent [session](/agents/sessions) becomes ready for the first time. |
+| `session.paused` | A session pauses: you paused it, it went idle, it hit its budget, or its sandbox was interrupted. |
+| `session.ended` | A session ends. |
+| `session.failed` | A session fails terminally; `failure_code` says why. |
+| `webhook.test` | You called `POST /v1/webhooks/{id}/test`. Delivered only to that endpoint, regardless of its subscription filter. It is not a subscribable type. |
 
 Each event fires exactly once per real state transition. Deliveries, however, are at-least-once (see [Idempotency](#idempotency-and-ordering)).
 
@@ -53,14 +60,28 @@ Deliveries are `POST` requests with `Content-Type: application/json` and a delib
   "created_at": "2026-08-03T00:00:00Z",
   "data": {
     "object": "deployment",
-    "id": "dep1a2b3c4d5e",
+    "id": "7df414b8fd01",
     "status": "serving",
     "name": "my-endpoint"
   }
 }
 ```
 
-Job events use `"object": "job"` and carry `"model"` (the base model for managed jobs, `null` for custom-script jobs) instead of `"name"`.
+The `data` object by event:
+
+| Event | `data.object` | Other `data` fields |
+| --- | --- | --- |
+| `deployment.*` | `deployment` | `id`, `status`, `name` |
+| `job.*` | `job` | `id`, `status`, `model` (the base model for managed jobs, `null` for custom-script jobs) |
+| `model.ready` | `model` | `id`, `status`, `name` |
+| `dataset.ready` | `dataset` | `id`, `status`, `name` |
+| `dataset.rows_appended` | `dataset` | `id`, `name`, `first_row`, `last_row`, `count`, `head_row` |
+| `dataset.snapshot_created` | `dataset_snapshot` | `id` (`<dataset id>@snap-<seq>`), `dataset_id`, `name`, `seq`, `head_row`, `auto`, `note` |
+| `experiment.completed` | `experiment` | `id`, `name`, `status`, `passed`, `dataset_snapshot_id`, `target_deployment_id`, `target_model_version_id`, `items_total`, `aggregates` |
+| `annotation.completed` | `annotation_item` | `id`, `queue_id`, `queue_name`, `target_type`, `request_id`, `deployment_id`, `thread_id`, `target_revision`, `experiment_id`, `item_id`, `completed_by`, `score_ids`, `has_correction`, `dataset_row` |
+| `score.failed` | `score` | `id`, `status` (`error`), `error`, `evaluator_id`, `evaluator_version`, `name`, `monitor_id`, `target_type`, `request_id`, `deployment_id`, `thread_id`, `target_revision` |
+| `session.*` | `session` | `id`, `status`, `environment_id`, `environment_version`, `failure_code` |
+| `webhook.test` | `webhook_endpoint` | `id` (the endpoint), `status` (`test`), `name` (`webhook.test`) |
 
 Fetch the full resource (`GET /v1/deployments/{id}`, `GET /v1/training_jobs/{id}`) when you need more than the transition itself.
 

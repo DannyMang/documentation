@@ -27,7 +27,7 @@ These are AWS shapes (the default provider): `L4-24GB` and `A10G-24GB` come as 1
 Each provider sells fixed node shapes — asking for a shape a provider doesn't sell returns a 400 at create, before anything boots. The full matrix (with status and per-provider guides) lives on the [Serving providers](/deployments/providers) page; the live version, including current prices, is `veri gpu list`.
 
 <Note>
-  AWS has no single-GPU A100/H100 instance: the smallest SKU is the whole 8-GPU node, and you pay for all of it. Its genuine single-GPU shapes are `L4-24GB` and `A10G-24GB`. Single-A100 serving on [GCP](/deployments/providers/gcp) is wired but feature-gated (coming soon).
+  AWS has no single-GPU A100/H100 instance: the smallest SKU is the whole 8-GPU node, and you pay for all of it. Its genuine single-GPU shapes are `L4-24GB` and `A10G-24GB`. Single-GPU A100 serving is not available yet.
 </Note>
 
 ## Cold start

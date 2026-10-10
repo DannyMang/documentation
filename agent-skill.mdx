@@ -1,11 +1,11 @@
 ---
 title: "Agent skill (SKILL.md)"
 sidebarTitle: "Agent skill"
-description: "A copy-paste SKILL.md that teaches coding agents (Claude Code, Cursor, Devin, Codex) how to drive Veri: training, deployments, datasets, volumes, and the API."
+description: "A copy-paste SKILL.md that teaches coding agents (Claude Code, Cursor, Devin, Codex) how to drive Veri: training, deployments, evals, managed agents, datasets, volumes, and the API."
 keywords: ["SKILL.md", "agent skill", "Claude Code", "Cursor", "Devin", "Codex", "AI agents", "skills"]
 ---
 
-Give your coding agent working knowledge of Veri. Copy the SKILL.md below into your agent's skills directory and it will know how to authenticate, submit training jobs, create deployments, and call the API — with the platform's current constraints baked in.
+Give your coding agent working knowledge of Veri. Copy the SKILL.md below into your agent's skills directory and it will know how to authenticate, submit training jobs, create deployments, run evals, and call the API, with the platform's current constraints baked in.
 
 | Agent | Where to put it |
 | --- | --- |
@@ -13,12 +13,12 @@ Give your coding agent working knowledge of Veri. Copy the SKILL.md below into y
 | Devin CLI | `.devin/skills/veri/SKILL.md` |
 | Cursor / others ([agentskills spec](https://agentskills.io)) | `.agents/skills/veri/SKILL.md` |
 
-Every command and constraint below is verified against the live API and `veri-sdk` 0.2.35 (the latest release). When docs and this file disagree, trust `veri <cmd> --help` and [the docs](https://docs.veri.studio).
+Every command and constraint below is verified against the API and `veri-sdk` 0.2.42 (the latest release). When docs and this file disagree, trust `veri <cmd> --help` and [the docs](https://docs.veri.studio).
 
 ````markdown SKILL.md
 ---
 name: veri
-description: Train, deploy, and manage language models on Veri, the AI compute platform (api.veri.studio). Covers the veri CLI and REST API for fine-tuning (SFT, DPO, GRPO), harness-in-the-loop RL (train the model inside your own agent), custom training scripts, GPU inference deployments with OpenAI-compatible endpoints, datasets, inline reward functions, volumes, billing, lifecycle webhooks, Prometheus metrics export, and resource cleanup. Use when the user mentions Veri, veri.toml, the veri CLI, api.veri.studio, or wants to fine-tune / RL-train / serve a model on rented GPUs — including RL-training the model that powers an existing agent or harness.
+description: Train, deploy, evaluate, and manage language models on Veri, the AI compute platform (api.veri.studio). Covers the veri CLI and REST API for fine-tuning (SFT, DPO, GRPO), harness-in-the-loop RL (train the model inside your own agent), custom training scripts, GPU inference deployments with OpenAI- and Anthropic-compatible endpoints, datasets, inline reward functions, evals (LLM judges, experiments, live-traffic monitors), agent observability, managed agent sessions, volumes, billing, lifecycle webhooks, Prometheus metrics export, and resource cleanup. Use when the user mentions Veri, veri.toml, the veri CLI, api.veri.studio, or wants to fine-tune / RL-train / serve / evaluate a model on rented GPUs, including RL-training the model that powers an existing agent or harness.
 ---
 
 # Veri
@@ -27,23 +27,22 @@ description: Train, deploy, and manage language models on Veri, the AI compute p
 
 ```bash
 uv tool install veri-sdk        # or: pipx install veri-sdk / pip install veri-sdk
-veri version                    # need sdk_version >= 0.2.35 (this skill's baseline); Python >= 3.10
+veri version                    # need sdk_version >= 0.2.42 (this skill's baseline); Python >= 3.10
 veri login                      # browser flow; or: veri login --token vk_... (headless/CI)
 veri whoami                     # verify: status must NOT be invalid_or_expired_token
 veri doctor                     # diagnose install/network if anything fails
 ```
 
-If `sdk_version` is older than 0.2.35, upgrade before continuing — older CLIs are missing
-commands this skill uses: `uv tool upgrade veri-sdk` (or `pipx upgrade veri-sdk` /
-`pip install -U veri-sdk`). 0.2.35 is a hard floor for two reasons: in 0.2.33 and
-earlier `--reward` took the id of a stored reward resource (it now takes a path to a
-local `.py`, so reward flows fail against an old CLI), and in 0.2.34 and earlier the
-`veri-sdk[mcp]` extra installs a broken MCP dependency, so `veri mcp serve` crashes.
+If `sdk_version` is older than 0.2.42, upgrade before continuing (older CLIs lack commands
+this skill uses, and before 0.2.34 `--reward` took a stored reward id instead of a `.py`
+path): `uv tool upgrade veri-sdk` (or `pipx upgrade veri-sdk` / `pip install -U veri-sdk`).
 
 Veri rents GPUs for model post-training and serving. One CLI (`veri`), one REST API
-(`https://api.veri.studio`, Bearer auth with `vk_...` keys), TOML configs.
+(`https://api.veri.studio`, Bearer auth with `vk_...` keys), TOML configs. Job, dataset,
+deployment and model ids are bare hex strings (no `job_`/`ds_`/`dep_` prefix); evaluators,
+experiments and monitors use `evl_`, `exp_`, `mon_`.
 
-- API keys: https://www.veri.studio/settings/api-keys
+- API keys: https://www.veri.studio/settings/api-keys (dashboard). The CLI can mint and revoke keys too (`veri api-keys`, SDK newer than 0.2.42).
 - Env vars `VERI_API_KEY` / `VERI_API_URL` override the config file.
 - Config file: `~/.config/veri/config.toml` (Linux), `~/Library/Application Support/veri/config.toml` (macOS). `veri whoami` prints the active path.
 - Global output flags on every command: `--format json|jsonl|csv|table`, `--quiet`.
@@ -52,9 +51,10 @@ Docs: https://docs.veri.studio/quickstart · https://docs.veri.studio/cli
 
 ## Account limits — plan around these
 
-Concurrency is capped per account. Defaults: **4 in-flight training jobs** and **2 active
-deployment replicas**. Both are counted weighted, so a 4-node job consumes 4 job slots and
-a 2-replica deployment consumes the whole replica budget.
+Concurrency is capped per account. Defaults: **4 in-flight training jobs**, **2 active
+deployment replicas**, 2 unfinished experiments, 2 agent sessions (paused ones count). Jobs and
+replicas are counted weighted, so a 4-node job consumes 4 job slots and a 2-replica
+deployment consumes the whole replica budget.
 
 - In-flight jobs = `queued` + `provisioning` + `configuring` + `running`. Terminal jobs never count.
 - Active replicas = `queued` + `provisioning` + `serving` + `waking`. A
@@ -63,25 +63,26 @@ a 2-replica deployment consumes the whole replica budget.
   wake (explicit `veri deployments wake` or a chat request to a `scaled_to_zero` deployment):
   a wake with no headroom returns the same 429 and the deployment stays parked.
 
-Hitting a cap returns **HTTP 429 with a `code`** — `CONCURRENT_JOB_LIMIT` or
-`ACTIVE_DEPLOYMENT_LIMIT`:
+Hitting a cap returns **HTTP 429 with a `code`**: `CONCURRENT_JOB_LIMIT`,
+`ACTIVE_DEPLOYMENT_LIMIT`, `CONCURRENT_EXPERIMENT_LIMIT` or `CONCURRENT_SESSION_LIMIT`:
 
 ```json
-{"error":{"code":"CONCURRENT_JOB_LIMIT","message":"This workspace has 5 in-flight training jobs (limit 4). Wait for one to finish, or cancel one with `veri jobs cancel <id>`, ..."}}
+{"error":{"code":"CONCURRENT_JOB_LIMIT","message":"This workspace has 4 in-flight training jobs and this submit adds 1 (limit 4). Wait for one to finish, or cancel one with `veri jobs cancel <id>`, then resubmit. Contact us to raise this limit."}}
 ```
 
-**These 429s are NOT transient — do not retry-loop.** Retrying without first freeing
-capacity fails every time. Cancel or stop something, then resubmit. Distinguish them from
-the request rate limiter, which also returns 429 but with a plain-text body and no `code`
-field (120 requests / 60s per key; back off and retry that one).
+**These 429s are NOT transient: do not retry-loop.** Retrying without first freeing
+capacity fails every time. Cancel or stop something, then resubmit. The request rate
+limiter (120 requests / 60s per key) is the one 429 to wait out: code `RATE_LIMITED`, a
+`retry_after_seconds` field and a `Retry-After` header.
 
-"Workspace" in these messages is the ownership boundary. For a normal single-user account
-your personal workspace IS your account, and there are no workspace CLI commands or public
-API routes — nothing to create, switch, or pass. Raising a limit is a "contact us" lever.
+"Workspace" in these messages is the workspace your API key belongs to: your personal
+workspace, or a team workspace created or joined (by invite) in the dashboard. Each
+workspace is its own ownership and billing boundary, and a key created in the dashboard is
+scoped to the workspace that was active when it was created. Raising a limit is a "contact us" lever.
 
 ## Project conventions
 
-`veri init <name>` scaffolds: `veri.toml` (project defaults), `configs/{train,deploy}.toml`, `reward.py`, `AGENTS.md`. Every config starts with `kind = "train"|"deploy"`; `veri run <config.toml>` dispatches on it. Override any key from the CLI: `--set method.learning_rate=2e-6` (TOML-typed; `--set-string` forces string).
+`veri init <name>` scaffolds `configs/{train,deploy}.toml`, `reward.py`, `AGENTS.md`/`CLAUDE.md` and a `veri.toml` project marker (no config reads defaults from it; each config is self-contained, so check its `gpu_type`/`gpu_count` against the GPU table below). Every config starts with `kind = "train"|"deploy"`; `veri run <config.toml>` dispatches on it. Override any key from the CLI: `--set method.learning_rate=2e-6` (TOML-typed; `--set-string` forces string).
 
 Docs (full config schemas + `--set` rules): https://docs.veri.studio/cli/run
 
@@ -97,17 +98,17 @@ Chat/ShareGPT/Alpaca/plain-text/prompt-completion/preference (`prompt`,`chosen`,
 
 ```bash
 veri datasets check ./train.jsonl                    # validate locally, no upload
-veri datasets upload ./train.jsonl --name my-train   # -> ds_...
+veri datasets upload ./train.jsonl --name my-train   # prints the dataset id
 veri datasets connect-hf openai/gsm8k --config main --split train --map question=prompt
 ```
 
-Private/gated HF datasets are not supported. Datasets are deletable (API + dashboard).
+Private/gated HF datasets are not supported. Uploading byte-identical content again returns the existing dataset (same id and original name).
 
-Docs (formats, column mapping, volumes as sources): https://docs.veri.studio/training/datasets · https://docs.veri.studio/cli/datasets
+Docs (formats, column mapping): https://docs.veri.studio/training/datasets · https://docs.veri.studio/cli/datasets
 
 ## Reward functions (GRPO)
 
-TRL signature, attached to the job inline as Python source text (no separate upload, no reward ids). No network egress inside the sandbox.
+TRL signature, attached to the job inline as Python source text (no separate upload, no reward ids). It runs inside the trainer process with no per-call timeout: keep it fast and deterministic, and avoid network calls.
 
 ```python
 def reward(completions, answer, **kwargs) -> list[float]:
@@ -122,11 +123,11 @@ rewards: `reward_sources` + optional `reward_weights` (equal lengths). Limits: m
 each; violations are 400 at submit. Read a job's submitted source back with
 `client.training_jobs.reward_source(job_id, index=0)` or on the job's dashboard page.
 
-Docs (contract, sandbox limits, debugging): https://docs.veri.studio/training/reward-functions
+Docs (contract, debugging): https://docs.veri.studio/training/reward-functions
 
 ## Training
 
-Methods: `grpo` (needs a reward source), `sft_text`, `dpo`, `sft_video_gen` (these three must omit the reward), `grpo_harness` (needs a reward source; submit via `veri run-harness`, see the harness section below). `grpo_agentic` is NOT runnable (400, being rebuilt).
+Methods: `grpo` (needs a reward source), `sft_text`, `dpo` (these two must omit the reward), `grpo_harness` (needs a reward source; submit via `veri run-harness`, see the harness section below). `grpo_agentic` is NOT runnable (400, being rebuilt).
 
 ```toml
 # configs/train.toml
@@ -136,11 +137,12 @@ kind = "train"
 [dataset]    # id = "ds_..."
 [reward]     # file = "./reward.py"   (grpo only)
 [method]     # type = "grpo"; learning_rate = 1e-6; max_steps = 100; rollouts_per_prompt = 4
-[resources]  # gpu_type = "L4-24GB"; gpu_count = 1  (optional: provider, region)
+[resources]  # gpu_type = "L4-24GB"; gpu_count = 1; optional region (aws only)
+[provider]   # name = "vast"  (optional; default aws. provider under [resources] is ignored)
 ```
 
 ```bash
-veri jobs create configs/train.toml --dry-run    # validate + cost estimate, no billing
+veri jobs create configs/train.toml --dry-run    # local check + rough AWS price; GPU shape/provider are checked only on submit
 veri jobs create configs/train.toml --follow     # submit + stream logs (Ctrl+C detaches)
 veri jobs logs <id> -f                           # tail later
 veri jobs get <id> && veri jobs download <id> --output-dir ./checkpoints
@@ -169,7 +171,7 @@ Docs (per-method guides + full hyperparameter tables): https://docs.veri.studio/
 | `aws` (default) | L4-24GB, A10G-24GB (1x or 4x); A100-80GB, H100-80GB (whole 8-GPU nodes only: gpu_count 8, you pay for all 8) | live |
 | `vast` | A100/H100-80GB (1/2/4/8x marketplace) | live |
 | `digitalocean` | H100-80GB (1x/8x droplets; capacity flaps — failed submits are unbilled, retry) | live |
-| `gcp` | — | gated off: submit returns "coming soon" 400 |
+| `gcp` | A100-80GB (1x) | live |
 
 Check live prices/availability: `veri gpu list` (add `--provider`/`--region`/`--gpu-type` to switch from the static catalog to live availability), `veri gpu describe <gpu-type>` for specs and node size, `veri gpu compare --gpu-type H100-80GB`, `veri regions list`.
 
@@ -201,7 +203,7 @@ veri run-script ./my-run \
   --requirements ./my-run/requirements.txt
 ```
 
-Base images: `veri/base`, `veri/base-vllm`, `veri/base-sglang`. Env injected: `VERI_DATA_DIR`, `VERI_OUTPUT_DIR` (write checkpoints here), `VERI_METRICS_FILE`, `VERI_NUM_GPUS`. NVIDIA only (AMD gpu_type → 400). Multi-node (`--num-nodes` ≥ 2) is currently gated off ("coming soon" 400). Exit 0 = completed.
+Base images: `veri/base`, `veri/base-vllm`, `veri/base-sglang`, `veri/base-claude-agent`. Env injected: `VERI_DATA_DIR`, `VERI_OUTPUT_DIR` (write checkpoints here), `VERI_METRICS_FILE`, `VERI_NUM_GPUS`. NVIDIA only (AMD gpu_type → 400). Multi-node (`--num-nodes` ≥ 2) is not enabled yet (400). Exit 0 = completed.
 
 Docs (env contract, images, worked examples): https://docs.veri.studio/training/custom-script
 
@@ -232,13 +234,15 @@ veri run-harness ./harness \
 
 Constraints that WILL bite:
 
-1. `--gpu-count` must be >= 2 on one node (trainer and policy server need disjoint
-   GPUs). The policy server runs tensor-parallel at gpu_count-1, and vLLM needs the
-   model's attention heads divisible by that — for 32-head models (Qwen3-4B) valid
-   counts are 2, 3, or 5. `H100-80GB x2 --provider vast` is the proven shape.
-2. Protocols: OpenAI (default) and Anthropic plain-text (`--harness-protocol
-   anthropic`) both train with exact token fidelity. Anthropic native tool_use
-   blocks are rejected with a 400 — use a text-protocol tool loop instead.
+1. `--gpu-count` must be >= 2 on one node (the CLI default of 1 is rejected: trainer
+   and policy server need disjoint GPUs). GPU 0 trains; the policy server gets the
+   largest power of two <= gpu_count-1 as tensor parallelism, so any count 2-8 boots
+   (odd counts leave GPUs idle; `vllm_data_parallel_size` reclaims them).
+   `H100-80GB x2 --provider vast` is the proven shape.
+2. Protocols: OpenAI (default) and Anthropic (`--harness-protocol anthropic`, e.g. the
+   Claude Agent SDK) both train with exact token fidelity. Anthropic native `tool_use` /
+   `tool_result` blocks are translated both ways; only `image` and `document` content
+   blocks are rejected (400).
 3. Policy ceiling today: ~7-8B full fine-tune (the trainer runs on one GPU).
 4. Every dataset task must be WINNABLE through the agent's own tools: if the tools
    can never surface the ground-truth answer, every rollout scores 0 and that task
@@ -261,6 +265,7 @@ veri deploy Qwen/Qwen3-4B --gpu-type L4-24GB --no-cache   # one-step HF deploy
 veri deployments create --from-hf Qwen/Qwen3-4B --name qwen-dev \
   --gpu-type L4-24GB --min-replicas 0 --max-replicas 2
 veri deployments create --model <job_id> ...     # serve a finished training job
+veri deployments create --from-model <model_id> ...   # serve a library model (veri models list)
 ```
 
 Always pass `--cache` or `--no-cache` to `veri deploy`: without it the command prompts
@@ -273,7 +278,7 @@ handles ≤4B models). `veri deploy` defaults to `L4-24GB` x1; `veri deployments
 x1 is a 400.
 
 - Engine: `vllm` only (any other value returns 400). Extra vLLM flags: repeat `--vllm-arg=<token>` or `deployment.vllm_extra_args` list in the config.
-- Serving providers live: `aws` (default). Gated off (create returns "coming soon" 400): `gcp` (single-GPU A100), `digitalocean`, `huggingface` (BYOC). `vast` is training-only (serving returns 400).
+- Serving providers live: `aws` (default). Not enabled: `gcp`, `digitalocean`, `huggingface` (create returns 400 "Serving provider '<name>' is not currently enabled."; ignore error hints that suggest them). `vast` is training-only (serving returns 400).
 - Defaults: gpu_count 1, replicas 1, concurrency_target 8, scale_to_zero_window 3600s (min 300).
 - Mutable on a live deployment: replica bounds, concurrency target, idle windows. Model/GPU/provider/engine are immutable.
 - Replica budget is 2 by default (see Account limits), so `--max-replicas` above 2 is not servable.
@@ -293,10 +298,11 @@ oai = OpenAI(base_url=f"https://api.veri.studio/v1/deployments/{dep_id}",
 resp = oai.chat.completions.create(model="<deployment-name>", messages=[...], stream=True)
 ```
 
-- Streaming works (SSE passthrough); the final usage-only chunk arrives only if the client sends `stream_options: {"include_usage": true}`. All other params (`top_p`, `stop`, `seed`, `response_format`, `tools`, ...) pass through to vLLM untouched. On a single-model deployment `model` accepts any string and is rewritten to the deployment's served name; on a multi-adapter fleet it selects the adapter.
+- Streaming works (SSE passthrough); the final usage-only chunk arrives only if the client sends `stream_options: {"include_usage": true}`. All other params (`top_p`, `stop`, `seed`, `response_format`, `tools`, ...) pass through to vLLM untouched. On a single-model deployment `model` accepts any string and is rewritten to the deployment's served name; on a multi-adapter fleet (beta, created through the REST API with `serving_mode: "multi_adapter"`) it selects the adapter.
 - Tool calling requires the deployment's vLLM to be launched with tool parsing (`--vllm-arg=--enable-auto-tool-choice --vllm-arg=--tool-call-parser --vllm-arg=hermes`).
 - A scaled-to-zero deployment returns 503 + `Retry-After` (`deployment_waking`) on first request; retry until warm or pre-warm with `veri deployments wake <id>`. The wake itself can be refused with 429 `ACTIVE_DEPLOYMENT_LIMIT` (see Account limits). Upstream failures (model server unreachable, 5xx/429 from it, or no serving replica) are 503 + `Retry-After` with code `upstream_unavailable`: retry those too.
-- Chat completions only — no embeddings endpoint.
+- Anthropic clients: `POST /v1/deployments/{id}/messages` (+ `/messages/count_tokens`) is the Messages API on the same deployment. No embeddings endpoint.
+- Agent observability: send `X-Veri-Agent: <name>` and `X-Veri-Thread-Id: <conversation id>` (both `[A-Za-z0-9._:-]`, 1-64 and 1-128 chars; anything else is a 400) on chat/messages requests. Veri groups requests into agents and conversations: `GET /v1/observability/{overview,agents,conversations}` and `GET /v1/deployments/{id}/threads/{thread_id}`. Store request/response bodies as traces with `--trace-bodies` at create (`veri deployments traces <id>`); monitors need it.
 
 Diagnostics: `veri deployments chat|metrics|requests|bench <id>`.
 
@@ -347,10 +353,13 @@ runs these:
 ## Webhooks (API only, no CLI)
 
 Subscribe to lifecycle events instead of polling. `POST /v1/webhooks` with `{"url": ...,
-"event_types": [...]}` — omit `event_types` to receive all. The only valid values are:
+"event_types": [...]}`; omit `event_types` to receive all. Valid values:
 
 ```
-deployment.serving   deployment.failed   deployment.scaled_to_zero   job.completed   job.failed
+deployment.serving  deployment.failed  deployment.scaled_to_zero  job.completed  job.failed
+model.ready  dataset.ready  dataset.rows_appended  dataset.snapshot_created
+experiment.completed  annotation.completed  score.failed
+session.started  session.paused  session.ended  session.failed
 ```
 
 Cancelling a job emits nothing (only `completed`/`failed` fire). URLs must be public HTTPS;
@@ -384,7 +393,7 @@ at 15s or slower.
 
 ```bash
 veri volumes create my-corpus && veri volumes upload my-corpus ./big.jsonl   # >5GiB auto-multipart
-veri volumes ls my-corpus                        # then: veri datasets ... source volume
+veri volumes ls my-corpus                        # storage only: training jobs cannot read volumes yet
 veri models save <job_id> --name my-model        # reusable model library; deploy with --from-model
 veri models register <job_id> --model acme-bot   # versioned lineage (acme-bot@v6); first version = production
 veri models promote acme-bot v6 -m "reason"      # move production (--alias staging); rollback / pin / retention exist
@@ -399,11 +408,61 @@ Hugging Face pushes run server-side (nothing downloads locally): connect once wi
 
 Docs: https://docs.veri.studio/volumes · https://docs.veri.studio/deployments/custom-models · https://docs.veri.studio/deployments/model-versions · https://docs.veri.studio/training/dataset-streams · https://docs.veri.studio/training/wandb · https://docs.veri.studio/training/huggingface
 
+## Evals and monitors
+
+Evaluators are named, versioned scoring rules: `llm_judge` (a deployment in your workspace
+judges), `code` (Python locally, or JavaScript/TypeScript with `--runtime cloud`) or `human`.
+
+```bash
+veri evaluators create exact --method code --output-type boolean --output-config '{"pass_when": true}' --source-file ./exact.py
+veri evaluators create --file judge.json --judge-deployment <dep_id>   # llm_judge from a spec file
+veri experiments run -d <dataset>@latest -t deployment:<dep_id> -e exact -e judge@2   # exit 0 = passed
+veri models gate <lineage>      # promotion gate: moving production needs a passing experiment
+```
+
+- Decision mode: `"method_config": {"mode": "decision", "prompt": ...}` in the spec makes the
+  judge answer one label (`yes`/`no`, a categorical label, or an integer of a numeric scale
+  at most 10 wide) and stores that label's probability as the score's `confidence` (0-1).
+  No CLI flag; use the spec file or API.
+- Target `none` scores outputs already in the dataset (chat rows ending in an assistant
+  turn). A local code evaluator runs on your machine with `veri experiments run --local`;
+  without it the experiment waits in `awaiting_local`.
+- Monitors (API only) score a sampled share of one deployment's live traffic:
+  `POST /v1/monitors {"name", "deployment_id", "evaluator_id"}` plus optional
+  `sampling_rate` (0-1, default 1), `filter: {"agent": ...}` (an `X-Veri-Agent` value),
+  `idle_minutes` (thread-scope evaluators score a conversation after this much idle time;
+  1-1440, default 15), `daily_cap` (1-100000, default 1000). The deployment must store
+  trace bodies (else 409 `trace_bodies_required`); the evaluator must be `llm_judge` or a
+  cloud `code` evaluator with no reference answer. Scores carry `source: monitor` and
+  `monitor_id`; a failed evaluation fires `score.failed`.
+
+Docs: https://docs.veri.studio/evals · https://docs.veri.studio/evals/evaluators
+
+## Managed agents (sessions)
+
+Run an agent harness (Claude Code today) in a Veri sandbox, talking to a Veri deployment or
+your own model endpoint (`base_url`). CLI commands need a `veri-sdk` newer than 0.2.42; the
+REST routes work from any client.
+
+- Secrets: `PUT /v1/secrets/{name}` (`veri secrets set NAME --value ...`); values never come back.
+- Skills: `POST /v1/skills` (`veri skills add <name> --file SKILL.md -d "when to use"`), versioned.
+- Environments: `POST /v1/environments` or `veri run environment.toml` (`kind = "environment"`;
+  `harness = "claude-code"`, `[model] deployment_id = "..."` or `base_url` + `secret`, `size`,
+  `egress`, `allowed_hosts`, `secrets`, `skills`, `[[mcp_servers]]`, `[permissions]`,
+  `idle_timeout_s`). Every edit is a new immutable version; sessions pin theirs.
+- Sessions: `POST /v1/sessions {"environment_id", "budget_usd"?}`
+  (`veri sessions create <env_id> --budget 5`), then `veri sessions send <id> "<task>" --follow`.
+  Transcript: `GET /v1/sessions/{id}/events?after_seq=N` or SSE `GET .../stream`
+  (resume with `Last-Event-ID`). `pause` / `resume` / `DELETE` (ends it). Billed per hour
+  while the sandbox is awake; paused sessions cost nothing; a message to a paused session is 409.
+
+Docs: https://docs.veri.studio/agents/environments · https://docs.veri.studio/agents/sessions
+
 ## REST API essentials
 
-Base `https://api.veri.studio`, header `Authorization: Bearer vk_...`. Public spec: `GET /openapi.json`. Main resources: `/v1/me` (identity), `/v1/training_jobs` (+ `/logs`, `/events`, `/metrics`, `/cancel`, `/model`, `/trajectories`), `/v1/deployments` (+ `/chat/completions`, `/stop`, `/wake`, `/replicas`, `/replicas/{id}/drain`), `/v1/datasets`, `/v1/volumes`, `/v1/models` (+ `/{id}/push-to-hf`, poll `/v1/hf_exports/{id}`), `/v1/webhooks` (+ `/secret`, `/test`, `/deliveries`), `/v1/metrics/export`, `/v1/settings/integrations/{wandb,huggingface}`, `/v1/billing/*`, `/v1/gpu/catalog`, `/v1/gpu/availability`, `/v1/regions`. DELETE exists for training jobs, datasets, deployments, models, volumes (and volume files). Errors: 400 invalid/gated, 401 bad key, 402 insufficient credit, 404 not found/not owned, 409 still referenced/wrong state, 422 schema, 429 concurrency cap (has `code`) or rate limit (plain text). Pagination: `limit` + `after` cursor, `has_more` in response.
+Base `https://api.veri.studio`, header `Authorization: Bearer vk_...`. Public spec: `GET /openapi.json`. Main resources: `/v1/me` (identity), `/v1/training_jobs` (+ `/logs`, `/events`, `/metrics`, `/cancel`, `/model`, `/trajectories`), `/v1/deployments` (+ `/chat/completions`, `/messages`, `/stop`, `/wake`, `/replicas`, `/replicas/{id}/drain`, `/requests`, `/traces`, `/threads/{thread_id}`), `/v1/observability/*`, `/v1/evaluators`, `/v1/experiments`, `/v1/scores`, `/v1/monitors`, `/v1/environments`, `/v1/skills`, `/v1/secrets`, `/v1/sessions`, `/v1/datasets`, `/v1/volumes`, `/v1/models` (+ `/{id}/push-to-hf`, poll `/v1/hf_exports/{id}`), `/v1/webhooks` (+ `/secret`, `/test`, `/deliveries`), `/v1/metrics/export`, `/v1/settings/integrations/{wandb,huggingface}`, `/v1/billing/*`, `/v1/gpu/catalog`, `/v1/gpu/availability`, `/v1/regions`. DELETE exists for training jobs, datasets, deployments, models, volumes (and volume files). Errors are JSON `{"error": {"message", "code"?}}` (body-parsing 400/415/422 rejections are plain text): 400 invalid/not enabled, 401 bad key, 402 insufficient credit, 404 not found/not owned, 409 still referenced/wrong state, 429 always with a `code` (a cap, or `RATE_LIMITED` + `retry_after_seconds`), 501 not available, 503 + `Retry-After` (`deployment_waking`, `upstream_unavailable`). Lists take `limit` (most also an `after` cursor) and return `has_more`.
 
-MCP alternative: hosted server at `https://api.veri.studio/mcp` (read-only: `/readonly/mcp`), or local `veri mcp serve` (needs `veri-sdk[mcp]`). On the read-only endpoint the chat tool never wakes a parked deployment: it returns `{status: "scaled_to_zero", choices: [], error: ...}` instead. With writes enabled, chatting to a parked deployment wakes it (GPU boot, billing starts) and the tool returns `{status: "waking", ...}` with a retry hint right away: call it again after the hinted delay rather than waiting on the first call. The stop tool is permanent. Docs: https://docs.veri.studio/api-reference/introduction · https://docs.veri.studio/cli/mcp
+MCP alternative: hosted server at `https://api.veri.studio/mcp` (read-only: `/readonly/mcp`, which drops the 12 write and delete tools), or local `veri mcp serve` (needs `veri-sdk[mcp]`). On the read-only endpoint the chat tool never wakes a parked deployment: it returns `{status: "scaled_to_zero", choices: [], error: ...}` instead. With writes enabled, chatting to a parked deployment wakes it (GPU boot, billing starts) and the tool returns `{status: "waking", ...}` with a retry hint right away: call it again after the hinted delay rather than waiting on the first call. The stop tool is permanent. Docs: https://docs.veri.studio/api-reference/introduction · https://docs.veri.studio/cli/mcp
 
 ## Ground rules for agents
 
@@ -411,8 +470,8 @@ MCP alternative: hosted server at `https://api.veri.studio/mcp` (read-only: `/re
 2. Estimate before spending: `veri jobs create --dry-run` / `veri cost estimate`. GPU time bills real money (402 = out of credit).
 3. Never leave deployments running: stop or scale-to-zero after use.
 4. Prefer `--format json --quiet` when parsing output.
-5. On a "coming soon" 400, the provider/feature is gated off — pick a live alternative, don't retry.
-6. On a 429 with `CONCURRENT_JOB_LIMIT` / `ACTIVE_DEPLOYMENT_LIMIT`, free capacity first — retrying alone never clears it.
+5. On a 400 that says "not currently enabled" or "coming soon", the provider/feature is off: pick a live alternative, don't retry.
+6. On a 429 with a cap code (`CONCURRENT_JOB_LIMIT`, `ACTIVE_DEPLOYMENT_LIMIT`, ...), free capacity first: retrying alone never clears it. On `RATE_LIMITED`, wait `retry_after_seconds`.
 7. Deletes are permanent and mostly unprompted. Confirm with the user before deleting anything you did not create in this session.
 
 ## When stuck
@@ -420,9 +479,9 @@ MCP alternative: hosted server at `https://api.veri.studio/mcp` (read-only: `/re
 1. `veri <command> --help` — authoritative for the installed CLI version; `veri doctor` for install/auth/network.
 2. The docs: https://docs.veri.studio — key pages: [quickstart](https://docs.veri.studio/quickstart), [CLI overview](https://docs.veri.studio/cli), [full CLI reference + exit codes + env vars](https://docs.veri.studio/cli/reference), [training](https://docs.veri.studio/training), [deployments](https://docs.veri.studio/deployments), [API reference](https://docs.veri.studio/api-reference/introduction).
 3. Live API surface: `curl -s https://api.veri.studio/openapi.json` (public, no auth).
-4. Read the error body — Veri 400s explain themselves (gated features say "coming soon"; validation lists supported values).
+4. Read the error body: Veri 400s explain themselves (disabled features say "not currently enabled" or "coming soon"; validation lists supported values).
 ````
 
 ## Keeping it current
 
-Feature gates (providers and engines) change server-side without an SDK release. The skill tells agents to trust live signals — `veri gpu list`, `--dry-run`, and HTTP error messages — over any static table, including its own.
+Feature gates (providers and engines) change server-side without an SDK release. The skill tells agents to trust live signals (`veri gpu list` and HTTP error messages) over any static table, including its own.

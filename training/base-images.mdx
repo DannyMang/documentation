@@ -49,9 +49,9 @@ The exact versions differ by provider, because each provider delivers the stack 
 
 ## L3 custom-script base images
 
-Custom scripts run inside one of three curated base images. Each prebakes CUDA, PyTorch, and the Hugging Face stack; you layer your own training dependencies (`trl`, `unsloth`, `bitsandbytes`, `deepspeed`, and so on) at job time through a `requirements.txt`. See [custom training scripts](/training/custom-script) for the base-image catalog and the `requirements.txt` flow.
+Custom scripts run inside one of four curated base images. Each prebakes CUDA, PyTorch, and the Hugging Face stack; you layer your own training dependencies (`trl`, `unsloth`, `bitsandbytes`, `deepspeed`, and so on) at job time through a `requirements.txt`. See [custom training scripts](/training/custom-script) for the base-image catalog and the `requirements.txt` flow.
 
-All three images share the same CUDA and PyTorch foundation: `nvidia/cuda:12.8.1-cudnn-runtime` on Ubuntu 22.04, Python 3.10, and PyTorch 2.8.0 built for CUDA 12.8 (`cu128`).
+All four images share the same CUDA and PyTorch foundation: `nvidia/cuda:12.8.1-cudnn-runtime` on Ubuntu 22.04, Python 3.10, and PyTorch 2.8.0 built for CUDA 12.8 (`cu128`).
 
 ### veri/base
 
@@ -100,6 +100,17 @@ vLLM resolves its own compatible `flashinfer` build against torch 2.8 on CUDA 12
 | sglang[all] | 0.5.2 |
 
 SGLang is held at 0.5.2 (the torch-2.8 / CUDA-12.8 era). Newer SGLang releases force a torch and CUDA upgrade that would break the base pins, so do not assume a later SGLang is available. Its matching `sgl-kernel` resolves from the CUDA 12.8 wheel index.
+
+### veri/base-claude-agent
+
+`veri/base` plus the Claude Code CLI, for running a Claude Agent SDK harness unmodified in [harness training](/training/harness).
+
+| Package | Version |
+| --- | --- |
+| (everything in `veri/base`) | see above |
+| Node.js | 22.x |
+| `@anthropic-ai/claude-code` | 2.1.173 |
+| `claude-agent-sdk` (Python) | latest compatible |
 
 ## Hardware constraints
 

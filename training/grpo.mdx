@@ -38,11 +38,9 @@ Every field of the GRPO hyperparameters, with defaults:
 | `system_prompt` | `null` | When set, each string prompt becomes a system + user chat, so the model's chat template applies. Use it to tell the model the output format your reward checks. |
 | `lora_rank` | `null` | Train LoRA adapters of this rank instead of full finetuning. `null` means full finetune. |
 | `lora_alpha` | `null` | LoRA scaling factor. Defaults to `lora_rank` when unset. |
-| `load_in_4bit` | `false` | QLoRA: load the base in 4-bit (NF4) and train LoRA adapters on top. Requires `lora_rank`. Single-GPU. |
+| `load_in_4bit` | `false` | QLoRA: load the base in 4-bit (NF4) and train LoRA adapters on top. Requires `lora_rank` (a 400 at submit otherwise). Single-GPU. |
 | `use_unsloth` | `false` | Opt-in Unsloth memory optimization. Off by default; vanilla TRL is the base path. Single-GPU only. |
 | `use_liger` | `false` | Opt-in [liger-kernel](https://github.com/linkedin/Liger-Kernel) fused training kernels. Lowers peak memory but does not train faster. The entropy metric is not reported. Not supported with `gpu_count` > 1, `use_unsloth`, or GPT-NeoX/Pythia models; computes wrong log-probs on Gemma 2, Cohere and Granite models. |
-| `tunableop` | `false` | Opt-in PyTorch TunableOp GEMM autotuning (most useful on AMD MI300X). Tunes at runtime, so best for long runs with steady shapes. |
-| `hipblaslt` | `false` | Opt-in hipBLASLt GEMM routing on AMD (ROCm). Aimed at large-GEMM workloads; benchmarked slower on small models at batch 1, so measure before adopting. No-op on NVIDIA. |
 
 ## LoRA and QLoRA
 
@@ -165,8 +163,5 @@ If your model can't follow the *format* you want yet (e.g. won't wrap answers in
   </Card>
   <Card title="Submit a job" icon="play" href="/api-reference/introduction">
     Wire it all into `training_jobs.create`.
-  </Card>
-  <Card title="Verl GSM8K PPO demo" icon="book" href="/demos/verl-gsm8k-ppo">
-    Planned math reasoning walkthrough with metrics interpretation.
   </Card>
 </CardGroup>

@@ -31,8 +31,8 @@ veri annotation-queues create refund-review --target-type trace \
 Add explicit targets:
 
 ```bash
-veri annotation-queues add refund-review --request-id req_9b1f2c --request-id req_77ad01
-veri annotation-queues add convo-review --thread dep_ab12cd34:thread-8812
+veri annotation-queues add refund-review --request-id 9b1f2c4a7d01 --request-id 77ad01e3c5b2
+veri annotation-queues add convo-review --thread 4f2a9c1e7b3d:thread-8812
 veri annotation-queues add exp-review --experiment-item exp_5c1e9a0b77f2:3.1
 ```
 
@@ -40,7 +40,7 @@ Or add the targets of matching scores, for example every trace your judge harnes
 
 ```bash
 veri annotation-queues add refund-review --from-evaluator helpful --failed \
-  --deployment dep_ab12cd34 --limit 200
+  --deployment 4f2a9c1e7b3d --limit 200
 ```
 
 `--passed`, `--failed`, `--min-score`, and `--max-score` filter by the score; `--experiment` limits the selection to one experiment's items. Targets already in the queue are counted, not added twice.
@@ -57,7 +57,7 @@ Completing an item:
 
 Human scores on experiment items are calibration data: they never change an experiment's results, verdict, or the gate's evidence.
 
-Building your own review tool? The same flow is in the API and SDK: `client.annotation_queues.next(queue)` reserves and returns the next item with its context (or `None` when the queue is empty), then `complete(queue, item_id, {"tone": "good"}, correction=..., append_to_dataset="golden")`, `skip`, or `release`. Subscribe to the `annotation.completed` [webhook](/webhooks) to react to reviews.
+Building your own review tool? The same flow is in the API and SDK: `client.annotation_queues.next(queue)` reserves and returns the next item with its context (or `None` when the queue is empty), then `complete(queue, item_id, {"tone": "good"}, correction=..., append_to_dataset="golden")` (one value for every evaluator the queue pins; `item_id` is `result["item"]["id"]` of what `next` returned), `skip`, or `release`. Subscribe to the `annotation.completed` [webhook](/webhooks) to react to reviews.
 
 ## Judge and human agreement
 

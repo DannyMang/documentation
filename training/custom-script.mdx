@@ -26,7 +26,7 @@ Veri runs your entrypoint inside the base image on the GPU, with a set of `VERI_
 | --- | --- |
 | `VERI_DATA_DIR` | Your dataset is materialized here (if you attach one). |
 | `VERI_OUTPUT_DIR` | Write checkpoints and artifacts here. Everything in this dir is captured to your account. |
-| `VERI_METRICS_FILE` | Append metrics here (or use `veri.log_metrics`, below). |
+| `VERI_METRICS_FILE` | Append metrics here (or use `veri_sdk.log_metrics`, below). |
 | `VERI_NUM_GPUS` | GPUs on this node. |
 | `VERI_NODE_RANK` | This node's 0-based rank in the gang. Single node: `0`. |
 | `VERI_NUM_NODES` | Number of nodes in the gang (`N`). Single node: `1`. |
@@ -45,6 +45,7 @@ Pick the base that matches your stack. Each prebakes the slow, compiled pieces s
 | `veri/base` | CUDA + PyTorch + the Hugging Face stack (transformers, datasets, accelerate, peft) | Most custom training and SFT-style loops |
 | `veri/base-vllm` | `veri/base` + vLLM | OpenRLHF-style scripts, any vLLM-rollout RL |
 | `veri/base-sglang` | `veri/base` + SGLang | slime and SGLang-based stacks |
+| `veri/base-claude-agent` | `veri/base` + Node.js 22, the Claude Code CLI and the `claude-agent-sdk` Python package | Claude Agent SDK harnesses ([harness training](/training/harness)) |
 
 <Note>
   Custom scripts run on NVIDIA GPUs only for now: the base-image catalog is CUDA-tier. A submit with an AMD `gpu_type` (e.g. `MI300X-192GB`) returns a 400. AMD support is planned.
@@ -94,14 +95,14 @@ Submit it with the CLI:
 
 ```bash
 veri run-script ./my-run \
-  --entrypoint "torchrun --nproc_per_node=$VERI_NUM_GPUS train.py" \
+  --entrypoint 'torchrun --nproc_per_node=$VERI_NUM_GPUS train.py' \
   --base-image veri/base \
   --gpu-type L4-24GB \
   --gpu-count 1 \
   --requirements ./my-run/requirements.txt
 ```
 
-The CLI uploads your code, submits the job, and prints the job id and dashboard link.
+The CLI uploads your code, submits the job, and prints the job id and dashboard link. Keep the entrypoint in single quotes so `$VERI_NUM_GPUS` reaches the GPU machine instead of being expanded (to nothing) by your local shell.
 
 ## Multi-node
 
@@ -197,4 +198,4 @@ For reward and loss curves you have two options:
 - **Node counts** are exact: `1`, `2`, `4`, `8`, or `16`. A gang launches at the requested size or the submit fails fast (no cap-down to fewer nodes).
 - **Multi-node is whole-box, AWS, custom script only**: `--gpu-count 8` with `--gpu-type A100-80GB` or `H100-80GB` on AWS. Managed methods (GRPO, SFT, DPO) are single-node.
 - **No shared filesystem** across nodes yet: each node writes to its own `VERI_OUTPUT_DIR`. Have rank 0 save, or shard with `torch.distributed.checkpoint`.
-- **Three base images** (above). If your stack does not fit, a bring-your-own container image is the escape hatch (coming soon).
+- **Four base images** (above). If your stack does not fit, a bring-your-own container image is the escape hatch (coming soon).

@@ -1,4 +1,5 @@
 ---
+noindex: true
 title: "Hugging Face (your account)"
 sidebarTitle: "Hugging Face BYOC (coming soon)"
 description: "Deploy to a dedicated HF Inference Endpoint under your own Hugging Face account — HF bills the compute, and it costs no Veri credits."
@@ -7,7 +8,7 @@ keywords: ["Hugging Face", "BYOC", "bring your own cloud", "Inference Endpoints"
 
 `provider="huggingface"` is different from every other provider: the deployment does not run on GPUs Veri rents. Instead, Veri creates and manages a dedicated [HF Inference Endpoint](https://huggingface.co/inference-endpoints) **under your own Hugging Face account** — your namespace, your billing, your data path.
 
-It is currently feature-gated: a `provider="huggingface"` create returns a "coming soon" 400 until the gate lifts.
+It is currently feature-gated: a `provider="huggingface"` create returns `400` with `Serving provider 'huggingface' is not currently enabled.` until the gate lifts.
 
 ## Why use it
 

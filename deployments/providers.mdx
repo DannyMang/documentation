@@ -1,13 +1,11 @@
 ---
 title: "Serving providers"
 sidebarTitle: "Overview"
-description: "Choose where your deployment runs: AWS (default), GCP, DigitalOcean, or Hugging Face (BYOC), and how to check the live catalog from the CLI."
-keywords: ["providers", "serving", "deployments", "AWS", "GCP", "AMD", "MI300X", "DigitalOcean", "Hugging Face"]
+description: "Where deployments run today (AWS) and how to check the live GPU catalog from the CLI."
+keywords: ["providers", "serving", "deployments", "AWS", "GPU catalog"]
 ---
 
-Deployments run on four providers. You pick one at create time with the `provider` field; it defaults to `aws`. There is no automatic cross-provider routing: you pick the provider explicitly, and capacity errors don't spill to another cloud.
-
-One provider is special: [`huggingface`](/deployments/providers/huggingface) is BYOC — the deployment runs as an HF Inference Endpoint under **your own Hugging Face account**, billed by HF, at zero Veri credits.
+Deployments run on AWS. The `provider` field defaults to `aws`, so you can leave it out. Capacity errors don't spill to another cloud: retry later or pick another GPU shape.
 
 ## Providers at a glance
 
@@ -17,14 +15,11 @@ One provider is special: [`huggingface`](/deployments/providers/huggingface) is 
 | [`aws`](/deployments/providers/aws) (default) | `A10G-24GB` | 24 GB | 1 or 4 | Available |
 | [`aws`](/deployments/providers/aws) (default) | `A100-80GB` | 80 GB | 8 (whole node) | Available |
 | [`aws`](/deployments/providers/aws) (default) | `H100-80GB` | 80 GB | 8 (whole node) | Available |
-| [`gcp`](/deployments/providers/gcp) | `A100-80GB` | 80 GB | 1 | Coming soon |
-| [`digitalocean`](/deployments/providers/digitalocean) | `H100-80GB`, `L40S-48GB`, `MI300X-192GB` | 80/48/192 GB | 1 | Coming soon |
-| [`huggingface`](/deployments/providers/huggingface) (BYOC: your HF account) | `A10G-24GB`, `L4-24GB`, `L40S-48GB`, `A100-80GB`, `H100-80GB` | 24-80 GB | 1-8 | Coming soon |
 
 Each provider sells fixed node shapes. The `gpu_count` you request must match one of the counts above — asking for a shape a provider doesn't sell returns a 400 at create, before anything boots.
 
 <Note>
-  Rows marked coming soon are wired but feature-gated: a create returns a 400 until the gate lifts.
+  Other serving providers are not available yet: a create with any other `provider` returns `400` with `Serving provider '<provider>' is not currently enabled.`
 </Note>
 
 ## Choosing a provider
@@ -34,8 +29,8 @@ client.deployments.create(
     model="Qwen/Qwen2.5-0.5B-Instruct",
     source="huggingface",
     name="my-deploy",
-    gpu={"gpu_type": "A100-80GB", "gpu_count": 1},
-    provider="gcp",
+    gpu={"gpu_type": "L4-24GB", "gpu_count": 1},
+    provider="aws",
 )
 ```
 
@@ -49,32 +44,23 @@ The live version of the matrix above (including current prices) is one command:
 veri gpu list
 ```
 
-This renders the GPU catalog: one row per (GPU type, provider) with a **training** and a **serving** column — the node counts you can order for each workload (`-` = not offered, `(soon)` = wired but feature-gated off) and the per-GPU $/hr.
+This renders the GPU catalog: one row per (GPU type, provider) with a **training** and a **serving** column: the node counts you can order for each workload (`-` = not offered, `(soon)` = not available yet) and the per-GPU $/hr.
 
 Any filter switches to the live availability view:
 
 ```bash
 veri gpu list --gpu-type H100-80GB      # one SKU across providers
 veri gpu list --provider digitalocean   # per-region droplet capacity
-veri gpu list --format json             # machine-readable, incl. usd_per_hour
+veri gpu list --format json             # machine-readable catalog, incl. usd_per_gpu_hr
 ```
 
-`AVAILABLE` is a real-time count (DigitalOcean per-region catalog); `OFFERED` (AWS) is catalog + a Spot placement-score proxy, not a launch guarantee.
+In that view, a `status` of `AVAILABLE` is a live signal (DigitalOcean per-region catalog, Vast offers); `OFFERED` (AWS) is catalog plus a Spot placement-score proxy, not a launch guarantee.
 
 ## Provider guides
 
 <CardGroup cols={2}>
   <Card title="AWS (default)" icon="aws" href="/deployments/providers/aws">
     L4/A10G single GPUs and whole-node A100/H100.
-  </Card>
-  <Card title="GCP" icon="google" href="/deployments/providers/gcp">
-    Genuine single-GPU A100 VMs (coming soon).
-  </Card>
-  <Card title="DigitalOcean" icon="droplet" href="/deployments/providers/digitalocean">
-    H100, L40S, and MI300X droplets — coming soon.
-  </Card>
-  <Card title="Hugging Face (BYOC)" icon="cloud-arrow-up" href="/deployments/providers/huggingface">
-    An HF Inference Endpoint under your own account — HF bills the compute, zero Veri credits.
   </Card>
 </CardGroup>
 

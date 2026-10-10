@@ -5,7 +5,7 @@ description: "Recipes: deploy + chat + stop, serve a trained model, and swap mod
 keywords: ["examples", "deploy", "chat", "train", "OpenAI SDK"]
 ---
 
-Three runnable recipes. All assume `from veri_sdk import Client; client = Client()` and `veri login` already done.
+Four runnable recipes. All assume `from veri_sdk import Client; client = Client()` and `veri login` already done.
 
 ## Recipe 1 — Deploy, chat, stop
 
@@ -39,7 +39,7 @@ After a training job completes, deploy it directly — no checkpoint download ne
 
 ```python
 # Assume job is a completed training_job from /training
-job = client.training_jobs.get("tj_your_completed_job")
+job = client.training_jobs.get("<your-completed-job-id>")
 
 assert job.status == "completed", f"Job not done: {job.status}"
 
@@ -108,7 +108,7 @@ This works the same way with LangChain, LlamaIndex, or any other library that le
 
 ## Recipe 4 — Compare two models on the same prompt
 
-Spin up two deployments side by side and ping both.
+Spin up two deployments side by side and ping both. Together they use both of a workspace's 2 default deployment replicas, so stop any other running deployment first.
 
 ```python
 prompts = ["What is 12 + 7?", "Write a haiku about coffee.", "Explain RLHF in one sentence."]

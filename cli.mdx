@@ -52,6 +52,8 @@ veri login --token vk_... --url https://api.veri.studio
 ```
 </CodeGroup>
 
+On a machine without a browser (an SSH session), `veri login --no-browser` skips opening one and goes straight to the paste prompt. `--timeout` sets how many seconds the browser flow waits for you to authorize (default 300) before it falls back to pasting.
+
 Confirm:
 
 ```bash
@@ -62,7 +64,7 @@ veri doctor
 `veri whoami` shows the account it resolves to (user and email), the active workspace (name, id, personal or team), the active key, config file path, and that workspace's credit balance. `veri doctor` runs a health check against the control plane.
 
 <Note>
-  Credentials live at `~/.config/veri/config.toml` on Linux (or `$XDG_CONFIG_HOME/veri/config.toml`) and `~/Library/Application Support/veri/config.toml` on macOS — `veri whoami` prints the active path. The CLI auto-migrates from the legacy `~/.veri/credentials.json` path when neither `VERI_API_KEY` nor `VERI_API_URL` is set in the environment. Env vars take precedence over the file.
+  Credentials live at `~/.config/veri/config.toml` on Linux (or `$XDG_CONFIG_HOME/veri/config.toml`) and `~/Library/Application Support/veri/config.toml` on macOS. `veri whoami` prints the active path. The CLI auto-migrates the legacy `~/.veri/credentials.json` file the first time it runs without a config file, unless `VERI_CONFIG_PATH` or `XDG_CONFIG_HOME` is set. Env vars take precedence over the file.
 </Note>
 
 ## Command groups
@@ -80,8 +82,17 @@ veri doctor
 | `veri gpu` | [Reference](/cli/reference) | `list`, `compare` |
 | `veri billing` | [Reference](/cli/reference) | `balance`, `transactions` |
 | `veri config` | [Reference](/cli/reference) | `show`, `set` |
+| `veri regions` | [Reference](/cli/reference#regions) | `list` |
+| `veri cost` | [Reference](/cli/reference#cost) | `estimate`, `summary` |
+| `veri api-keys` | [Reference](/cli/reference#api-keys) | Create, list, revoke API keys and model access keys |
+| `veri secrets` | [Reference](/cli/reference#secrets) | Workspace secrets for agent sessions |
+| `veri wandb` | [Reference](/cli/reference#wandb) | Weights & Biases key and default project |
+| `veri hf` | [Hugging Face](/training/huggingface) | Connect a Hugging Face token: `set`, `status`, `remove` |
+| `veri environments`, `veri skills`, `veri sessions` | [Agents](/agents/environments) | Agent environments, skills and sessions |
+| `veri evaluators`, `veri experiments`, `veri annotation-queues` | [Reference](/cli/reference#evals) | Evaluations |
+| `veri mcp` | [MCP](/cli/mcp) | Run an MCP server exposing Veri |
 
-Plus top-level: `veri login`, `veri logout`, `veri whoami`, `veri doctor`, `veri version`, `veri init`.
+Plus top-level: `veri login`, `veri logout`, `veri whoami`, `veri doctor`, `veri version`, `veri init`, `veri deploy` (deploy a Hugging Face model in one step, see [Deployments](/cli/deployments#deploy-a-hugging-face-model-in-one-step)), `veri run-script` (a [custom training script](/training/custom-script)) and `veri run-harness` (RL-train the model inside [your agent harness](/training/harness)).
 
 ## Global flags
 
@@ -100,7 +111,6 @@ These flags are spliced into every command group by Veri's Typer wrapper:
 | `0` | Success |
 | `1` | User error (bad arguments, missing files) |
 | `2` | API error from the control plane (4xx/5xx) |
-| `3` | Network error (DNS, timeout) |
 | `4` | Auth error (missing/expired key) |
 | `130` | Interrupted by SIGINT |
 
@@ -120,7 +130,7 @@ These flags are spliced into every command group by Veri's Typer wrapper:
     Serve, chat, stop.
   </Card>
   <Card title="Volumes" icon="hard-drive" href="/cli/volumes">
-    Managed storage for datasets and checkpoints.
+    Persistent named storage for your files.
   </Card>
   <Card title="Reference" icon="book" href="/cli/reference">
     Full command table, all flags, all exit codes.
