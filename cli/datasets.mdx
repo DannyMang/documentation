@@ -47,12 +47,11 @@ The validator checks:
 - Every row is a JSON object (not a list or scalar).
 - Row count is `> 0`.
 - No duplicate `id` field values (when an `id` column exists).
-- Required columns are present, if specified.
 
-To skip validation:
+To skip the local check (the server still rejects lines that are not valid JSON):
 
 ```bash
-veri datasets upload bad.jsonl --skip-validation
+veri datasets upload dupes.jsonl --skip-validation
 ```
 
 <Note>
@@ -63,7 +62,7 @@ veri datasets upload bad.jsonl --skip-validation
 
 ```bash
 DS_ID=$(veri datasets upload data.jsonl --quiet)
-echo $DS_ID    # ds_abc123
+echo $DS_ID    # 0a1500ea6128
 ```
 
 ## Connect a HuggingFace dataset
@@ -97,7 +96,7 @@ veri datasets connect-hf openai/gsm8k \
 veri datasets check ./datasets/train.jsonl
 ```
 
-Same validator as `upload --check`, but standalone. Exits `1` on issues:
+Same validator `upload` runs, but standalone. Exits `1` on issues:
 
 ```bash
 $ veri datasets check ok.jsonl
@@ -127,8 +126,8 @@ Reads the first N JSON rows from a local file. Useful before upload; for registe
 ```bash
 veri datasets list                              # default 20 rows
 veri datasets list --limit 100 --format json
-veri datasets get ds_abc123
-veri datasets delete ds_abc123
+veri datasets get 0a1500ea6128
+veri datasets delete 0a1500ea6128
 ```
 
 `delete` is irreversible. The CLI exits `0` and prints the deleted ID; no confirmation prompt.
@@ -142,10 +141,10 @@ veri datasets create acme-feedback --format preference
 veri datasets append acme-feedback ./new-pairs.jsonl
 veri datasets snapshot acme-feedback --note "week 2"
 veri run configs/train.toml --set dataset.id=acme-feedback@latest
-veri datasets diff acme-feedback snap-1 snap-2
+veri datasets diff acme-feedback snap-1     # snap-1 vs the live head
 ```
 
-Every stream command accepts the dataset's name or `ds_...` id. `snapshot --quiet` prints the pinned `ds_...@snap-N` id for scripting.
+Every stream command accepts the dataset's name or id. `snapshot --quiet` prints the pinned `<id>@snap-N` reference for scripting. Pass a second snapshot to `diff` (`snap-1 snap-2`) once you have cut one.
 
 ## Exit codes
 

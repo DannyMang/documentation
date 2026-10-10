@@ -39,7 +39,7 @@ job = client.training_jobs.create(
   DigitalOcean GPU capacity fluctuates minute-to-minute. A submit that hits `CAPACITY_UNAVAILABLE` after retrying across regions is not billed — check `veri gpu list --provider digitalocean` and retry.
 </Warning>
 
-`veri gpu list` shows one `AVAILABLE` entry per region with current capacity, or a single `UNAVAILABLE` row when a shape has no capacity anywhere. This signal comes from DigitalOcean's size catalog, which can lag real launch acceptance in both directions.
+`veri gpu list --provider digitalocean` shows one `AVAILABLE` entry per region with current capacity, or a single `UNAVAILABLE` row when a shape has no capacity anywhere. This signal comes from DigitalOcean's size catalog, which can lag real launch acceptance in both directions.
 
 ## Where to go next
 

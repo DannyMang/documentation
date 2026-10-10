@@ -1,11 +1,11 @@
 ---
 title: "Examples"
 sidebarTitle: "Examples"
-description: "Three end-to-end training recipes: math reasoning with GRPO on a single L4, a custom multi-signal reward, and video generation LoRA SFT."
-keywords: ["examples", "math", "GSM8K", "custom reward", "video generation", "LoRA", "CogVideoX"]
+description: "Two end-to-end training recipes: math reasoning with GRPO on a single L4, and a custom multi-signal reward."
+keywords: ["examples", "math", "GSM8K", "custom reward", "LoRA"]
 ---
 
-Three runnable examples, each tuned for a different use case. All snippets work against `https://api.veri.studio` after `veri login`.
+Two runnable examples, each tuned for a different use case. All snippets work against `https://api.veri.studio` after `veri login`.
 
 ## Math reasoning with GRPO
 
@@ -126,10 +126,10 @@ For standalone merged weights, push the finished model to your Hugging Face acco
   dep.wait()
   ```
 
-- **Adapter on its base model.** Save the job as an adapter (`client.models.create_from_training_job(job.id, name="qwen-1.5b-gsm8k", artifact="adapter")`). Create a deployment of `Qwen/Qwen2.5-1.5B-Instruct` with `"serving_mode": "multi_adapter"`, then attach the adapter under an alias with `POST /v1/deployments/{id}/adapters`. Requests whose `model` is that alias are answered by the adapter, and one deployment can serve many adapters of the same base.
+- **Adapter on its base model (beta).** Save the job as an adapter (`model = client.models.create_from_training_job(job.id, name="qwen-1.5b-gsm8k", artifact="adapter")`). Create a deployment of `Qwen/Qwen2.5-1.5B-Instruct` with `"serving_mode": "multi_adapter"` in the `POST /v1/deployments` body (the SDK's `client.deployments.create` has no `serving_mode` argument), then attach the adapter under an alias with `POST /v1/deployments/{id}/adapters` (SDK: `client.deployments.attach_adapter(deployment_id, serve_name="qwen-1.5b-gsm8k", model_id=model.id)`). Requests whose `model` is that alias are answered by the adapter, and one deployment can serve many adapters of the same base. Multi-adapter fleets are in beta: see [Multi-adapter fleets](/deployments/api#multi-adapter-fleets) for the known limitations.
 
 <Note>
-  For larger models, use `A100-80GB` or `H100-80GB`; on AWS these come as whole 8-GPU nodes (`gpu_count=8`). Today `gpu_count` above 1 shards one copy of the model across the GPUs: more memory, not more speed. Multi-GPU data-parallel training is planned.
+  For larger models, use `A100-80GB` or `H100-80GB`; on AWS these come as whole 8-GPU nodes (`gpu_count=8`). For GRPO, `gpu_count` above 1 shards one copy of the model across the GPUs: more memory, not more speed. Data-parallel training on several GPUs is available for `sft_text` and `dpo`; see [Multi-GPU training](/training/multi-gpu).
 </Note>
 
 ## Custom multi-signal reward
@@ -148,12 +148,13 @@ def reward(completions, answer, **kwargs):
         # 1. Format: must wrap in <answer></answer>
         format_score = 0.3 if re.search(r"<answer>.*?</answer>", text, re.DOTALL) else 0.0
 
-        # 2. Correctness: ground truth appears inside the tags
+        # 2. Correctness: the expected answer appears inside the tags.
+        #    GSM8K answers end in "#### <number>"; plain answers pass through unchanged.
         m = re.search(r"<answer>(.*?)</answer>", text, re.DOTALL)
         correct_score = 0.0
         if m and expected:
             inner = m.group(1).strip()
-            if expected.strip() in inner:
+            if expected.split("####")[-1].strip() in inner:
                 correct_score = 0.5
 
         # 3. Length: penalize responses > 300 chars
@@ -168,11 +169,11 @@ Total bounded at `1.0`. Each weight is tunable. Test locally before submitting:
 ```bash
 python -c "
 from multi_signal_reward import reward
-print(reward(
-    ['<answer>4</answer>', 'I think it is 4', 'The answer is 4. Let me explain at length...' + 'X' * 500],
+print([round(s, 2) for s in reward(
+    ['<answer>4</answer>', 'I think it is 4', '<answer>4</answer> Let me explain at length...' + 'X' * 500],
     ['4', '4', '4'],
-))
-# → [0.8, 0.0, 0.7] — first wins, second has no format, third gets length penalty
+)])
+# [1.0, 0.2, 0.95]: the first scores full marks, the second has no tags, the third loses part of the length credit
 "
 ```
 
@@ -190,45 +191,6 @@ job = client.training_jobs.create(
     gpu_count=1,
 )
 ```
-
-## Video generation LoRA SFT
-
-Different method, different runner. Trains a LoRA adapter on top of a video diffusion model.
-
-<Note>
-  Preview: the 8-process launch for `sft_video_gen` on an 8-GPU node has not been verified end to end yet.
-</Note>
-
-```python
-job = client.training_jobs.create(
-    base_model="THUDM/CogVideoX-5b",
-    dataset_id=video_dataset.id,
-    output_name="cogvideo-5b-custom",
-    method="sft_video_gen",     # not grpo
-    # No reward_source: SFT is supervised, not RL
-    hyperparameters={
-        "learning_rate": 1e-3,
-        "num_epochs": 30,
-        "lora_rank": 64,
-        "lora_alpha": 64,
-        "resolution_height": 480,
-        "resolution_width": 720,
-        "num_frames": 49,
-        "fps": 8,
-        "batch_size": 1,
-        "gradient_accumulation_steps": 4,
-    },
-    gpu_type="A100-80GB",   # video gen requires 80GB; A100-40GB rejected
-    gpu_count=8,            # on AWS, A100 comes as a whole 8-GPU node
-)
-
-job.wait(poll_interval=60)
-job.download(output_dir="./video-checkpoints")
-```
-
-Supported video gen models: `THUDM/CogVideoX-5b`, `THUDM/CogVideoX-2b`, `Wan-AI/Wan2.1-T2V-14B`, `Wan-AI/Wan2.1-T2V-1.3B`, `Lightricks/LTX-Video`, `genmo/mochi-1-preview`.
-
-The output is a LoRA adapter (small file), not a full checkpoint: load it on top of the base model at inference time.
 
 ## Where to go next
 

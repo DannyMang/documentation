@@ -36,8 +36,10 @@ def reward(completions, answer, **kwargs):
 
         format_ok = bool(re.search(r"<answer>.*?</answer>", text, re.DOTALL))
 
+        # GSM8K-style answers end in "#### <number>"; plain answers pass through unchanged.
+        gold = expected.split("####")[-1].strip() if expected else ""
         m = re.search(r"<answer>(.*?)</answer>", text, re.DOTALL)
-        correct = bool(m and expected and expected.strip() in m.group(1).strip())
+        correct = bool(m and gold and gold in m.group(1).strip())
 
         scores.append(0.5 * float(format_ok) + 0.5 * float(correct))
     return scores
@@ -78,7 +80,7 @@ curl -X POST https://api.veri.studio/v1/training_jobs \
   -H "Content-Type: application/json" \
   -d "$(jq -n --rawfile src math_reward.py '{
     base_model: "Qwen/Qwen3-4B",
-    dataset_id: "ds_abc123",
+    dataset_id: "9f2c81ab04de",
     method: "grpo",
     reward_source: $src,
     output_name: "qwen-math",
@@ -87,29 +89,41 @@ curl -X POST https://api.veri.studio/v1/training_jobs \
 ```
 </CodeGroup>
 
-From the CLI, `veri jobs create configs/train.toml` reads `[reward].file`, or override it inline with `--reward ./reward.py`. The CLI runs an AST lint before submitting (the file parses as Python and defines at least one function), so a broken file fails locally instead of at the API.
+From the CLI, `veri jobs create configs/train.toml` reads `[reward].file`, or override it inline with `--reward ./reward.py` (a relative path resolves against the config file's directory, like `[reward].file`). The CLI runs an AST lint before submitting (the file parses as Python and defines at least one function), so a broken file fails locally instead of at the API.
 
-A `method=grpo` or `method=grpo_harness` job requires a reward (or `environments`, which is mutually exclusive with reward sources). `sft_text`, `dpo`, `sft_video_gen`, and `custom_script` jobs must omit it: the dataset is their training signal.
+A `method=grpo` or `method=grpo_harness` job requires a reward. `sft_text` and `dpo` jobs must omit it (the dataset is their training signal), and so must `custom_script` jobs, which own their training loop.
 
 The job response carries `reward_count` (the number of attached sources; `null` for reward-free methods).
 
 **Limits:** up to 8 sources per job, 256 KiB each, and every source must define a function. Violations are HTTP 400 at submit.
 
-## Sandbox + limits
+## Where rewards run
 
-Reward functions run inside the training runner. They have:
+Your reward is imported and called inside the training process on the GPU machine. It can use the Python standard library and the packages already installed on the training image; there is no way to declare extra dependencies.
 
-- **No network egress** — calls to external APIs will silently fail or hang
-- **Standard library + the runner image's pre-installed packages** only — no `pip install` at runtime
-- **A timeout** per rollout batch — exceeding it fails the job with `error.code = "training_error"`
-
-For PoC, treat this as "trusted users only." Real isolation (gVisor / Firecracker) is on the Phase 2 roadmap.
+There is no separate sandbox and no per-call timeout: the machine has network access, and a reward that hangs (for example on a slow network call) stalls the whole job. Keep rewards fast and deterministic, and avoid network calls. An exception raised by your reward fails the job with `error.code = "training_error"`.
 
 ## Composing rewards
 
 A common pattern is to weight multiple signals:
 
 ```python
+import re
+
+
+def has_correct_format(text):
+    return re.search(r"<answer>.*?</answer>", text, re.DOTALL) is not None
+
+
+def has_correct_answer(text, expected):
+    m = re.search(r"<answer>(.*?)</answer>", text, re.DOTALL)
+    return bool(m) and expected.split("####")[-1].strip() in m.group(1)
+
+
+def length_penalty(text, target):
+    return max(0.0, 1.0 - max(0, len(text) - target) / 1000)
+
+
 def reward(completions, answer, **kwargs):
     scores = []
     for completion, expected in zip(completions, answer):
@@ -133,8 +147,14 @@ Each function has the standard `trl` signature and returns one score per complet
 
 ```python
 # correctness.py
+import re
 def reward(completions, answer, **kwargs):
-    return [1.0 if c == a else 0.0 for c, a in zip(completions, answer)]
+    scores = []
+    for c, a in zip(completions, answer):
+        text = c[-1]["content"] if isinstance(c, list) else str(c)
+        m = re.search(r"<answer>(.*?)</answer>", text, re.DOTALL)
+        scores.append(1.0 if m and m.group(1).strip() == a.split("####")[-1].strip() else 0.0)
+    return scores
 
 # format.py
 import re

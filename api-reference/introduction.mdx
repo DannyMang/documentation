@@ -23,13 +23,14 @@ API keys use the `vk_` prefix and are hashed server-side. Manage keys from the [
 
 ## Endpoints
 
+These tables cover the core resources. Every endpoint, including evals, agents, webhooks, secrets and models, has its own page in this API reference with the full request and response schema.
+
 ### Datasets
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `POST` | `/v1/datasets` | Upload a JSONL dataset |
 | `POST` | `/v1/datasets/connect` | Register an external dataset source |
-| `POST` | `/v1/datasets/connect/validate` | Validate a source connection |
 | `GET` | `/v1/datasets` | List datasets |
 | `GET` | `/v1/datasets/{id}` | Get dataset info |
 
@@ -95,7 +96,7 @@ See the [Volumes guide](/volumes) for usage.
 
 - **JSON endpoints** (`POST /v1/training_jobs`): Use `Content-Type: application/json` with a JSON body. Reward functions for GRPO jobs ride this body as source text (`reward_source`), not as a file upload.
 - **Upload endpoints** (`POST /v1/datasets`, code artifacts): Use `multipart/form-data`.
-- **Connector endpoints** (`POST /v1/datasets/connect`, `POST /v1/datasets/connect/validate`): Send JSON bodies.
+- **Connector endpoints** (`POST /v1/datasets/connect`): Send JSON bodies.
 
 ## Response Format
 
@@ -114,7 +115,7 @@ Single-resource endpoints return one object. List endpoints return cursor-pagina
 **Success (2xx)**
 ```json
 {
-  "id": "job_abc123",
+  "id": "3f9c2a7b1d40",
   "object": "training_job",
   "status": "queued",
   "base_model": "Qwen/Qwen3-4B",
@@ -133,37 +134,53 @@ Single-resource endpoints return one object. List endpoints return cursor-pagina
 ```json
 {
   "error": {
-    "type": "invalid_request_error",
-    "code": null,
-    "message": "Invalid API key",
-    "param": null
+    "message": "Invalid, revoked or expired API key"
   }
 }
 ```
+
+Errors a client can branch on also carry a machine-readable `code`, and retryable ones (`429` rate limit, `503`) add `retry_after_seconds` and a `Retry-After` header:
+
+```json
+{
+  "error": {
+    "code": "RATE_LIMITED",
+    "message": "rate limit exceeded (120 requests per 60s for this key); retry after the current window resets",
+    "retry_after_seconds": 59
+  }
+}
+```
+
+Some `409` refusals add structured fields next to `code` (for example, the [promotion gate](/evals/promotion-gate) lists the failing evaluators). A body that is not valid JSON, has a missing or mistyped field, or is sent without `Content-Type: application/json` is rejected before it reaches the endpoint, with a plain-text message instead of JSON (`400`, `422` or `415`).
 
 ## Common Status Codes
 
 | Status | Meaning |
 |--------|---------|
-| 400 | Invalid request or unsupported state transition |
-| 401 | Missing or invalid API key |
-| 402 | Insufficient credit balance |
-| 404 | Resource not found or not owned by the caller |
-| 422 | Request body failed schema validation |
+| 400 | Invalid request: malformed JSON, a failed validation, or an unsupported state transition |
+| 401 | Missing, invalid, revoked or expired API key, or a [model access key](/secrets#model-access-keys) used outside its deployment |
+| 402 | Insufficient credit balance, or no billing account linked to the workspace yet |
+| 404 | Resource not found or not in your workspace |
+| 409 | Conflict: the name is taken, or the resource's current state does not allow the action |
+| 415 | JSON endpoint called without `Content-Type: application/json` |
+| 422 | Request body has a missing or mistyped field |
+| 429 | Rate limit (`RATE_LIMITED`: 120 requests per minute per key, 3,600 per minute for `chat/completions`; honor `Retry-After`), or a workspace concurrency cap such as `CONCURRENT_JOB_LIMIT` or `ACTIVE_DEPLOYMENT_LIMIT` (no `Retry-After`: finish or stop something first) |
 | 500 | Unexpected server error |
+| 501 | The feature is not available on this server yet |
+| 503 | Temporarily unavailable, for example a deployment waking from scale-to-zero (`deployment_waking`); retry after `Retry-After` seconds |
 
 ## Pagination
 
-List endpoints support cursor-based pagination with `limit` and `after` query parameters:
+Most list endpoints support cursor-based pagination with `limit` and `after` query parameters:
 
 ```bash
-curl "https://api.veri.studio/v1/datasets?limit=10&after=ds_abc123" \
+curl "https://api.veri.studio/v1/datasets?limit=10&after=3f9c2a7b1d40" \
   -H "Authorization: Bearer vk_your_api_key"
 ```
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `limit` | integer | 20 | Maximum number of items to return |
+| `limit` | integer | 20 (deployments: 50) | Maximum number of items to return |
 | `after` | string | — | ID of the last item from the previous page (cursor) |
 
 The response includes a `has_more` field indicating whether additional pages exist:
@@ -176,4 +193,4 @@ The response includes a `has_more` field indicating whether additional pages exi
 }
 ```
 
-To paginate, pass the `id` of the last item in `data` as the `after` parameter in the next request.
+To paginate, pass the `id` of the last item in `data` as the `after` parameter in the next request. A few short lists are returned whole, without a cursor (for example, webhook endpoints, up to 100). Each endpoint's page lists the parameters it accepts.

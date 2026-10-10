@@ -63,10 +63,6 @@ Once connected, managed LLM training jobs (`grpo`, `sft_text`, `dpo`) report to 
 
 The same metrics also stream to Veri's native charts on the job page. W&B is additive, not a replacement, and jobs behave identically if W&B is ever unreachable: training never fails because of a logging integration.
 
-<Note>
-  `sft_video_gen` jobs don't report to W&B yet; their metrics are available on the Veri job page.
-</Note>
-
 ## Custom scripts
 
 For [custom-script jobs](/training/custom-script), Veri injects `WANDB_API_KEY`, `WANDB_PROJECT`, and `WANDB_RUN_ID` into your container's environment. A bare `wandb.init()`, or any framework with W&B support (verl, OpenRLHF, slime, TRL), lands in your account with no code change. Your script's own `env` values take precedence if you set the same variables yourself.

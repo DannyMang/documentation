@@ -24,14 +24,14 @@ Every command accepts these:
 
 ## Override syntax (`--set`)
 
-Available on every command that loads a TOML config (`jobs create`, `deployments create`, `run`, `jobs estimate`, `config set`).
+Available on every command that loads a TOML config (`jobs create`, `jobs estimate`, `deployments create`, `environments create`, `environments update`, `run`). `veri config set` takes the same `KEY=VALUE` syntax as its argument.
 
 ```bash
 --set <dotted.key>=<value>           # canonical
 --set-string <dotted.key>=<value>    # force string parsing
 ```
 
-Type coercion uses TOML scalars; repeated flags build lists; scalar-vs-table conflicts error. See [the run-verb reference](/cli/run#override-toml-fields-from-the-cli) for the full rules.
+Values parse as Python literals (numbers, `true` / `false`, quoted strings, lists; anything else stays a string); repeated flags build lists; scalar-vs-table conflicts error. See [the run-verb reference](/cli/run#override-toml-fields-from-the-cli) for the full rules.
 
 ## Help-on-missing-args
 
@@ -53,7 +53,6 @@ Deterministic across every command. Designed for shell scripting.
 | `0` | Success. |
 | `1` | User error (validation failed, missing flag, bad config). |
 | `2` | API error (server returned 4xx or 5xx that isn't auth). |
-| `3` | Network error (timeout, DNS, connection refused). |
 | `4` | Auth error (401 / 403, missing credentials). |
 | `130` | SIGINT (Ctrl-C). |
 
@@ -155,18 +154,32 @@ Bare `veri gpu list` is served from `GET /v1/gpu/catalog`: the `training` and `s
 veri regions list
 ```
 
-Pass a region to a training job with `veri train --region <name>`, `veri jobs create --region <name>` (or `region` under `[resources]` in the config), or the `region` argument of the `@veri.train` decorator. Omit it to use the default region.
+Pass a region to a training job with `veri train --region <name>`, `veri jobs create --region <name>` (or `region` under `[resources]` in the config), or the `region` argument of the `@training_job` decorator. Omit it to use the default region.
 
 ## `veri billing` {#billing}
 
 | Command | Purpose |
 | --- | --- |
 | `balance` | Current credit balance. |
+| `burn-rate` | Current spend per hour across running jobs and deployments, and the hours your balance covers at that rate. |
 | `transactions [--limit N]` | Recent billing entries. |
 
 ```bash
 veri billing balance
+veri billing burn-rate
 veri billing transactions --limit 50 --format jsonl
+```
+
+## `veri cost` {#cost}
+
+| Command | Purpose |
+| --- | --- |
+| `estimate --gpu-type T [--gpu-count N] [--hours H] [--provider P]` | Price a GPU lease before you start one. |
+| `summary [--days N]` | Your spend over the last N days (default 30). |
+
+```bash
+veri cost estimate --gpu-type L4-24GB --gpu-count 1 --hours 2
+veri cost summary --days 30
 ```
 
 ## `veri settings` {#settings}
@@ -228,7 +241,7 @@ Mint, list and revoke API keys. `--deployment` mints a [model access key](/secre
 | `revoke KEY_ID` | Revoke immediately. |
 
 ```bash
-veri api-keys create agent-prod --deployment dep1a2b3c4d5e --expires-in 86400
+veri api-keys create agent-prod --deployment 5b0e7c2d9a14 --expires-in 86400
 veri api-keys list
 ```
 
@@ -275,23 +288,21 @@ veri version --format json
 Prints SDK version, Python version, and platform string. The `--version` and `-v` root flags are aliases — they emit the same output and exit. From CI:
 
 ```bash
-test "$(veri version --format json | jq -r .sdk_version)" = "0.2.0" || exit 1
+test "$(veri version --format json | jq -r .sdk_version)" = "0.2.42" || exit 1
 ```
 
 ## Phase-2 deferrals
 
-These are not in Phase-1 and will error or print a clear "deferred" note if attempted:
+These are not available yet; the CLI rejects them as unknown commands:
 
 | Feature | Gated on |
 | --- | --- |
-| `veri jobs logs --follow` | SDK log-streaming method. |
 | `veri jobs resume` | Resumable training-runner checkpoints. |
 | `veri jobs ssh` | SSH ingress into training containers. |
 | `veri jobs metrics --export wandb` | SDK metrics method. |
-| `veri deployments start` / `scale` / `rollback` / `history` | Server-side versioned deploy history. |
+| `veri deployments start` / `rollback` / `history` | Server-side versioned deploy history. Scale with `veri deployments update`. |
 | `veri deployments load-lora` / `unload-lora` | Multi-LoRA inference backend. |
 | Multi-profile (`veri profile use/new`) | Forward-compatible schema already in place. |
-| `veri secrets` | API secrets surface. |
 
 ## What's next
 

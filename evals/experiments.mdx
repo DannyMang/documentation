@@ -40,8 +40,8 @@ Other stream formats run too: a `prompt` row is the input; a `completion` row is
 
 | Target | CLI | What runs |
 | --- | --- | --- |
-| A deployment | `--target deployment:dep_...` (`--target-model` for a model or adapter name on it) | Every item calls that deployment. |
-| A model version | `--target acme-bot@v7` or `--target model_version:mv...` | The exact weights of that version: a deployment serving its library model, or a fleet adapter holding it. `409 version_not_servable` when nothing serves it; deploy it first. |
+| A deployment | `--target deployment:<id>` (`--target-model` for a model name on it, or an adapter name on a [multi-adapter fleet (beta)](/deployments/api#multi-adapter-fleets)) | Every item calls that deployment. |
+| A model version | `--target acme-bot@v7` or `--target model_version:mv...` | The exact weights of that version: a deployment serving its library model, or an adapter on a multi-adapter fleet (beta) holding it. `409 version_not_servable` when nothing serves it; deploy it first. |
 | None | `--target none` | No calls: each row's recorded `output` (or a chat row's last assistant turn) is scored. Use it to score outputs produced elsewhere. |
 
 Targets are deployments in your workspace. `--temperature` and `--max-tokens` set the target's sampling; `--trials N` (1-10) runs each row N times.
@@ -57,7 +57,7 @@ A `turns` row replays a conversation: the target answers the first user turn, it
 
 <CodeGroup>
 ```bash CLI
-veri experiments run --dataset golden --target deployment:dep_ab12cd34 \
+veri experiments run --dataset golden --target deployment:4f2a9c1e7b3d \
   --evaluator helpful --evaluator exact@2 --baseline exp_5c1e9a0b77f2
 ```
 
@@ -65,7 +65,7 @@ veri experiments run --dataset golden --target deployment:dep_ab12cd34 \
 exp = client.experiments.create(
     "nightly",
     dataset="golden",
-    target={"kind": "deployment", "deployment_id": "dep_ab12cd34"},
+    target={"kind": "deployment", "deployment_id": "4f2a9c1e7b3d"},
     evaluators=["helpful", "exact@2"],
     baseline_experiment_id="exp_5c1e9a0b77f2",
 )

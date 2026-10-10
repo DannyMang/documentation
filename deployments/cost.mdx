@@ -53,7 +53,7 @@ Options, from most to least automatic:
        dep.stop()
    ```
 4. **Monitor active deployments** — regularly list deployments and stop anything no longer in use.
-5. **Set up the low-balance webhook** — Stripe will email at configurable balance thresholds
+5. **Set a spend alert or auto-reload**: a [spend alert](/billing#budget-alerts) emails you at 75% and 100% of a monthly threshold, and [auto-reload](/billing#adding-funds) tops up the balance from your saved card when it drops below a threshold. There is no low-balance webhook.
 
 ## Comparison vs training jobs
 
@@ -73,7 +73,7 @@ If you only need to spot-check a trained model, run a short batch of requests ag
   <Card title="Deployments API" icon="play" href="/api-reference/introduction">
     `create` / `stop` endpoints.
   </Card>
-  <Card title="Deployment analytics demo" icon="book" href="/deployments/observability">
-    Planned walkthrough for request, token, latency, and replica metrics.
+  <Card title="Deployment observability" icon="book" href="/deployments/observability">
+    Request, token, latency, and replica metrics.
   </Card>
 </CardGroup>

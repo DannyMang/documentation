@@ -9,18 +9,18 @@ keywords: ["agents", "sessions", "claude code", "sse", "transcript", "pause", "r
 A session is one running agent, started from an [environment](/agents/environments). The harness runs unmodified inside an isolated sandbox. You send messages, the agent works, and every step lands in an ordered transcript you can read back or stream live.
 
 ```bash
-veri sessions create env_1a2b3c --title "fix the flaky test" --budget 5
-veri sessions send sess_9f8e7d "Find why tests/test_queue.py is flaky and fix it" --follow
-veri sessions pause sess_9f8e7d
-veri sessions resume sess_9f8e7d
-veri sessions delete sess_9f8e7d
+veri sessions create 3f9c2a7b1d40 --title "fix the flaky test" --budget 5
+veri sessions send 9f8e7d6c5b4a "Find why tests/test_queue.py is flaky and fix it" --follow
+veri sessions pause 9f8e7d6c5b4a
+veri sessions resume 9f8e7d6c5b4a
+veri sessions delete 9f8e7d6c5b4a
 ```
 
 ```python
 from veri_sdk import Client
 
 client = Client()
-s = client.sessions.create("env_1a2b3c", title="fix the flaky test", budget_usd=5)
+s = client.sessions.create("3f9c2a7b1d40", title="fix the flaky test", budget_usd=5)
 client.sessions.send(s["id"], "Find why tests/test_queue.py is flaky and fix it")
 for ev in client.sessions.stream(s["id"]):
     if ev["type"] == "agent.message":
@@ -54,11 +54,13 @@ If the environment's model is a Veri deployment, each session gets a 24-hour [mo
 | `user.interrupt` | you stopped a run; the run ends with `run.completed{stop_reason: "interrupted"}` |
 | `agent.message` | `{text}`, the agent's reply |
 | `agent.thinking` | `{text}` |
-| `agent.tool_use` | `{name, input}` |
+| `agent.tool_use` | `{id, name, input}` |
 | `tool.result` | `{tool_use_id, content, is_error}` |
 | `usage` | `{awake_seconds, input_tokens, output_tokens, cache_read_tokens}` |
 | `run.completed` | `{stop_reason}`, the agent finished a turn |
 | `session.status` | `{status, from, failure_code, error}` |
+| `session.interrupted` | `{reason, exit_code, run_id, snapshot_id, snapshot_error}`: the sandbox was stopped underneath the session (`reason` is `sigterm` for an inactivity timeout or host eviction, `container_stopped` when the container exited during a run). The session moves to `paused`; after `container_stopped` a `session.status` event then marks it `failed`. |
+| `session.budget_exhausted` | `{budget_usd, accrued_usd, awake_seconds}`, written just before a [budget](#pricing-and-limits) pause |
 | `error` | `{message, fatal}` |
 
 Payloads above 64 KiB (a large file read, for example) are stored in object storage; the event carries a 1 KiB preview and `payload_ref`.

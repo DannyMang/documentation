@@ -23,7 +23,7 @@ claude mcp add --transport http veri https://api.veri.studio/mcp \
   --header "Authorization: Bearer $VERI_API_KEY"
 ```
 
-**Claude Desktop** and **Cursor** take a URL entry under `mcpServers`:
+**Cursor** takes a URL entry under `mcpServers` in `~/.cursor/mcp.json` (or `.cursor/mcp.json` in a project):
 
 ```json
 {
@@ -36,7 +36,9 @@ claude mcp add --transport http veri https://api.veri.studio/mcp \
 }
 ```
 
-For an unattended agent, use `https://api.veri.studio/readonly/mcp` instead — the creation and cancellation tools are not registered at all on that path (see [Read-only mode](#read-only-mode)).
+**Claude Desktop** only launches local servers from `claude_desktop_config.json` (`command` and `args`, no `url` entries), so use the [local server](#local-server-setup) there.
+
+For an unattended agent, use `https://api.veri.studio/readonly/mcp` instead: the write and delete tools are not registered at all on that path (see [Read-only mode](#read-only-mode)).
 
 Verify with `/mcp` inside a Claude Code session, or ask the agent "what is my Veri credit balance?"
 
@@ -112,6 +114,8 @@ The file location depends on the client:
 | Claude Desktop (Windows) | `%APPDATA%\Claude\claude_desktop_config.json` |
 | Cursor (global) | `~/.cursor/mcp.json` |
 | Cursor (per project) | `.cursor/mcp.json` in the project root |
+
+If the client reports that it cannot find `veri` (desktop apps often start without your shell's `PATH`), set `"command"` to the absolute path that `which veri` prints.
 </Step>
 
 <Step title="Restart and verify">
@@ -126,7 +130,7 @@ In Claude Code, run `claude mcp list` (or `/mcp` inside a session) and confirm `
 
 By default every tool is available, including ones that create billable GPU jobs and deployments. Your MCP client prompts you to approve each tool call, so creation is gated by that approval. Tools that spend credits have descriptions that begin with `CREATES A BILLABLE ...` so the intent is clear in the approval prompt.
 
-For an automated or unattended setup where no human approves each call, run the server read-only so the creation and cancellation tools are not registered at all. Pass `--readonly` in the command:
+For an automated or unattended setup where no human approves each call, run the server read-only so the 12 write and delete tools (every tool in the write and delete tables below) are not registered at all. Pass `--readonly` in the command:
 
 <CodeGroup>
 ```bash Claude Code
@@ -158,64 +162,66 @@ claude mcp add --transport http veri-readonly https://api.veri.studio/readonly/m
 
 ### Read tools (always available)
 
-| Tool | What it does |
-| --- | --- |
-| `veri_whoami` | Confirm the key is valid, and return the account identity and credit balance. Call this first. |
-| `veri_list_training_jobs` | List training jobs, with optional status and method filters. |
-| `veri_get_training_job` | Get one job: status, cost, dashboard URL, and any error. |
-| `veri_get_training_metrics` | Get bounded native training curves and the W&B run URL when available. |
-| `veri_list_deployments` | List deployments, with an optional status filter. |
-| `veri_get_deployment` | Get one deployment: status, endpoint, GPU, and running cost. |
-| `veri_get_deployment_summary` | Get a compact single-call overview of one deployment. |
-| `veri_get_deployment_metrics` | Get compact lifetime request and token totals, past-24-hour latency percentiles and error rate, uptime, and cost. |
-| `veri_get_deployment_metrics_timeseries` | Get metric buckets over a time range. |
-| `veri_query_deployment_metrics` | Query up to 500 server-aggregated metric buckets for a time range (seven days by default). |
-| `veri_list_deployment_requests` | List compact request telemetry, optionally restricted to failures or a time range. |
-| `veri_chat_deployment` | Send a chat request to a serving deployment. On the read-only endpoint it never wakes a parked (`scaled_to_zero`) deployment and returns `{status: "scaled_to_zero", choices: [], error: ...}` instead; with writes enabled, chatting to a parked deployment sends the request once, which wakes it (GPU boot, billing starts), and returns `{status: "waking", choices: [], error: "...retry in about Ns..."}` immediately instead of waiting; call the tool again after the hinted delay. |
-| `veri_list_models` | List custom models in your registry. |
-| `veri_get_hf_export` | Poll the status of a Hugging Face export. |
-| `veri_list_datasets` | List datasets available for training. |
-| `veri_list_volumes` | List persistent volumes with their size and file count. |
-| `veri_list_gpus` | List the GPU catalog: types, providers, and hourly price. |
-| `veri_list_regions` | List the launch regions you can target. |
-| `veri_estimate_cost` | Estimate the cost of a GPU job before submitting it. |
-| `veri_billing_balance` | Get your current credit balance. |
-| `veri_billing_burn_rate` | Get the current spend rate. |
-| `veri_billing_overview` / `veri_get_billing_overview` | Get balance, training and deployment burn, runway, active resources, and recent transactions. |
-| `veri_get_cost_summary` | Get the supported historical cost breakdown for up to 30 days. |
-| `veri_list_evaluators` | List evaluators (LLM judge, code, human) with their latest version's method and output type. |
-| `veri_get_experiment` | Get an experiment's status, per-evaluator results, verdict, and diff against its baseline. |
-| `veri_get_model_gate` | Get a model lineage's promotion gate: its config, production's latest matching experiment, and judge-vs-human agreement warnings. |
+Arguments without a default are required. `limit` values are capped at the maximum shown.
+
+| Tool | Arguments | Returns |
+| --- | --- | --- |
+| `veri_whoami` | none | Account identity (`user_id`, `email`, `workspace`), `authenticated: true` and `balance_usd`. With a missing or expired key it returns `authenticated: false` and a `next_step` instead of failing. Call this first. |
+| `veri_list_training_jobs` | `limit` (20, max 100), `status`, `method` | Jobs, newest first. |
+| `veri_get_training_job` | `job_id` | One job: `status`, `method`, `cost_usd`, step and loss progress, `dashboard_url`, `wandb_run_url`, `hf_repo_url` and `error_message`. |
+| `veri_get_training_metrics` | `job_id`, `keys`, `from_step`, `to_step`, `max_points` (200, max 500) | `{metrics, available_keys, latest_step}`: sampled native training curves. |
+| `veri_list_deployments` | `limit` (20, max 100), `status` | Deployments, newest first. |
+| `veri_get_deployment` | `deployment_id` | One deployment: `status`, `endpoint_url`, `gpu`, `cost_per_hour_usd`, `error` and `failure_code`. |
+| `veri_get_deployment_summary` / `veri_get_deployment_metrics` | `deployment_id` | `{deployment, metrics}`: lifetime request and token totals, past-24-hour latency percentiles and error rate, uptime and cost. Both return the same shape. |
+| `veri_get_deployment_metrics_timeseries` | `deployment_id`, `from_`, `to` (ISO 8601; default the last seven days), `interval` (`auto`, `minute`, `five_minutes`, `hour` or `day`) | `{summary, buckets, cost_efficiency}` for the range. |
+| `veri_query_deployment_metrics` | `deployment_id`, `from_time`, `to_time`, `interval`, `metrics` | The same, with each bucket cut down to the `metrics` keys you name (plus `timestamp`). At most 500 buckets. |
+| `veri_list_deployment_requests` | `deployment_id`, `limit` (20, max 50), `after`, `errors_only`, `from_time`, `to_time` | Request records, newest first: tokens, latency, TTFT and TPOT, status code and error category. |
+| `veri_chat_deployment` | `deployment_id`, `messages`, `model`, `temperature` (1.0), `max_tokens` | The OpenAI-style chat completion. On the read-only endpoint it never wakes a parked (`scaled_to_zero`) deployment and returns `{status: "scaled_to_zero", choices: [], error: ...}` instead; with writes enabled, chatting to a parked deployment sends the request once, which wakes it (GPU boot, billing starts), and returns `{status: "waking", choices: [], error: "...retry in about Ns..."}` immediately instead of waiting; call the tool again after the hinted delay. |
+| `veri_list_models` | `limit` (20, max 100) | Library models: `id`, `name`, `status`, `base_model`, `training_job_id`, `artifact_type`. |
+| `veri_get_hf_export` | `export_id` | A Hugging Face export: `status` (`launching`, `uploading`, `completed`, `failed` or `cancelled`), progress bytes and `hf_repo_url`. |
+| `veri_list_datasets` | `limit` (20, max 100) | Datasets: `id`, `name`, `source_type`, `huggingface_dataset`. |
+| `veri_list_volumes` | `limit` (20, max 100) | Volumes: `id`, `name`, `total_bytes`, `file_count`. |
+| `veri_list_gpus` | none | The GPU catalog: per provider and workload (`training` or `serving`), each GPU type's allowed counts (`node_counts`), `status` and `usd_per_gpu_hr`. |
+| `veri_list_regions` | none | The launch regions you can target and the default. |
+| `veri_estimate_cost` | `gpu_type`, `gpu_count` (1), `duration_minutes` (60), `provider` | `rate_usd_per_hour` and `estimated_cost_usd`. |
+| `veri_billing_balance` | none | `balance_usd`. |
+| `veri_billing_burn_rate` | none | `burn_rate_usd_per_hour`, `hours_remaining`, and the active jobs and deployments. |
+| `veri_billing_overview` / `veri_get_billing_overview` | `transaction_limit` (10, max 20) | `{balance, burn_rate, transactions}`. Both return the same shape. |
+| `veri_get_cost_summary` | `days` (30, max 30) | Training-job spend for the window: `window_days`, `total_usd`, `job_count`. Deployment spend is not included. |
+| `veri_list_evaluators` | `include_archived` (false) | Evaluators (LLM judge, code, human) with their latest version's `method`, `scope` and `output_type`, without prompts or source. |
+| `veri_get_experiment` | `experiment_id` | Status (`queued`, `running`, `awaiting_local`, `completed`, `failed` or `canceled`), progress, the pinned evaluator versions, per-evaluator aggregates, the verdict `passed` and the `diff` against its baseline. |
+| `veri_get_model_gate` | `model` (a lineage name) | The lineage's promotion gate: `enabled`, `config`, production's latest matching experiment and judge-vs-human agreement warnings. |
 
 ### Write tools (available unless read-only)
 
-| Tool | What it does |
-| --- | --- |
-| `veri_create_training_job` | Submit a managed training run. Returns the job and a pre-submit cost estimate. |
-| `veri_create_deployment` | Create an inference deployment from a training job or a HuggingFace model. |
-| `veri_cancel_training_job` | Cancel a queued or running job. |
-| `veri_stop_deployment` | Stop a running deployment. Permanent: a stopped deployment cannot be resumed or woken. |
-| `veri_register_model` | Register a completed job's checkpoint as a reusable custom model. |
-| `veri_push_model_to_hf` | Push a library model to the connected Hugging Face account. |
-| `veri_run_experiment` | Start an experiment on existing deployments (no new GPUs). Returns at once; poll `veri_get_experiment` for the result. |
+| Tool | Arguments | Returns |
+| --- | --- | --- |
+| `veri_create_training_job` | `base_model`, `dataset_id`, `gpu_type`, `gpu_count` (1), `output_name` ("default"), `method` ("grpo"), `reward_source`, `hyperparameters`, `region`, `provider`, `hf_push` | `{job, cost_estimate}`. The estimate is for one hour on the chosen GPUs (null if it could not be computed). `grpo` needs `reward_source` (the reward function's Python source). |
+| `veri_create_deployment` | `model`, `name`, `gpu_type`, `gpu_count` (1), `source` ("training_job"), `provider`, `engine` | The new deployment. `model` is a training job id (`source="training_job"`), a Hugging Face repo (`source="huggingface"`) or a library model id (`source="custom_model"`). |
+| `veri_cancel_training_job` | `job_id` | The cancelled job. A job that already finished returns an error. |
+| `veri_stop_deployment` | `deployment_id` | The deployment. Permanent: a stopped deployment cannot be resumed or woken. Stopping a stopped or failed deployment returns it unchanged. |
+| `veri_register_model` | `training_job_id`, `name` | The library model (same fields as `veri_list_models`). Only a completed job with a saved checkpoint registers; a repeat call returns the existing model. |
+| `veri_push_model_to_hf` | `model_id`, `repo` ("namespace/name"), `private` (true) | The export; poll `veri_get_hf_export` until it finishes. Needs a connected Hugging Face account. |
+| `veri_run_experiment` | `name`, `dataset`, `target`, `evaluators`, `trials`, `baseline_experiment_id` | The queued experiment; poll `veri_get_experiment`. `target` is `{"kind": "deployment", "deployment_id": ...}`, `{"kind": "model_version", "model_version_id": ...}` or `{"kind": "none"}` (score the outputs already in the dataset). Runs on existing deployments, no new GPUs. |
 
 ### Delete tools (available unless read-only)
 
 Deletes are irreversible and, unlike provisioning, cost nothing, so your MCP client's
 approval prompt is the only safeguard. Every description below starts with
 `PERMANENTLY DELETES` so the stakes are visible in that prompt. Use read-only mode for
-any unattended agent.
+any unattended agent. Each returns `{"deleted": true, "id": ..., "object": ...}`.
 
-| Tool | What it does |
-| --- | --- |
-| `veri_delete_training_job` | Delete a finished job and its stored checkpoints. |
-| `veri_delete_dataset` | Delete a dataset. |
-| `veri_delete_deployment` | Delete a stopped deployment and its request history. |
-| `veri_delete_model` | Remove a model from the library. |
-| `veri_delete_volume` | Delete a volume and every file in it. |
+| Tool | Arguments | What it deletes |
+| --- | --- | --- |
+| `veri_delete_training_job` | `job_id` | A finished job and its stored checkpoints. |
+| `veri_delete_dataset` | `dataset_id` | A dataset. |
+| `veri_delete_deployment` | `deployment_id` | A stopped deployment and its request history. |
+| `veri_delete_model` | `model_id` | A library model. Returns an error while an active deployment uses it or a lineage alias points at it. |
+| `veri_delete_volume` | `name` | A volume and every file in it. |
 
-Lifecycle webhooks, Prometheus metrics export, and per-replica drain have no MCP tools
-today. Reach them over REST; see the [API reference](/api-reference/introduction).
+Job logs, lifecycle webhooks, Prometheus metrics export, and per-replica drain have no MCP
+tools today. Read logs with `veri jobs logs <id>` and reach the rest over REST; see the
+[API reference](/api-reference/introduction).
 Creating evaluators and running local code evaluators happen in the `veri` CLI
 (`veri evaluators create`, `veri experiments run --local`): an experiment that pins a
 local code evaluator waits in `awaiting_local` until those scores arrive.
@@ -232,7 +238,7 @@ claude mcp add veri-observe -- veri mcp serve --readonly
 
 Send a buffered and a streaming request to a serving deployment, then ask:
 
-> Inspect deployment `dep_...` over the past hour. Report request volume, p50/p95/p99 TTFT and end-to-end latency, token throughput, error rate, and cost efficiency. List failed requests grouped by error category. Do not modify resources.
+> Inspect deployment `<deployment-id>` over the past hour. Report request volume, p50/p95/p99 TTFT and end-to-end latency, token throughput, error rate, and cost efficiency. List failed requests grouped by error category. Do not modify resources.
 
 The agent should use:
 
@@ -254,19 +260,21 @@ Time-series queries return at most 500 buckets, and request-history queries retu
 veri mcp serve-http --host 0.0.0.0 --port 8321
 ```
 
-The HTTP server does not use your local `veri login` credentials. Every request must carry your Veri API key as a bearer token, and each call acts as that key's owner:
+The HTTP server does not use your local `veri login` credentials. Every request must carry your Veri API key as a bearer token, and each call acts as that key's owner.
+
+The server speaks plain HTTP (no TLS), so connect with an `http://` URL. Bearer keys travel in every request: beyond a trusted network, put a TLS-terminating proxy in front of it and use the proxy's `https://` URL instead.
 
 <CodeGroup>
 ```bash Claude Code
-claude mcp add --transport http veri https://your-host:8321/mcp \
+claude mcp add --transport http veri http://your-host:8321/mcp \
   --header "Authorization: Bearer $VERI_API_KEY"
 ```
 
-```json Claude Desktop / Cursor
+```json Cursor
 {
   "mcpServers": {
     "veri": {
-      "url": "https://your-host:8321/mcp",
+      "url": "http://your-host:8321/mcp",
       "headers": { "Authorization": "Bearer vk_..." }
     }
   }
@@ -287,7 +295,7 @@ The transport is stateless, so the service scales horizontally behind a plain lo
 
 Use Veri MCP for infrastructure, lifecycle, deployment telemetry, and billing. Connect the official W&B MCP alongside it for rich cross-run training analysis, artifacts, and reports.
 
-Veri returns a bounded native training metric series and the W&B run URL when available. It does not proxy W&B credentials or reimplement W&B's query surface.
+`veri_get_training_metrics` returns a bounded native metric series, and `veri_get_training_job` returns the run's `wandb_run_url` when the job logged to W&B. Veri does not proxy W&B credentials or reimplement W&B's query surface.
 
 ## Working with datasets and rewards
 
@@ -301,6 +309,6 @@ Rewards need no upload step: `veri_create_training_job` takes a `reward_source` 
 
 ## Harness-in-the-loop RL jobs
 
-Harness RL jobs — method `grpo_harness`, where your own agent (OpenAI SDK, LangChain, or Anthropic SDK) drives the GRPO rollouts unmodified — are regular training jobs to MCP: they appear in `veri_list_training_jobs`, `veri_get_training_job`, logs, and metrics like any other run. Submission is CLI-only today (`veri run-harness`, because the harness code directory is uploaded with the job; `veri_create_training_job` does not accept this method), and the per-rollout trajectory archive lives on the job's dashboard page.
+Harness RL jobs (method `grpo_harness`, where your own agent, built on the OpenAI SDK, LangChain, or the Anthropic SDK, drives the GRPO rollouts unmodified) are regular training jobs to MCP: they appear in `veri_list_training_jobs`, `veri_get_training_job` and `veri_get_training_metrics` like any other run (read their logs with `veri jobs logs <id>`). Submission is CLI-only today (`veri run-harness`, because the harness code directory is uploaded with the job; `veri_create_training_job` does not accept this method), and the per-rollout trajectory archive lives on the job's dashboard page.
 
 When a user asks their agent how to RL-train the model behind an existing agent or harness, the setup is small enough to explain conversationally: the agent keeps its normal loop and reads `OPENAI_BASE_URL` / `ANTHROPIC_BASE_URL` (pointed at the in-training policy per rollout) plus the task from `VERI_TASK_INPUT`; a TRL-signature reward function (attached to the job inline) scores each finished trajectory. The full contract and a worked demo: [Harness-in-the-loop RL](/training/harness) and [the URL-extraction agent demo](/demos/harness-url-extraction-agent).

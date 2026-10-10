@@ -1,7 +1,7 @@
 ---
 title: "AWS"
 sidebarTitle: "AWS (default)"
-description: "The default training provider: NVIDIA L4, A10G, A100, and H100 on EC2 with per-second billing, on-demand or spot."
+description: "The default training provider: NVIDIA L4, A10G, A100, and H100 on EC2 on-demand instances with per-second billing."
 keywords: ["AWS", "NVIDIA", "H100", "A100", "L4", "A10G", "EC2", "provider"]
 ---
 
@@ -33,9 +33,9 @@ job = client.training_jobs.create(
 
 ## Notes
 
-- Billing is per-second, on-demand or spot.
+- Billing is per-second, on on-demand instances.
 - Regions: AWS is the only provider with manual region selection — pass `region` at submit, or omit it for the default. Unknown regions 400 with the offered list.
-- Multi-node gangs (`num_nodes >= 2`, custom-script only) are AWS-only and require the 8-GPU A100/H100 shapes.
+- Multi-node gangs (`num_nodes >= 2`, custom-script only) are AWS-only and require the 8-GPU A100/H100 shapes. Multi-node is not enabled yet: a `num_nodes` of 2 or more currently returns a 400.
 
 ## Where to go next
 

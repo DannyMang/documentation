@@ -1,28 +1,14 @@
 ---
 title: "Volumes"
-description: "Named persistent storage that mounts into training workers"
+description: "Named persistent storage for your files on Veri"
 keywords: ["volumes", "storage", "persistent storage", "veri volumes"]
 ---
 
 ## Overview
 
-Veri Volumes are named persistent storage you upload to once and reference from any number of training jobs. The worker mounts the volume at `/mnt/<name>` before training starts; your script reads files from the mount the same way it would read any local file.
+Veri Volumes are named persistent storage in your workspace. You create a volume, upload files or whole directories to it, list what it holds, and delete single files or the whole volume when you no longer need them.
 
-Volumes solve three problems with the upload-per-job flow:
-
-- **Reuse.** Upload your dataset once, reference it from 100 training jobs without re-uploading.
-- **Large datasets.** Files stay on disk on the worker — no full materialization into Python memory, so multi-tens-of-GB datasets work on H100-class GPUs.
-- **Bring your own data.** S3/SQL connect paths aren't available; Volumes are the supported path for proprietary data that doesn't live on HuggingFace.
-
-## When to use a Volume
-
-Pick a Volume when any of the following is true:
-
-- You expect to run more than one training job against the same dataset.
-- Your dataset is larger than a few GB.
-- Your dataset isn't public and isn't on HuggingFace.
-
-For one-off experiments against small public data, the dataset upload (`veri datasets upload`) or HuggingFace connect (`veri datasets connect-hf`) paths are simpler.
+Mounting volumes into training jobs is not available yet: to train on your own data, [upload it as a dataset](/training/datasets#upload-a-jsonl-file).
 
 ## Billing
 
@@ -40,7 +26,7 @@ veri volumes create my-corpus
 The name must match `^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$`. Re-running with the same name is idempotent — it returns the existing volume.
 </Step>
 
-<Step title="Upload your dataset">
+<Step title="Upload files">
 ```bash
 veri volumes upload my-corpus ./train.jsonl
 ```
@@ -54,41 +40,7 @@ veri volumes upload-dir my-corpus ./training-data --to /data
 ```
 </Step>
 
-<Step title="Reference the volume in a training job">
-The SDK exposes a `from_volume` helper that creates a Dataset pointing at a file inside the volume:
-
-```python
-from veri_sdk import Client
-
-client = Client()
-dataset = client.datasets.from_volume(
-    volume="my-corpus",
-    path="/train.jsonl",
-)
-job = client.training_jobs.create(
-    base_model="Qwen/Qwen2.5-0.5B-Instruct",
-    dataset_id=dataset.id,
-    output_name="my-run",
-    gpu_type="L4-24GB",
-    gpu_count=1,
-)
-```
-
-When the worker boots, it mounts `my-corpus` at `/mnt/my-corpus` and reads `/mnt/my-corpus/train.jsonl` directly. No download to `/tmp`, no in-memory list materialization.
-</Step>
-
 </Steps>
-
-## Worker behavior
-
-Before training starts, the worker:
-
-1. Mints short-lived AWS credentials scoped to the volume's S3 prefix (read-only, 30-minute TTL).
-2. Checks that the volume fits in available disk (refuses if it would consume more than 80% of free space — you'll see `volume_too_large_for_node` in the job error and need a larger GPU SKU).
-3. Syncs the prefix to `/mnt/<volume-name>` using `aws s3 sync`.
-4. Verifies the post-sync file count and total bytes against what the control plane recorded. If a file silently dropped during sync, the job fails fast with `volume_sync_incomplete` rather than training on partial data.
-
-These steps add a few seconds to job startup for small volumes; a 50 GB volume sync typically takes 30–60s on H100-class network.
 
 ## Deletion
 
