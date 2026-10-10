@@ -86,7 +86,7 @@ Create a job. Returns immediately with status `queued`.
 - `method=sft_text` or `dpo`, and `job_type=custom_script` → reward fields must be omitted (these learn from the dataset, or own their loop)
 - `custom_script` is a `job_type`, not a `method`: `"method": "custom_script"` is a 400 (`Unknown training method`). `job_type` must be `managed` or `custom_script`; anything else is a 400.
 - `environments` is not supported: a non-empty value is a 400 (no available method reads it).
-- `volume` is not supported: volume-backed training is not available yet, so a job-level `volume`, or a `dataset_id` whose dataset reads from a volume, is a 400. [Upload the data as a dataset](/training/datasets#upload-a-jsonl-file) instead.
+- A job-level `volume` (a whole-volume read-only mount at `/mnt/<name>`) is coming soon: until it is enabled, it is a 400 whose message points at `from_volume`. A `dataset_id` whose dataset was connected with `datasets.from_volume` trains: the file is downloaded to the training machine at job start. See [Volumes](/volumes).
 - `checkpoint_destination` other than `{"type": "veri"}` (another `type`, a `uri`, or `credentials`) is a 400; see [Checkpoint destination schema](#checkpoint-destination-schema).
 - `hyperparameters.load_in_4bit: true` without `lora_rank` is a 400 (QLoRA trains adapters on a frozen 4-bit base).
 - A hyperparameter value of the wrong type (for example `"lora_rank": "8"` or `"packing": "yes"`) is a 400 that names the key.
