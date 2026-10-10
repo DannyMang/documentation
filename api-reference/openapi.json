@@ -3906,6 +3906,64 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "evaluator",
+            "in": "query",
+            "description": "Score filter: only threads with an ok score of this evaluator (id or\nname; any evaluator when omitted) matching every given bound.\nSessions never match a score filter.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "label",
+            "in": "query",
+            "description": "Score filter: a categorical label, or `true` / `false` for a boolean\nscore.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "min_score",
+            "in": "query",
+            "description": "Score filter: inclusive lower bound on the numeric value (a Jev noul\nscore's P(yes)).",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          {
+            "name": "max_score",
+            "in": "query",
+            "description": "Score filter: inclusive upper bound on the numeric value (a Jev noul\nscore's P(yes)).",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          {
+            "name": "min_confidence",
+            "in": "query",
+            "description": "Score filter: inclusive lower bound on the judge's confidence, 0..1.",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          {
+            "name": "max_confidence",
+            "in": "query",
+            "description": "Score filter: inclusive upper bound on the judge's confidence, 0..1\n(the dashboard's \"needs review\" view uses 0.5).",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "format": "double"
+            }
           }
         ],
         "responses": {
@@ -6421,6 +6479,73 @@
           },
           "409": {
             "description": "Active jobs, deployments, or pending billing block deletion"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/workspace/settings": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Get workspace settings",
+        "operationId": "get",
+        "responses": {
+          "200": {
+            "description": "The caller's workspace settings (defaults when never changed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceSettingsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Jev is not enabled"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Update workspace settings",
+        "description": "Turning `third_party_judges` off stops new Jev evaluators and skips queued Jev work in this workspace; nothing is sent to TypeSafe while it is off.",
+        "operationId": "update",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceSettingsPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The stored settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceSettingsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Unknown field, or Jev is not enabled"
           }
         },
         "security": [
@@ -13966,6 +14091,13 @@
             "format": "double",
             "description": "The judge's probability for its verdict, 0..1; null unless a\ndecision-mode judge wrote the score."
           },
+          "probabilities": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "The Jev judge's distribution behind the value: noul\n`{\"true\": p, \"false\": 1 - p}`, choice `{option: p}`, score\n`{\"<level>\": p}`. Null for every other score."
+          },
           "created_at": {
             "type": "string",
             "format": "date-time"
@@ -16198,6 +16330,47 @@
             "type": "integer",
             "format": "int32",
             "description": "Days unprotected model versions and unreferenced dataset snapshots are\nkept (default 90; 0 = zero-data-retention opt-in)."
+          }
+        }
+      },
+      "WorkspaceSettingsPatch": {
+        "type": "object",
+        "properties": {
+          "third_party_judges": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "WorkspaceSettingsResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "workspace_id",
+          "third_party_judges"
+        ],
+        "properties": {
+          "object": {
+            "type": "string",
+            "description": "Always \"workspace_settings\"."
+          },
+          "workspace_id": {
+            "type": "string"
+          },
+          "third_party_judges": {
+            "type": "boolean",
+            "description": "Evaluators may send trace text to a third-party judge (TypeSafe's\nJev). Off: jev evaluators can't be created and queued Jev work is\nskipped."
+          },
+          "updated_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Null until the workspace changes a default."
           }
         }
       },
