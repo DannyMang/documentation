@@ -72,7 +72,7 @@ What evaluations do not do today:
 - **No templates.** Veri ships no built-in evaluators, rubrics, or benchmark suites; you write every prompt and function.
 - **Text only.** No multimodal inputs or outputs.
 - **Cloud code evaluators are JavaScript or TypeScript only.** Python code evaluators run locally through the SDK or CLI.
-- **No online monitors yet.** Evaluators do not run automatically on sampled live traffic; score traffic through experiments, the scores API, or annotation queues.
+- **Monitors need traced traffic and a reference-free evaluator.** A monitor scores a sampled share of one deployment's live traffic, so the deployment must capture bodies ([`trace_bodies`](/deployments/observability#request-traces)), and only `llm_judge`, `jev`, and cloud code evaluators that need no reference answer can run on it.
 
 ## Where to go next
 
