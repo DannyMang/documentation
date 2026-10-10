@@ -17,7 +17,6 @@ The training method you pick decides how outputs are scored. GRPO takes a [rewar
 | `grpo_agentic` | Multi-turn agentic RL for LLMs: the model acts in an environment across turns and reward comes from the environment outcome. **Not currently available** while the agentic engine is rebuilt. | Rebuilding |
 | `sft_text` | Supervised finetuning for LLMs on text or chat data, learning directly from your labeled completions. | [TRL SFTTrainer](https://huggingface.co/docs/trl/sft_trainer) |
 | `dpo` | Preference tuning for LLMs on chosen/rejected pairs, with no reward function. | [TRL DPOTrainer](https://huggingface.co/docs/trl/dpo_trainer) |
-| `sft_video_gen` | LoRA finetuning for video-gen models (CogVideoX, Wan2.1, LTX, Mochi) from the dataset's video pairs. | [diffusers + LoRA](https://huggingface.co/docs/diffusers/main/en/training/lora) via accelerate |
 
 GRPO is the default. All methods support [LoRA and QLoRA](/training/grpo#lora-and-qlora).
 
@@ -53,8 +52,8 @@ What happens at each transition:
 - **`completed | failed | cancelled`**: pod auto-terminates. Cost is attributed (`cost_attributed_at`). Stripe credit is deducted (`billing_deducted_at`). The full stdout is uploaded to S3 and available via `GET /v1/training_jobs/{id}/logs/full`.
 
 Cancellation is **immediate**: the instance is terminated as soon as the request is
-accepted. The worker does not get a chance to flush anything, so whatever
-checkpoints already reached storage are what you keep — see [Checkpoints](#checkpoints).
+accepted. The worker does not get a chance to flush anything, and a job saves its
+weights only at completion (see [Checkpoints](#checkpoints)), so a cancelled job leaves no trained weights.
 
 ## Failure modes
 
@@ -89,79 +88,11 @@ Credits appear on the job as `refund` with `status` (`approved`, `credited`, `pe
 
 ## Checkpoints
 
-Every managed job writes a final artifact when training finishes. It also saves
-**intermediate checkpoints** while training runs, so a job that fails at hour 19 of 20
-still leaves usable weights behind.
+Every managed job saves its trained weights as a final artifact when training completes. Managed jobs can also save **intermediate checkpoints** while they run, so a job that fails or is cancelled at hour 19 of 20 still leaves weights (and the optimizer state) to download or to continue training from with `resume_from`. See [Checkpoints and resume](/training/checkpoints) for the knobs (`checkpoint_every`, `checkpoint_keep`), what a checkpoint holds, retention, and how to resume.
 
 <Info>
-  Intermediate checkpoints are rolling out behind a feature flag. Until it is enabled for
-  your workspace, jobs write only the final artifact and the `veri checkpoints` commands
-  report the feature as unavailable.
+  Intermediate checkpoints are rolling out behind a feature flag. Until it is enabled for your workspace, jobs write only the final artifact, the `veri checkpoints` commands report the feature as unavailable, and `resume_from` is refused at submit.
 </Info>
-
-Two hyperparameters control them:
-
-| Knob | Default | Meaning |
-| --- | --- | --- |
-| `checkpoint_every` | `0.1` | How often to save. A value between 0 and 1 is a **fraction of the run** (`0.1` = ten checkpoints, whatever the run length). A value of 1 or more is a **literal step count** and must be a whole number. `0` turns intermediate checkpoints off. |
-| `checkpoint_keep` | `3` | How many checkpoints to retain. Older ones are deleted as new ones are written. `0` keeps every checkpoint. |
-
-```python
-import veri
-
-job = veri.train(
-    base_model="Qwen/Qwen3-4B",
-    dataset="gsm8k-train",
-    method="grpo",
-    checkpoint_every=0.1,
-    checkpoint_keep=3,
-)
-```
-
-### Working with checkpoints
-
-```bash
-veri checkpoints list job_abc123
-veri checkpoints get job_abc123 job_abc123@400
-veri checkpoints download job_abc123 job_abc123@400 --output ./ckpt
-```
-
-Anywhere a checkpoint ID is accepted, `<job_id>@<step>` works too, so you can act on a
-step number you read off a loss curve.
-
-`download` fetches the model and tokenizer files by default — enough to load with
-`from_pretrained`. Optimizer state is roughly two thirds of a checkpoint's size and
-`from_pretrained` never reads it, so pass `--artifact` when you need more:
-
-| `--artifact` | Contents |
-| --- | --- |
-| `weights` (default) | Model + tokenizer. Loads with `from_pretrained`. |
-| `resumable` | Everything, including optimizer, scheduler, and RNG state. |
-| `adapter` | LoRA adapter files only. |
-
-### Checkpoints from a custom script
-
-[Custom script](/training/custom-script) jobs get a directory instead of a hyperparameter.
-Write a `checkpoint-<step>` subdirectory into `$VERI_CHECKPOINT_DIR` and Veri uploads it:
-
-```python
-import os
-
-checkpoint_dir = os.environ.get("VERI_CHECKPOINT_DIR")
-if checkpoint_dir:
-    model.save_pretrained(f"{checkpoint_dir}/checkpoint-{step}")
-    tokenizer.save_pretrained(f"{checkpoint_dir}/checkpoint-{step}")
-```
-
-Veri uploads a checkpoint directory once it stops changing, and sweeps for any remaining
-ones after your script exits. The variable is unset when the feature is not enabled, so
-guard on it as shown above.
-
-<Warning>
-  A checkpoint that was still being written when a script crashed cannot be told apart
-  from a complete one, so Veri uploads it rather than discard it. Checkpoints from a
-  custom script are reported as `weights` and are not guaranteed to be resumable.
-</Warning>
 
 ## Submitting a job
 
@@ -197,8 +128,8 @@ returns the finished job. Pass `stream=False` for quiet polling only. You can
 also tail any job from another terminal:
 
 ```bash
-veri jobs logs job_abc       # print everything so far
-veri jobs logs job_abc -f    # follow until the job finishes (Ctrl+C detaches)
+veri jobs logs $JOB_ID       # print everything so far
+veri jobs logs $JOB_ID -f    # follow until the job finishes (Ctrl+C detaches)
 ```
 
 `download()` fetches the complete Hugging Face checkpoint — weights plus
@@ -211,15 +142,15 @@ Hugging Face Hub.
 Capacity is per-region. If your job fails with `CAPACITY_UNAVAILABLE`, another region may have the GPU you need right now:
 
 ```bash
-veri regions list        # offered regions; default marked, coming-soon flagged
-veri gpu list            # live availability per provider and region
+veri regions list              # offered regions; default marked, coming-soon flagged
+veri gpu list --provider aws   # live availability per region (bare `veri gpu list` shows the catalog and prices)
 ```
 
-Pass `region="us-west-2"` to `client.training_jobs.create`, the `@veri.train` decorator, or `veri train --region us-west-2`. Omit it to launch in the default region. Unknown or not-yet-available regions are rejected at submit with the list of valid options.
+Pass `region="us-west-2"` to `client.training_jobs.create` or the `@training_job` decorator, or run `veri train --region us-west-2`. Omit it to launch in the default region. Unknown or not-yet-available regions are rejected at submit with the list of valid options.
 
 ### Choosing a GPU provider
 
-Veri supports multiple GPU providers: AWS (NVIDIA, default), Vast.ai (NVIDIA marketplace), and DigitalOcean (H100 droplets). Pass `provider` at submit time to choose where your job runs:
+Veri supports multiple GPU providers: AWS (NVIDIA, default), Vast.ai (NVIDIA marketplace), DigitalOcean (H100 droplets), and GCP (single A100 80GB). Pass `provider` at submit time to choose where your job runs:
 
 ```python
 job = client.training_jobs.create(

@@ -24,11 +24,13 @@ In a terminal, it asks whether to cache the model in Veri storage for faster sta
 | `--name` | Endpoint name. Default: derived from the repo name (`qwen3-4b`). |
 | `--gpu-type` | GPU shape. Default `L4-24GB`. |
 | `--gpu-count` | GPUs per replica. Default `1`. |
+| `--provider` | Compute provider. Default: chosen automatically. |
 | `--engine` | `vllm` (the default and only serving engine). |
 | `--replicas` | GPU-box replicas behind the endpoint. Default `1`. |
 | `--cache` / `--no-cache` | Cache the model in your library (or don't) without prompting. |
 | `--yes` / `-y` | Skip the prompt. No caching unless `--cache` is passed. |
-| `--vllm-image` | Explicit vLLM serving image for [architectures newer than the platform vLLM](/deployments#serving-newer-architectures), e.g. `vllm/vllm-openai:v0.25.1`. |
+| `--vllm-arg` | Extra vLLM CLI token appended to the engine command; repeat per token. Same rules as on [`deployments create`](#create-inline). |
+| `--vllm-image` | Explicit vLLM serving image for [architectures newer than the platform vLLM](/deployments#serving-newer-architectures), e.g. `vllm/vllm-openai:v0.31.0`. |
 | `--trace-bodies` / `--no-trace-bodies` | Capture request/response bodies as browsable [traces](/deployments/observability#request-traces). Off by default. |
 | `--trace-retention` | `base` (14 days, default) or `extended` (400 days). Requires `--trace-bodies`. |
 
@@ -67,7 +69,7 @@ The config must declare `kind = "deploy"`. See the [config schema](/cli/run#conf
 Flags passed alongside a config override the file's values the same way `--set` does (the flag wins). `--from-hf <repo>` and `--from-model <model-id>` replace `deployment.model` and pin `deployment.source` (`huggingface` / `custom_model`); `--gpu-count N` replaces `resources.gpu_count` (GPUs per replica, default `1`); `--name`, `--gpu-type`, and the replica and scaling flags below work the same way.
 
 ```bash
-veri deployments create configs/deploy.toml --from-hf Qwen/Qwen3-4B --gpu-count 2
+veri deployments create configs/deploy.toml --from-hf Qwen/Qwen3-4B --gpu-count 4
 ```
 
 ## Create inline
@@ -77,14 +79,14 @@ Two mutually exclusive modes — deploy a training job's output, or deploy a Hug
 ```bash
 # From a finished training job:
 veri deployments create \
-  --model job_abc \
+  --model 3f9c2a7b1d4e \
   --name my-endpoint \
   --gpu-type L4-24GB \
   --gpu-count 1
 
 # From a saved model in your library:
 veri deployments create \
-  --from-model mdl_abc \
+  --from-model 6a1f3c9e2b70 \
   --name support-prod \
   --gpu-type L4-24GB \
   --gpu-count 1
@@ -114,18 +116,18 @@ veri deployments create \
 | `--self-heal-attempts` | How many times Veri replaces the GPU box when the deployment's last box dies after it has served, `0` to `5`. Default `3`. See [Self-healing](/deployments#self-healing). Also available as `resources.self_heal_attempts` in a deploy config. |
 | `--cache` / `--no-cache` | With `--from-hf` only: also save the downloaded model to your [library](/deployments/custom-models) so later deploys of the repo start from Veri storage. |
 | `--vllm-arg` | Extra vLLM CLI token appended verbatim to the engine command; repeat per token (e.g. `--vllm-arg=--kv-cache-dtype --vllm-arg=fp8`). vllm engine only; platform-managed flags (`--model`, `--port`, `--host`, `--api-key`, `--served-model-name`) and `--trust-remote-code` are rejected. Also available as `deployment.vllm_extra_args` (list of strings) in a deploy config. |
-| `--vllm-image` | Explicit vLLM serving image for [architectures newer than the platform vLLM](/deployments#serving-newer-architectures), e.g. `vllm/vllm-openai:v0.25.1`. Official upstream images only (`vllm/vllm-openai[-rocm]:<tag>`); vllm engine only. Also available as `deployment.vllm_image` in a deploy config. Default: platform vLLM. |
+| `--vllm-image` | Explicit vLLM serving image for [architectures newer than the platform vLLM](/deployments#serving-newer-architectures), e.g. `vllm/vllm-openai:v0.31.0`. Official upstream images only (`vllm/vllm-openai[-rocm]:<tag>`); vllm engine only. Also available as `deployment.vllm_image` in a deploy config. Default: platform vLLM. |
 | `--trace-bodies` / `--no-trace-bodies` | Capture this deployment's request/response bodies as browsable [traces](/deployments/observability#request-traces). Off by default: enabling stores your end users' prompt/completion content. Also available as `deployment.trace_bodies` in a deploy config. |
 | `--trace-retention` | Trace retention class: `base` (14 days, default) or `extended` (400 days, extended rate). Requires `--trace-bodies`. Also available as `deployment.trace_retention`. |
 
-See [Replicas, autoscaling, and scale to zero](#replicas-autoscaling-and-scale-to-zero) for how the bounds behave.
+See [Replicas, autoscaling, and scale to zero](#replicas-autoscaling-and-scale-to-zero) for how the bounds behave. A workspace can run 2 active deployment replicas by default: a create, wake or update that would boot more fails with `429` (`ACTIVE_DEPLOYMENT_LIMIT`).
 
 ## Smoke-test with `chat`
 
 The fastest way to confirm a deployment is healthy:
 
 ```bash
-veri deployments chat dep_abc --message "What is 2+2?"
+veri deployments chat 5b0e7c2d9a14 --message "What is 2+2?"
 ```
 
 The CLI calls the OpenAI-compatible endpoint with a single user message and prints the assistant's reply.
@@ -176,23 +178,23 @@ With `min-replicas` below `max-replicas`, the fleet targets `--concurrency-targe
 With `--min-replicas 0`, a deployment idle past `--scale-to-zero-window` (default 1 hour) parks: replicas terminate, billing stops, status becomes `scaled_to_zero`. The idle window counts from when the deployment starts serving or from its last request (not from create or wake), and a park waits for in-flight requests to finish and for a fresh engine-metrics sample before terminating anything. Turning scale-to-zero on, or changing the window, starts a fresh idle window. The next chat request wakes it. While the GPU boots (a few minutes), the server answers that request with `503`, a `Retry-After` header, and error code `deployment_waking`. The SDK and CLI absorb this for you: `veri deployments chat` prints a "waking from zero" note and waits for the answer, and the Python SDK's `chat()` retries in the background until the deployment is up (see [chat and waking](/deployments/api#post-v1deploymentsidchatcompletions) for the knobs). Only raw HTTP clients need to handle the `503` themselves. To hide the cold start from your users, pre-warm on a predictive signal instead:
 
 ```bash
-veri deployments wake dep_abc     # 202; no-op if already up
+veri deployments wake 5b0e7c2d9a14   # 202; no-op if already up
 ```
 
-Then poll `veri deployments get dep_abc` until it's `serving`. Raising the floor also wakes it: `veri deployments update dep_abc --min-replicas 1` on a parked deployment wakes it immediately. A wake (explicit, request-triggered, or from raising `--min-replicas`) relaunches `min_replicas` boxes (at least one; the autoscaler grows the fleet again if traffic returns) and is subject to the workspace active-replica limit, like a create: with no headroom it returns `429` with code `ACTIVE_DEPLOYMENT_LIMIT` and the deployment stays parked, so stop or scale down something else first. Optionally set `--idle-delete-after N` to auto-stop a deployment that stays parked with no traffic for N days.
+Then poll `veri deployments get 5b0e7c2d9a14` until it's `serving`. Raising the floor also wakes it: `veri deployments update 5b0e7c2d9a14 --min-replicas 1` on a parked deployment wakes it immediately. A wake (explicit, request-triggered, or from raising `--min-replicas`) relaunches `min_replicas` boxes (at least one; the autoscaler grows the fleet again if traffic returns) and is subject to the workspace active-replica limit, like a create: with no headroom it returns `429` with code `ACTIVE_DEPLOYMENT_LIMIT` and the deployment stays parked, so stop or scale down something else first. Optionally set `--idle-delete-after N` to auto-stop a deployment that stays parked with no traffic for N days.
 
 A wake that fails (for example no GPU capacity) puts the deployment back to `scaled_to_zero` with the reason in its `error`, and the next wake waits out a backoff (1 minute, doubling up to 1 hour). With `--min-replicas 0` the next request after the backoff retries it; with `--min-replicas 1` or more Veri retries the wake itself once the backoff has passed, so the floor comes back without traffic (and as soon as there is room if the workspace active-replica limit is full). After 3 failed wakes in a row Veri stops retrying on its own and says so in `error`. `veri deployments wake` retries immediately whatever the count, and so does `veri deployments update` with `--min-replicas` of 1 or more.
 
 ### Change scaling on a live deployment
 
 ```bash
-veri deployments update dep_abc --replicas 4                    # fixed fleet of 4
-veri deployments update dep_abc --min-replicas 1 --max-replicas 6
-veri deployments update dep_abc --concurrency-target 4
-veri deployments update dep_abc --min-replicas 1                 # parked: wakes it now
-veri deployments update dep_abc --self-heal-attempts 5           # replace a lost last box up to 5 times
-veri deployments update dep_abc --clear-scale-to-zero-window     # idle window back to the default (3600s)
-veri deployments update dep_abc --clear-idle-delete-after        # never auto-stop while parked
+veri deployments update 5b0e7c2d9a14 --replicas 2              # fixed fleet of 2
+veri deployments update 5b0e7c2d9a14 --min-replicas 1 --max-replicas 6
+veri deployments update 5b0e7c2d9a14 --concurrency-target 4
+veri deployments update 5b0e7c2d9a14 --min-replicas 1          # parked: wakes it now
+veri deployments update 5b0e7c2d9a14 --self-heal-attempts 5    # replace a lost last box up to 5 times
+veri deployments update 5b0e7c2d9a14 --clear-scale-to-zero-window  # idle window back to the default (3600s)
+veri deployments update 5b0e7c2d9a14 --clear-idle-delete-after  # never auto-stop while parked
 ```
 
 `update` returns immediately with the new desired state; the fleet converges in the background (watch the `replicas` column approach `desired/desired`). Model, GPU, and provider are immutable: recreate the deployment to change those. A flag you leave out keeps its current setting; `--clear-scale-to-zero-window` and `--clear-idle-delete-after` put those two settings back to their defaults (each cannot be combined with its value flag). Clearing the window on a `--min-replicas 0` deployment starts a fresh idle window, like changing it.
@@ -208,7 +210,7 @@ veri deployments update dep_abc --clear-idle-delete-after        # never auto-st
 - **Without a session key**, requests go to the least-loaded replica.
 
 ```bash
-veri deployments chat dep_abc -m "Continue our story" --session-id chat-42
+veri deployments chat 5b0e7c2d9a14 -m "Continue our story" --session-id chat-42
 ```
 
 Reuse the same `--session-id` for every turn of a conversation to keep it on its cache-warm replica.
@@ -216,7 +218,7 @@ Reuse the same `--session-id` for every turn of a conversation to keep it on its
 ## Stop to end billing
 
 ```bash
-veri deployments stop dep_abc
+veri deployments stop 5b0e7c2d9a14
 ```
 
 `stop` ends billing and is final: a stopped deployment can't wake or resume; bring it back by creating a new one. Running `stop` again on an already stopped (or failed) deployment is a no-op that returns the deployment unchanged. `stop` is not a pause. For a deployment you'll come back to, prefer `--min-replicas 0` and let it park instead.
@@ -230,28 +232,28 @@ Once a deployment is stopped (or failed), `veri deployments delete <id>` removes
 ## Inspect traffic
 
 ```bash
-veri deployments metrics dep_abc
+veri deployments metrics 5b0e7c2d9a14
 ```
 
 Returns lifetime counters (`total_requests`, `total_prompt_tokens`, `total_completion_tokens`, `uptime_seconds`) and past-24-hour stats (`avg_latency_ms`, latency percentiles, `error_rate`); eval calls are excluded. JSON output is dict-shaped (suitable for `jq`):
 
 ```bash
-veri deployments metrics dep_abc --format json | jq .avg_latency_ms
+veri deployments metrics 5b0e7c2d9a14 --format json | jq .avg_latency_ms
 ```
 
 Recent requests:
 
 ```bash
-veri deployments requests dep_abc --limit 50
-veri deployments requests dep_abc --after req_xyz --limit 100   # pagination
+veri deployments requests 5b0e7c2d9a14 --limit 50
+veri deployments requests 5b0e7c2d9a14 --after 7c41e09ab2d3 --limit 100   # pagination
 ```
 
 Request traces (deployments created with `--trace-bodies` — see the
 [traces guide](/deployments/observability#request-traces)):
 
 ```bash
-veri deployments traces dep_abc --page 1 --limit 20
-veri deployments trace dep_abc veri-req000000001    # full request/response bodies
+veri deployments traces 5b0e7c2d9a14 --page 1 --limit 20
+veri deployments trace 5b0e7c2d9a14 veri-req000000001    # full request/response bodies
 ```
 
 ## List, get
@@ -262,7 +264,7 @@ veri deployments trace dep_abc veri-req000000001    # full request/response bodi
 veri deployments list                              # all of them
 veri deployments list --status serving             # only the live ones
 veri deployments list --status serving --format json
-veri deployments get dep_abc                        # one deployment, with its status
+veri deployments get 5b0e7c2d9a14                  # one deployment, with its status
 ```
 
 | Flag | Purpose |
@@ -276,7 +278,7 @@ A deployment holds GPU boxes while it is `provisioning` or `serving`. A `queued`
 The table (and `--format csv`) shows `id`, `name`, `status`, `replicas`, `model`, `endpoint_url`, `cost_per_hour_usd` and `self_heal_attempts`. With `--format json`, `list` and `get` also return the scaling settings (`min_replicas`, `max_replicas`, `concurrency_target`, `scale_to_zero_window_seconds` and `idle_delete_after_days`, where `null` means the default: a 3600-second idle window, never auto-stop), `failure_code`, and the wake state of a scale-to-zero deployment: `last_wake_at`, `wake_failure_count` and `next_wake_not_before` (see [the deployment object](/deployments/api#post-v1deployments)). When wakes have been failing, the table output adds a line under the table:
 
 ```text
-Wake: 2 failed wake boots in a row (last wake started 2026-10-03T10:00:00Z); a request wakes it again from 2026-10-03T10:04:00Z, `veri deployments wake dep_abc` retries now.
+Wake: 2 failed wake boots in a row (last wake started 2026-10-03T10:00:00Z); a request wakes it again from 2026-10-03T10:04:00Z, `veri deployments wake 5b0e7c2d9a14` retries now.
 ```
 
 ## Exit codes
@@ -285,7 +287,7 @@ Wake: 2 failed wake boots in a row (last wake started 2026-10-03T10:00:00Z); a r
 | --- | --- |
 | `0` | Success. |
 | `1` | User error (both `--model` and `--from-hf` passed, missing `--gpu-type` inline). |
-| `2` | API error. The server's message is printed as one `Error:` line on stderr, ending in the error code when the server sent one: `Error: self_heal_attempts must be between 0 and 5 (got 9) (code: invalid_self_heal_attempts)`. |
+| `2` | API error. The server's message is printed as one `Error:` line on stderr, ending in the error code when the server sent one: `Error: self_heal_attempts must be between 0 and 5 (got 9); 0 turns self-healing off (code: invalid_self_heal_attempts)`. |
 | `4` | Auth error. |
 
 ## What's next

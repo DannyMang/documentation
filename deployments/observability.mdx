@@ -28,9 +28,11 @@ Request, latency, token, cost, and engine telemetry (queue depth, KV-cache usage
 
 | Provider | Serving GPUs | Request + engine telemetry | GPU hardware snapshot | Backend |
 | --- | --- | --- | --- | --- |
-| `aws` | A100-80GB, H100-80GB, L4-24GB | Yes | Yes | NVML (vLLM's vendored binding on the host) |
+| `aws` | A100-80GB, H100-80GB, L4-24GB, A10G-24GB | Yes | Yes | NVML (vLLM's vendored binding on the host) |
 | `gcp` | A100-80GB | Yes | Not yet | Engine runs in docker; the agent cannot reach NVML from outside the container |
 | `digitalocean` | H100-80GB, L40S-48GB, MI300X-192GB | Yes | Not yet | Same docker visibility gap |
+
+GCP and DigitalOcean serving are not enabled yet (see [Serving providers](/deployments/providers)); their rows describe what those providers will report.
 
 Two design contracts worth knowing: the snapshot is **fail-soft** (a box where no GPU library works simply omits the readings — GPU telemetry can never break the heartbeat that liveness monitoring depends on), and it is **vendor-neutral in shape** — NVIDIA and AMD boxes emit the identical schema, so dashboards and Prometheus queries never branch on vendor.
 
@@ -45,7 +47,7 @@ veri deployments list --status serving --format json
 Copy the deployment `id` and export it for the REST examples:
 
 ```bash
-export DEPLOYMENT_ID=dep_...
+export DEPLOYMENT_ID=3f9c2a7d1b04  # the id from the list above
 ```
 
 ### 2. Generate buffered and streaming traffic
@@ -96,7 +98,7 @@ from datetime import datetime, timedelta, timezone
 from veri_sdk import Client
 
 client = Client()
-deployment_id = "dep_..."
+deployment_id = "<deployment-id>"
 now = datetime.now(timezone.utc)
 
 lifetime = client.deployments.metrics(deployment_id)
@@ -169,7 +171,7 @@ The `metrics/timeseries`, `metrics/engine-timeseries`, and `requests` endpoints 
 curl --get "https://api.veri.studio/v1/deployments/$DEPLOYMENT_ID/metrics/timeseries" \
   -H "Authorization: Bearer $VERI_API_KEY" \
   --data-urlencode "interval=auto" \
-  --data-urlencode "replica_id=rep_..."
+  --data-urlencode "replica_id=$REPLICA_ID"
 ```
 
 When `replica_id` is set, buckets, the window summary, engine gauges (queue depth and KV-cache utilization), and recent requests are scoped to that replica. Cost efficiency becomes replica-scoped as well: window cost is the replica's own active interval multiplied by its per-box GPU rate. Without `replica_id`, window cost is the sum of every replica's billed time in the window. Each bucket also carries `cost_usd`, the GPU cost billed inside that bucket, so cost lands where the boxes actually ran. Scoped metrics responses echo `replica_id` at the top level. The ID must be a replica of the deployment; unknown IDs return `404`. Omit the parameter to keep deployment-wide aggregates.
@@ -217,8 +219,8 @@ Or in the SDK: `client.deployments.create(..., trace_bodies=True)`.
 Browse traces from the deployment page in the dashboard, the CLI, or the API:
 
 ```bash
-veri deployments traces dep_abc --page 1 --limit 20
-veri deployments trace dep_abc veri-req000000001
+veri deployments traces $DEPLOYMENT_ID --page 1 --limit 20
+veri deployments trace $DEPLOYMENT_ID veri-9b1f2c4a7d01
 ```
 
 ```python
@@ -233,7 +235,7 @@ Details worth knowing:
   `deployments.requests()`, so you can join body-level traces with the timing,
   token, and error telemetry for the same request.
 - **Model version identity.** When the request was answered by a registered
-  model version (an adapter alias on a fleet, or a fleet built from a
+  model version (an adapter alias on a [multi-adapter fleet (beta)](/deployments/api#multi-adapter-fleets), or a fleet built from a
   registered model), `metadata.model_version_id` carries that version's id —
   the same value as the request log's `model_version_id` — so per-version
   quality can group traces by identity instead of by a serve-name string that
@@ -253,13 +255,61 @@ Details worth knowing:
   `A-Z a-z 0-9 . _ : -`) on every request of a conversation to group its traces
   into a thread; the SDK's `session_id` sends the equivalent `X-Veri-Session-Id`.
   The thread id is stored on the request and in trace metadata, and thread
-  [evaluators](/evals/evaluators#threads) score the whole conversation.
+  [evaluators](/evals/evaluators#threads) score the whole conversation. The dashboard and API views of threads are in
+  [Agent conversations](#agent-conversations).
 - **Scores.** Each trace carries its evaluator [scores](/evals/evaluators#scores)
   (from your own harness, experiments, or human review) under `scores`.
 - **Traces to training data.** A time window of traces can be imported into a
   [dataset stream](/training/dataset-streams#import-request-traces) as `chat`
   or `prompt` rows (`veri datasets import-traces`), snapshotted, and trained
   on — production traffic feeding the next fine-tune.
+
+## Agent conversations
+
+When an agent calls a deployment, two optional headers let Veri group its requests into conversations:
+
+| Header | Value | Effect |
+| --- | --- | --- |
+| `X-Veri-Thread-Id` | 1-128 characters of `A-Z a-z 0-9 . _ : -` | Groups the requests of one conversation into a thread. Send the same value on every turn. |
+| `X-Veri-Agent` | 1-64 characters of the same set | Names the agent the conversation belongs to. Threads sent without it are grouped under their deployment. |
+
+A header value outside these rules is rejected with `400` before the request reaches the model, for example `{"error": {"message": "X-Veri-Agent must be 1-64 characters of [A-Za-z0-9._:-]"}}`. The SDK's `session_id` sends `X-Veri-Session-Id`, which also counts as the thread id when it follows the same rules.
+
+```python
+from openai import OpenAI
+
+oai = OpenAI(
+    base_url=f"https://api.veri.studio/v1/deployments/{dep.id}",
+    api_key="vk_your_api_key",
+    default_headers={"X-Veri-Agent": "support-bot"},
+)
+response = oai.chat.completions.create(
+    model=dep.name,
+    messages=[{"role": "user", "content": "Where is my order?"}],
+    extra_headers={"X-Veri-Thread-Id": "conv-42"},
+)
+```
+
+Open **Agents** in the dashboard (Overview, Conversations, and Agents tabs) to browse them, or read the same data from the API. Each agent has a `key`: `agent:<X-Veri-Agent value>`, `deployment:<deployment id>` for threads sent without an agent name, or `env:<environment id>` for a [managed agent](/agents/environments). Eval calls are left out.
+
+| Endpoint | Returns |
+| --- | --- |
+| `GET /v1/observability/overview` | Totals, a zero-filled time series, live counts, and the top tools, agents, and models. Filter with `agent` (a key) or `deployment_id`. |
+| `GET /v1/observability/agents` | One entry per agent: conversations, turns, model and tool calls, tokens, error rate, and a 14-day daily conversation count. |
+| `GET /v1/observability/conversations` | Threads (and managed agent sessions) with activity in the window, newest first. Filters: `agent`, `deployment_id`, `kind` (`thread` or `session`), `active`, `errors_only`, `q` (text search). Page with `limit` (1-100, default 50) and `after` (the previous page's `next_cursor`). |
+| `GET /v1/deployments/{deployment_id}/threads/{thread_id}` | One thread, turn by turn: every model call and the tool calls between calls. Message text comes from stored [traces](#request-traces); `bodies` is `none` when the deployment does not capture them. |
+
+The window is `from` and `to` (RFC 3339), by default the past 24 hours, at most 30 days.
+
+```bash
+curl --get "https://api.veri.studio/v1/observability/conversations" \
+  -H "Authorization: Bearer $VERI_API_KEY" \
+  --data-urlencode "kind=thread" \
+  --data-urlencode "limit=20"
+
+curl "https://api.veri.studio/v1/deployments/$DEPLOYMENT_ID/threads/conv-42" \
+  -H "Authorization: Bearer $VERI_API_KEY"
+```
 
 ## Export metrics to Prometheus
 
@@ -308,10 +358,12 @@ scrape_configs:
     scrape_interval: 30s
     authorization:
       type: Bearer
-      credentials: $VERI_API_KEY
+      credentials_file: /etc/prometheus/veri_api_key  # a file holding your API key
     static_configs:
       - targets: ["api.veri.studio"]
 ```
+
+Prometheus does not expand environment variables in its config file, so keep the key in a file and point `credentials_file` at it.
 
 ### Grafana Cloud
 
@@ -323,7 +375,7 @@ prometheus.scrape "veri" {
   scrape_interval = "30s"
   authorization {
     type        = "Bearer"
-    credentials = "$VERI_API_KEY"
+    credentials = sys.env("VERI_API_KEY")
   }
   forward_to = [prometheus.remote_write.grafana_cloud.receiver]
 }
@@ -383,11 +435,11 @@ Useful deployment tools:
 
 Try these prompts:
 
-> Inspect deployment `dep_...` over the past hour. Summarize request volume, p50/p95/p99 TTFT and end-to-end latency, token throughput, error rate, and cost efficiency. Then list failed requests and group them by error category. Do not modify resources.
+> Inspect deployment `<deployment-id>` over the past hour. Summarize request volume, p50/p95/p99 TTFT and end-to-end latency, token throughput, error rate, and cost efficiency. Then list failed requests and group them by error category. Do not modify resources.
 
-> Compare the past 24 hours with the preceding 24 hours for deployment `dep_...`. Identify latency, error-rate, throughput, or cost regressions and cite the metric values behind each conclusion.
+> Compare the past 24 hours with the preceding 24 hours for deployment `<deployment-id>`. Identify latency, error-rate, throughput, or cost regressions and cite the metric values behind each conclusion.
 
-> Review deployment `dep_...` and my billing overview. Explain whether request volume, output-token efficiency, errors, or the current GPU burn rate is the main cost risk. Do not modify resources.
+> Review deployment `<deployment-id>` and my billing overview. Explain whether request volume, output-token efficiency, errors, or the current GPU burn rate is the main cost risk. Do not modify resources.
 
 Agent responses are only as complete as the telemetry window. Include the deployment ID and an explicit period in prompts when you need reproducible results.
 

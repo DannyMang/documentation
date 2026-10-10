@@ -1,22 +1,25 @@
 ---
 title: "GPU providers"
 sidebarTitle: "Overview"
-description: "Choose where your training job runs: AWS (NVIDIA), Vast.ai (NVIDIA marketplace spillover), or DigitalOcean (H100 droplets)."
-keywords: ["providers", "AWS", "Vast.ai", "DigitalOcean", "H100", "GPU", "cloud"]
+description: "Choose where your training job runs: AWS (NVIDIA), Vast.ai (NVIDIA marketplace spillover), DigitalOcean (H100 droplets), or GCP (single A100)."
+keywords: ["providers", "AWS", "Vast.ai", "DigitalOcean", "GCP", "H100", "GPU", "cloud"]
 ---
 
-Veri runs training jobs on three GPU providers. You pick one at job submit time with the `provider` field. Each provider offers different GPU types at different price points: AWS is the default, Vast.ai is the NVIDIA marketplace spillover, and DigitalOcean offers single-GPU H100 droplets with per-second billing.
+Veri runs training jobs on four GPU providers. You pick one at job submit time with the `provider` field. Each provider offers different GPU types at different price points: AWS is the default, Vast.ai is the NVIDIA marketplace spillover, DigitalOcean offers 1x and 8x H100 droplets with per-second billing, and GCP offers a single A100 80GB.
 
 ## Providers at a glance
 
 | Provider | GPUs offered | Architecture | Billing | Status |
 | --- | --- | --- | --- | --- |
-| [`aws`](/training/providers/aws) (default) | L4, A10G, A100 80GB, H100 80GB | NVIDIA (Ampere/Hopper) | Per-second, on-demand or spot | Available |
-| [`vast`](/training/providers/vast) | A100 80GB, H100 80GB | NVIDIA (marketplace) | Per-second, marketplace pricing | Available |
-| [`digitalocean`](/training/providers/digitalocean) | H100 80GB | NVIDIA (Hopper) | Per-second, on-demand | Available |
+| [`aws`](/training/providers/aws) (default) | L4, A10G, A100 80GB, H100 80GB | NVIDIA (Ampere/Hopper) | Per-second, on-demand | Available |
+| [`vast`](/training/providers/vast) | A100 80GB, H100 80GB (1, 2, 4 or 8 GPUs) | NVIDIA (marketplace) | Per-second, marketplace pricing | Available |
+| [`digitalocean`](/training/providers/digitalocean) | H100 80GB (1 or 8 GPUs) | NVIDIA (Hopper) | Per-second, on-demand | Available |
+| `gcp` | A100 80GB (1 GPU) | NVIDIA (Ampere) | Spot (can be preempted) | Available |
+
+GCP training runs on Spot VMs: if GCP preempts the VM, the job fails and is not resumed (resubmit it to try again).
 
 <Note>
-  All providers except AWS are gated behind feature flags that may be off in your environment. If a provider is disabled, submit returns a "coming soon" 400. Run `veri gpu list` to see which providers are live.
+  All providers except AWS are gated behind feature flags. If a provider is disabled, submit returns a 400 saying the provider isn't available yet. Run `veri gpu list` to see which provider and GPU combinations are offered for training.
 </Note>
 
 ## Choosing a provider
@@ -43,17 +46,23 @@ job = client.training_jobs.create(
 )
 ```
 
-From the CLI:
+From the CLI, override the provider and GPU of a [config file](/cli/training):
 
 ```bash
-veri train --provider digitalocean --gpu-type H100-80GB --gpu-count 1
+veri jobs create configs/train.toml --set provider.name=digitalocean --gpu-type H100-80GB --gpu-count 1
 ```
+
+(`veri train my_job.py --provider digitalocean` does the same for a script with a `@training_job` decorator, which sets the GPU itself.)
 
 Or in a TOML config:
 
 ```toml
 kind = "train"
-provider = "digitalocean"
+
+[provider]
+name = "digitalocean"
+
+[resources]
 gpu_type = "H100-80GB"
 gpu_count = 1
 ```
@@ -65,20 +74,20 @@ Omit `provider` to use the default (AWS).
 Capacity is per-provider and per-region. Check what's available right now before submitting:
 
 ```bash
-veri gpu list                    # all providers, all regions
-veri gpu list --provider vast     # Vast.ai only
-veri gpu list --provider digitalocean  # DigitalOcean only
-veri gpu list --gpu-type H100-80GB  # filter by GPU type
+veri gpu list                          # catalog: every provider and GPU, node sizes, price per GPU-hour
+veri gpu list --provider vast          # live availability on Vast.ai, per region
+veri gpu list --provider digitalocean  # live availability on DigitalOcean, per region
+veri gpu list --gpu-type H100-80GB     # live availability for one GPU type
 ```
 
-The `available` column shows live capacity: a real-time count of GPUs that can be launched immediately. `0` means the shape is offered but currently out of stock — retry later.
+Bare `veri gpu list` is the static catalog: which node sizes each provider sells for training and serving, and the price per GPU-hour. Add any filter (`--provider`, `--gpu-type`, `--region`) for the live view: one row per provider, GPU type and region with a `status` (`AVAILABLE` for a DigitalOcean region or Vast offer, `OFFERED` for an AWS catalog entry, `UNAVAILABLE` when there is no capacity) and a `signal` column (`qty N` for a live DigitalOcean or Vast count, `spot N/10` for the AWS Spot placement score). AWS `OFFERED` is not a launch guarantee.
 
 ## Pricing
 
 Each provider has its own rate card. Check current pricing with:
 
 ```bash
-veri gpu list --format json   # includes usd_per_hour per GPU type
+veri gpu list --format json   # includes usd_per_gpu_hr per provider and GPU type
 ```
 
 Rates are per-GPU-hour. You are billed from the moment the instance boots (during `provisioning`, before the first training step) until the job terminates and the instance is reaped. This applies to failed jobs too: GPU time actually used is billed. A job that never secures a GPU (e.g. `CAPACITY_UNAVAILABLE`) rents nothing and is not billed. Each billed job also carries a flat checkpoint-storage charge of about $0.24; see [Training job charges](/billing#training-job-charges).

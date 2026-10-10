@@ -152,7 +152,7 @@ curl -X POST https://api.veri.studio/v1/deployments/<id>/stop \
 
 - `source="huggingface"` tells Veri to pull the weights from the Hub at serve time. Nothing was uploaded from your machine, and there is no second download at request time.
 - The endpoint speaks the OpenAI Chat Completions API, so any OpenAI client works by pointing `base_url` at it. See [Calling a deployment](/deployments#calling-a-deployment).
-- Billing ran only while the deployment was `serving`. Once stopped, the row stays for history but no longer charges.
+- Billing ran from the moment the GPU launched (provisioning time counts, not only `serving`) until you stopped it. Once stopped, the row stays for history but no longer charges.
 
 ## Next steps
 

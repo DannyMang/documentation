@@ -1,18 +1,20 @@
 ---
 title: "Vast.ai"
 sidebarTitle: "Vast.ai"
-description: "NVIDIA marketplace spillover: per-host A100/H100 chunks (1-8 GPUs) when AWS is out of stock, at marketplace pricing."
+description: "NVIDIA marketplace spillover: per-host A100/H100 chunks (1, 2, 4 or 8 GPUs) when AWS is out of stock, at marketplace pricing."
 keywords: ["Vast.ai", "NVIDIA", "marketplace", "A100", "H100", "provider"]
 ---
 
-Vast.ai is a GPU marketplace that rents per-host NVIDIA chunks (1-8 GPUs within a single machine). It serves as a capacity spillover when AWS is out of A100 or H100 stock.
+Vast.ai is a GPU marketplace that rents per-host NVIDIA chunks (1, 2, 4 or 8 GPUs within a single machine). It serves as a capacity spillover when AWS is out of A100 or H100 stock.
 
 ## GPU types
 
 | GPU type | VRAM | Architecture | GPUs available |
 | --- | --- | --- | --- |
-| `A100-80GB` | 80 GB | NVIDIA Ampere | 1-8 (per-host) |
-| `H100-80GB` | 80 GB | NVIDIA Hopper | 1-8 (per-host) |
+| `A100-80GB` | 80 GB | NVIDIA Ampere | 1, 2, 4 or 8 (per-host) |
+| `H100-80GB` | 80 GB | NVIDIA Hopper | 1, 2, 4 or 8 (per-host) |
+
+Any other `gpu_count` (for example 3) is rejected at submit with a `400`.
 
 ## Submitting a job
 

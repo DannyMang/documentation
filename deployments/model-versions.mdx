@@ -14,15 +14,15 @@ Versions build on the [model library](/deployments/custom-models): each version 
 When a training job completes, register it into a lineage. The lineage is created on first use, and its first version becomes `production` automatically; later versions are only served after you promote them.
 
 ```bash
-veri models register job_8c41d2 --model acme-bot
+veri models register 8c41d2e7a9b3 --model acme-bot
 ```
 
 ```text
-Registered mdl_e51b09 as acme-bot@v6 (aliases: -).
+Registered e51b09c4d2a7 as acme-bot@v6 (aliases: -).
 ```
 
 ```python
-resp = client.models.register_version("job_8c41d2", "acme-bot")
+resp = client.models.register_version("8c41d2e7a9b3", "acme-bot")
 print(resp["version"]["name"])   # acme-bot@v6
 ```
 
@@ -30,8 +30,8 @@ Useful flags:
 
 | Flag | Purpose |
 | --- | --- |
-| `--artifact adapter` | Save a LoRA job's adapter instead of the merged checkpoint. Required if a multi-adapter fleet serves this lineage and should follow promotions. |
-| `--dataset-snapshot <id>` | Record the [dataset snapshot](/training/dataset-streams) the version trained on (`ds_...@snap-N`, from the job's `dataset_snapshot_id`). Not inferred automatically; pass it if you want provenance on the version. |
+| `--artifact adapter` | Save a LoRA job's adapter instead of the merged checkpoint. Required if a multi-adapter fleet ([beta](/deployments/api#multi-adapter-fleets)) serves this lineage and should follow promotions. |
+| `--dataset-snapshot <id>` | Record the [dataset snapshot](/training/dataset-streams) the version trained on (`<dataset-id>@snap-N`, from the job's `dataset_snapshot_id`). Not inferred automatically; pass it if you want provenance on the version. |
 | `--tag <t>` | Tag the version (repeatable). Tagged versions are protected from retention. |
 | `--name <n>` | Library display name (default `<model>-<job id>`). |
 
@@ -48,8 +48,8 @@ acme-bot  base_model=Qwen/Qwen3-4B  aliases: production=v5, staging=v6
 
 versions
 version  aliases  custom_model_id  artifact_type  pinned  dataset_snapshot_id  created_at
-v6       staging  mdl_e51b09       adapter                ds_9f2c81ab@snap-2   2026-09-09T00:12:31Z
-v5       production  mdl_c02a77    adapter        yes     ds_9f2c81ab@snap-1   2026-09-02T18:03:10Z
+v6       staging  e51b09c4d2a7     adapter                9f2c81ab4d6e@snap-2  2026-09-09T00:12:31Z
+v5       production  c02a77f1b8e4  adapter        yes     9f2c81ab4d6e@snap-1  2026-09-02T18:03:10Z
 
 alias audit (newest first)
 at                    alias       from  to  actor       reason
@@ -76,15 +76,15 @@ Staged a flip on 1 fleet adapter(s) serving this lineage.
 
 The version argument accepts `v6` or `6`. The alias move and its audit row commit together.
 
-**What promotion changes in serving.** A multi-adapter fleet that serves this lineage follows the `production` alias: promoting flips its adapter to the new version without a redeploy, and the next request is answered by the new weights. A deployment created from one specific library model (`--from-model`) is deliberately fixed: it keeps serving the version it was created from until you redeploy it.
+**What promotion changes in serving.** A multi-adapter fleet ([beta](/deployments/api#multi-adapter-fleets)) that serves this lineage follows the `production` alias: promoting flips its adapter to the new version without a redeploy, and the next request is answered by the new weights. A deployment created from one specific library model (`--from-model`) is deliberately fixed: it keeps serving the version it was created from until you redeploy it.
 
 ## Gate promotions on evals
 
 Turn on a [promotion gate](/evals/promotion-gate) and moving `production` requires evidence: a completed experiment of exactly that version, on a pinned dataset snapshot, scored by pinned evaluator versions, that meets your thresholds and does not regress from production.
 
 ```bash
-veri models gate acme-bot --snapshot ds_9f2c81ab@snap-4 --evaluator helpful --threshold helpful=0.9
-veri models evaluate acme-bot@v7 --wait        # creates the evidence
+veri models gate acme-bot --snapshot 9f2c81ab4d6e@snap-4 --evaluator helpful --threshold helpful=0.9
+veri models evaluate acme-bot@v7 --wait        # creates the evidence (v7 must be deployed)
 veri models promote acme-bot v7 --reason "passes the refund suite"
 ```
 

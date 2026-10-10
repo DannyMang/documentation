@@ -39,17 +39,19 @@ You set these at create time, whether from the [SDK](/deployments/examples) (`cl
 | `gpu.gpu_count` | Yes (inline CLI flags default to `1`) | none | GPUs per replica, for multi-GPU model parallelism. Must be a count the provider sells for that `gpu_type`: on AWS, `1` or `4` for `L4-24GB`/`A10G-24GB` and `8` for `A100-80GB`/`H100-80GB`. |
 | `engine` | No | `vllm` | Inference engine. `vllm` is the only serving engine; any other value returns a 400 at create. |
 | `provider` | No | `aws` | Cloud to serve on — see [Serving providers](/deployments/providers) for shapes and status, or run `veri gpu list` for the live catalog. |
-| `replicas` | No | `1` | GPU-box replicas behind one endpoint (1-8). Shorthand for equal `min_replicas`/`max_replicas` (a fixed fleet). |
-| `min_replicas` | No | `replicas` | Lower replica bound. Set below `max_replicas` to enable autoscaling; set to `0` to enable scale to zero. |
-| `max_replicas` | No | `replicas` | Upper replica bound (1-8). |
+| `num_replicas` | No | `1` | GPU-box replicas behind one endpoint (at most 8). Shorthand for equal `min_replicas`/`max_replicas` (a fixed fleet). The CLI flag is `--replicas`. |
+| `min_replicas` | No | `num_replicas` | Lower replica bound. Set below `max_replicas` to enable autoscaling; set to `0` to enable scale to zero. |
+| `max_replicas` | No | `num_replicas` | Upper replica bound (at most 8). |
 | `concurrency_target` | No | `8` | In-flight requests per replica the autoscaler aims for. Lower it for latency-sensitive traffic, raise it for batch throughput. |
 | `scale_to_zero_window_seconds` | No | `3600` | Idle seconds before a `min_replicas: 0` deployment parks, counted from when the deployment starts serving or from its last request (not from create or wake). Turning scale-to-zero on, or changing the window, starts a fresh idle window. Minimum `300`. |
 | `idle_delete_after_days` | No | off | Auto-stop a deployment that has been parked at zero with no traffic for this many days. |
 | `self_heal_attempts` | No | `3` | How many times Veri replaces the GPU box when the deployment's last box dies after it has served (crash or host failure), `0` to `5`. See [Self-healing](#self-healing). |
 | `cache` | No | `false` | `source: huggingface` only: also [save the model to your library](/deployments/custom-models#cache-a-hugging-face-model-while-deploying-it) for faster future starts. Best-effort; never affects this deployment. |
-| `vllm_image` | No | platform vLLM | Explicit vLLM serving image (e.g. `vllm/vllm-openai:v0.25.1`) for architectures newer than the platform's vLLM. See [Serving newer architectures](#serving-newer-architectures). |
+| `vllm_image` | No | platform vLLM | Explicit vLLM serving image (e.g. `vllm/vllm-openai:v0.31.0`) for architectures newer than the platform's vLLM. See [Serving newer architectures](#serving-newer-architectures). |
 | `trace_bodies` | No | `false` | Capture this deployment's request/response bodies as browsable [traces](/deployments/observability#request-traces). Enabling stores end-user prompt/completion content. First 5,000 traces per workspace each month are free, then metered per 1k from credits. |
 | `trace_retention` | No | `base` | Trace retention class: `base` (14 days) or `extended` (400 days, extended rate). Requires `trace_bodies: true`. |
+
+A workspace can run at most 2 deployment replicas at a time by default. Every replica of a `queued`, `provisioning`, `serving`, or `waking` deployment counts. A create that would go over the limit returns `429` with code `ACTIVE_DEPLOYMENT_LIMIT`; stop a deployment first, or contact us to raise the limit.
 
 `min_replicas`, `max_replicas`, `concurrency_target`, `scale_to_zero_window_seconds`, `idle_delete_after_days`, and `self_heal_attempts` can also be changed later on a live deployment: see [Scaling](/cli/deployments#replicas-autoscaling-and-scale-to-zero). Model, GPU, and provider are immutable: changing those means a new deployment. Send `null` for `scale_to_zero_window_seconds` or `idle_delete_after_days` to put it back to its default. Raising `min_replicas` to 1 or more on a parked (`scaled_to_zero`) deployment wakes it immediately, subject to the workspace active-replica limit (`429` if it is full, and nothing changes). Scaling changes made during the first boot apply once the deployment is serving; a new `self_heal_attempts` applies immediately in every status. See [what an update does in each status](/deployments/api#patch-v1deploymentsid).
 
@@ -108,7 +110,7 @@ Once a deployment is `serving`, it accepts OpenAI-shaped requests at `https://ap
 from veri_sdk import Client
 
 client = Client()
-dep = client.deployments.get("dep_...")  # the object returned by client.deployments.create(...)
+dep = client.deployments.get("<deployment-id>")  # or the object returned by client.deployments.create(...)
 
 # dep carries its own id, so it routes to the right deployment.
 response = dep.chat([
@@ -170,21 +172,21 @@ To serve one, pin the deployment to a newer official vLLM image:
 veri deployments create \
   --from-hf poolside/Laguna-M.1 \
   --gpu-type A100-80GB --gpu-count 8 \
-  --vllm-image vllm/vllm-openai:v0.25.1
+  --vllm-image vllm/vllm-openai:v0.31.0
 ```
 
 Or in a deploy config:
 
 ```toml
 [deployment]
-vllm_image = "vllm/vllm-openai:v0.25.1"
+vllm_image = "vllm/vllm-openai:v0.31.0"
 ```
 
 How it behaves:
 
 - Only official upstream images are accepted: `vllm/vllm-openai:<tag>` (NVIDIA) or `vllm/vllm-openai-rocm:<tag>` (AMD). Anything else is rejected at create.
 - The image runs via Docker on the deployment's box, on every provider, and is used exactly as written: the platform never rewrites or substitutes it.
-- The image is pulled from Docker Hub when the box boots, so the boot deadline is longer than the default 20 minutes: 40 minutes plus 5 seconds per GB of the deployment's total GPU memory. The pull can still be too slow or rate limited to provision reliably: a first boot that passes the deadline fails with `watchdog_timeout`, and a wake boot re-parks (a request after the backoff, or `POST /wake`, wakes it again). Explicit images are supported as literal overrides; the supported route for a newer architecture is the platform's next validated vLLM version.
+- The image is pulled from Docker Hub when the box boots, which adds to the cold start. The boot deadline is the same as for the platform image: 40 minutes plus 5 seconds per GB of the deployment's total GPU memory (about 42 minutes on `L4-24GB` x1, about 93 minutes on `H100-80GB` x8). The pull can still be too slow or rate limited to provision reliably: a first boot that passes the deadline fails with `watchdog_timeout`, and a wake boot re-parks (a request after the backoff, or `POST /wake`, wakes it again). Explicit images are supported as literal overrides; the supported route for a newer architecture is the platform's next validated vLLM version.
 - Without `vllm_image`, the deployment runs the platform-managed vLLM (0.27.1), which never pulls at boot.
 - `engine: vllm` only.
 - The image is set at create and immutable, like model and GPU.

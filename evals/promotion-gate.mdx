@@ -18,7 +18,7 @@ The gate is opt-in per lineage and guards only `production`:
 <CodeGroup>
 ```bash CLI
 veri models gate acme-bot \
-  --snapshot ds_9f2c81ab@snap-4 \
+  --snapshot 9f2c81ab4d7e@snap-4 \
   --evaluator helpful --evaluator exact \
   --threshold helpful=0.9 --threshold exact=1 \
   --max-error-rate 0.02
@@ -28,7 +28,7 @@ veri models gate acme-bot \
 client.models.update_gate(
     "acme-bot",
     enabled=True,
-    dataset_snapshot_id="ds_9f2c81ab@snap-4",
+    dataset_snapshot_id="9f2c81ab4d7e@snap-4",
     evaluators=["helpful", "exact"],
     thresholds={"helpful": 0.9, "exact": 1.0},
     max_error_rate=0.02,
@@ -40,7 +40,7 @@ Configuring from the CLI turns the gate on; `veri models gate acme-bot --off` tu
 
 | Setting | Flag | Default | Meaning |
 | --- | --- | --- | --- |
-| Dataset snapshot | `--snapshot` | required | The pinned snapshot (`ds_...@snap-N`) the evidence must run on. |
+| Dataset snapshot | `--snapshot` | required | The pinned snapshot the evidence must run on: `<dataset id>@snap-N`, with the dataset's id rather than its name. |
 | Evaluators | `--evaluator` | required | `llm_judge` or `code` evaluators, pinned as `name` (the latest version when you configure) or `name@N`. |
 | Thresholds | `--threshold NAME=RATE` | 1.0 | Minimum pass rate per evaluator with a pass rule. Errors and skips count as not passed. |
 | Trials | `--trials` | 1 | The evidence ran at least this many trials per row. |
@@ -62,7 +62,7 @@ done = client.experiments.wait(exp["id"])
 
 This creates the experiment the gate requires (the gate's snapshot, exactly its evaluator pins and trials) against version 7, and sets the current production version's latest matching run as the baseline, so the result carries a diff. It works whether or not the gate is on, so you can gather evidence before turning it on. Add `--local` if the gate pins a local code evaluator.
 
-The version must be served by a live deployment: deploy its library model (`veri deployments create --from-model mdl_...`), or attach it to a fleet that serves the lineage. Otherwise the call returns `409 version_not_servable`. With no gate config it returns `409 gate_not_configured`.
+The version must be served by a live deployment: deploy its library model (`veri deployments create --from-model <model id>`), or attach it to a fleet that serves the lineage. Otherwise the call returns `409 version_not_servable`. With no gate config it returns `409 gate_not_configured`.
 
 Then promote:
 

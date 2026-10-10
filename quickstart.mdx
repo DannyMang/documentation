@@ -35,7 +35,7 @@ veri version
 ```
 
 <Note>
-  The CLI uses `~/.config/veri/config.toml` on Linux/macOS (or `$XDG_CONFIG_HOME/veri/config.toml`) for credentials and defaults.
+  The CLI keeps credentials in `~/.config/veri/config.toml` on Linux and `~/Library/Application Support/veri/config.toml` on macOS (or `$XDG_CONFIG_HOME/veri/config.toml` when that is set). `veri whoami` prints the path in use.
 </Note>
 
 ## Log in
@@ -66,13 +66,16 @@ Output (rendered as a table):
 
 ```text
  api_url        https://api.veri.studio
- api_key        vk_abc123…d39f
- config_path    /Users/you/.config/veri/config.toml
+ api_key        vk_abc123def…d39f
+ config_path    /Users/you/Library/Application Support/veri/config.toml
  active_profile default
  user_id        user_abc123
  email          you@example.com
- balance_usd    12.50
- sdk_version    0.2.35
+ plan           None
+ workspace      Personal (personal)
+ workspace_id   user_abc123
+ balance_usd    12.5
+ sdk_version    0.2.42
 ```
 
 <Tip>

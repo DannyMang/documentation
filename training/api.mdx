@@ -14,13 +14,16 @@ Reference for `/v1/training_jobs/*`. All endpoints require Bearer token auth (`A
 | `GET` | `/v1/training_jobs` | List jobs (paginated, filter by `status`, `method`) |
 | `POST` | `/v1/training_jobs` | Create a job |
 | `GET` | `/v1/training_jobs/{id}` | Get one |
-| `GET` | `/v1/training_jobs/{id}/logs` | Stream stdout tail (SSE-shaped) |
+| `GET` | `/v1/training_jobs/{id}/logs` | Stream the worker's log as server-sent events |
 | `GET` | `/v1/training_jobs/{id}/logs/full` | Full stdout from S3 (after job ends) |
 | `GET` | `/v1/training_jobs/{id}/events` | Audit trail |
 | `GET` | `/v1/training_jobs/{id}/metrics` | Sampled training metrics |
 | `POST` | `/v1/training_jobs/{id}/cancel` | Cancel a non-terminal job |
 | `DELETE` | `/v1/training_jobs/{id}` | Hard-delete a finished job (S3 + DB) |
-| `GET` | `/v1/training_jobs/{id}/model` | Presigned download URL for the checkpoint |
+| `GET` | `/v1/training_jobs/{id}/model` | Presigned download URLs for the checkpoint files |
+| `GET` | `/v1/training_jobs/{id}/rewards/{index}/source` | The reward source a job was submitted with ([Reward functions](/training/reward-functions#viewing-a-jobs-reward)) |
+| `GET` | `/v1/training_jobs/{id}/trajectories` | Trajectory archive of a `grpo_harness` job ([Harness training](/training/harness)) |
+| `POST`, `DELETE` | `/v1/training_jobs/{id}/publish` | Publish or unpublish a run ([Sharing runs](/training/sharing)) |
 
 Worker-only endpoints (used by the runner agent, authenticated via per-job `callback_token`): `POST /status`, `POST /presigned-upload`, `POST /logs/presigned-upload`. Documented in the worker-callbacks appendix at the bottom.
 
@@ -33,7 +36,7 @@ Create a job. Returns immediately with status `queued`.
 ```json
 {
   "base_model": "Qwen/Qwen2.5-1.5B-Instruct",
-  "dataset_id": "ds_abc123",
+  "dataset_id": "9f2c81ab04de",
   "reward_source": "def reward(completions, answer, **kwargs):\n    ...",
   "method": "grpo",
   "hyperparameters": {
@@ -52,133 +55,179 @@ Create a job. Returns immediately with status `queued`.
 }
 ```
 
-**Required:** `base_model`, `dataset_id`, `output_name`, `gpu`. **Required for `method=grpo` and `grpo_harness`:** `reward_source` (or `reward_sources`, or `environments`).
+**Required:** `base_model`, `dataset_id`, `output_name`, `gpu` (a `custom_script` job needs `script` instead of `base_model` and `dataset_id`). **Required for `method=grpo` and `grpo_harness`:** `reward_source` (or `reward_sources`).
+
+**Request fields:**
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `job_type` | `"managed"` | `"managed"` runs a managed `method`. `"custom_script"` runs your own code instead: send `script` and omit `base_model`, `method`, and the reward fields ([Custom training scripts](/training/custom-script)). |
+| `base_model` | none | Hugging Face model id. Required for managed jobs. |
+| `dataset_id` | none | Dataset id or name (see below). Required for managed jobs, optional for `custom_script`. |
+| `method` | `"grpo"` | `grpo`, `grpo_harness`, `sft_text`, or `dpo`. |
+| `hyperparameters` | `{}` | Method knobs; see [Hyperparameter schemas](#hyperparameter-schemas). Keys the method does not read are accepted and listed in an `ignored_hyperparameter_keys` warning event on the job; a key it reads with a value of the wrong type (for example `"lora_rank": "8"`) is a 400. |
+| `output_name` | none | Name of the trained model. Required. |
+| `gpu` | none | `{"gpu_type", "gpu_count"}`; see [GPU config schema](#gpu-config-schema). Required. |
+| `provider` | `"aws"` | `aws`, `gcp`, `vast`, or `digitalocean`; see [GPU providers](/training/providers). |
+| `region` | default region | Launch region, AWS only (`GET /v1/regions` lists them). Other providers choose placement themselves and reject a `region`. |
+| `reward_source`, `reward_sources`, `reward_weights` | none | Inline reward functions (below). |
+| `script` | none | `custom_script` and `grpo_harness` code bundle: `{"base_image", "code_artifact_id", "entrypoint", "deps", "env"}`. |
+| `hf_push` | none | Push the result to Hugging Face when the job finishes: `{"repo", "artifact", "private"}` ([Hugging Face](/training/huggingface)). |
+| `num_nodes` | `1` | Gang size for multi-node `custom_script` jobs. Multi-node is not enabled yet: `2` or more returns a 400. |
+| `requires_heartbeat` | `true` | When `true`, a running job whose client stops sending heartbeats (`POST /v1/training_jobs/{id}/heartbeat`, which `veri train` sends while it waits) for 300 seconds is stopped with `heartbeat_timeout`. A job that never received a heartbeat is not affected. |
+| `checkpoint_destination` | `{"type": "veri"}` | Where the checkpoint is stored. Only `{"type": "veri"}` (or omitting the field) is accepted; any other value is a 400. See [Checkpoint destination schema](#checkpoint-destination-schema). |
 
 `dataset_id` also accepts [dataset stream](/training/dataset-streams) references: a stream's name or id with `@latest` or `@snap-N` (for example `acme-feedback@latest`). The job resolves and stores the pinned snapshot as `dataset_snapshot_id` in its response, so later appends never change what the job trains on.
 
-**Reward fields:** `reward_source` is the Python source text of a TRL-signature reward function. For multiple weighted rewards, pass `reward_sources` (a list) plus optional `reward_weights` (same length). `reward_source`/`reward_sources` and `environments` are mutually exclusive. Limits: at most 8 sources, 256 KiB each, and each source must define a function; violations are HTTP 400 at submit. See [Reward functions](/training/reward-functions).
+**Reward fields:** `reward_source` is the Python source text of a TRL-signature reward function. For multiple weighted rewards, pass `reward_sources` (a list) plus optional `reward_weights` (same length). Limits: at most 8 sources, 256 KiB each, and each source must define a function; violations are HTTP 400 at submit. See [Reward functions](/training/reward-functions).
 
 **Validation rules:**
-- `method=grpo` or `grpo_harness` → reward required (`reward_source`, `reward_sources`, or `environments`). `grpo_agentic` is being rebuilt and is not currently available.
-- `method=sft_text`, `dpo`, `sft_video_gen`, or `custom_script` → reward fields must be omitted (these learn from the dataset)
-- `gpu.gpu_type` must be one of: `A100-80GB`, `H100-80GB`, `L4-24GB`, `A10G-24GB`
-- `gpu.gpu_count` must be a node shape the provider sells for that `gpu_type` (on `aws`: `1` or `4` for `L4-24GB`/`A10G-24GB`, `8` for `A100-80GB`/`H100-80GB`); see [GPU config schema](#gpu-config-schema)
+- `method=grpo` or `grpo_harness` → reward required (`reward_source` or `reward_sources`). `grpo_agentic` is being rebuilt and `sft_video_gen` is not available: both are a 400.
+- `method=sft_text` or `dpo`, and `job_type=custom_script` → reward fields must be omitted (these learn from the dataset, or own their loop)
+- `custom_script` is a `job_type`, not a `method`: `"method": "custom_script"` is a 400 (`Unknown training method`). `job_type` must be `managed` or `custom_script`; anything else is a 400.
+- `environments` is not supported: a non-empty value is a 400 (no available method reads it).
+- `volume` is not supported: volume-backed training is not available yet, so a job-level `volume`, or a `dataset_id` whose dataset reads from a volume, is a 400. [Upload the data as a dataset](/training/datasets#upload-a-jsonl-file) instead.
+- `checkpoint_destination` other than `{"type": "veri"}` (another `type`, a `uri`, or `credentials`) is a 400; see [Checkpoint destination schema](#checkpoint-destination-schema).
+- `hyperparameters.load_in_4bit: true` without `lora_rank` is a 400 (QLoRA trains adapters on a frozen 4-bit base).
+- A hyperparameter value of the wrong type (for example `"lora_rank": "8"` or `"packing": "yes"`) is a 400 that names the key.
+- `gpu.gpu_type` must be one the provider offers for training: `L4-24GB`, `A10G-24GB`, `A100-80GB`, `H100-80GB` on `aws`; see [GPU config schema](#gpu-config-schema)
+- `gpu.gpu_count` must be a node shape the provider sells for that `gpu_type` (on `aws`: `1` or `4` for `L4-24GB`/`A10G-24GB`, `8` for `A100-80GB`/`H100-80GB`)
 
-**Errors:**
-- `400 Bad Request`: invalid reward source (too many, too large, or doesn't define a function)
-- `402 Payment Required` — no billing account is linked to the workspace yet (see [Billing](/billing))
-- `404 Not Found` — `dataset_id` doesn't exist or belongs to another user
-- `422 Unprocessable Entity` — schema validation failed
+**Errors:** coded errors carry a JSON body `{"error": {"code": "...", "message": "..."}}`; uncoded ones carry `{"error": {"message": "..."}}`.
 
-**Response** (`TrainingJobResponse`, `201`):
+- `400 Bad Request`: the job was rejected (invalid reward source, unknown or unavailable method or `job_type`, unsupported or unpriced GPU shape, provider or region, invalid or wrongly typed hyperparameters, an unsupported field (`environments`, `volume`, or a `checkpoint_destination` other than Veri storage), or a dataset the method can't use: a row format it can't train on, or one that reads from a volume). The message names the problem.
+- `402 Payment Required`: no billing account is linked to the workspace yet (see [Billing](/billing)).
+- `404 Not Found`: `dataset_id` doesn't exist in your workspace.
+- `422 Unprocessable Entity`: the body is not valid JSON for this schema (for example a missing `output_name`). This body is plain text, not JSON.
+- `429 Too Many Requests`: code `CONCURRENT_JOB_LIMIT` when the workspace already has its maximum of in-flight jobs (4 by default; failed, completed and cancelled jobs don't count). Wait for one to finish or cancel one, then resubmit. Code `RATE_LIMITED` (with a `Retry-After` header and `retry_after_seconds`) when the API key exceeds its request rate.
+- `503 Service Unavailable`: code `billing_unavailable` when the billing account could not be checked; retry after the `Retry-After` header (`retry_after_seconds` in the body).
+
+**Response** (`TrainingJobResponse`, `201`). `hyperparameters` echoes every field of the method's schema (see the note under [GRPOHyperparameters](#hyperparameter-schemas) about echoed defaults):
 
 ```json
 {
   "object": "training_job",
-  "id": "tj_abc123",
+  "id": "a1b2c3d4e5f6",
   "status": "queued",
   "base_model": "Qwen/Qwen2.5-1.5B-Instruct",
-  "dataset_id": "ds_abc123",
+  "dataset_id": "9f2c81ab04de",
+  "dataset_snapshot_id": null,
   "reward_count": 1,
   "method": "grpo",
-  "hyperparameters": {...},
+  "hyperparameters": {"learning_rate": 2e-05, "max_steps": 200, "rollouts_per_prompt": 8, "max_response_length": 512, "lora_rank": 16, "lora_alpha": 32, ...},
+  "base_image": null,
+  "entrypoint": null,
   "output_name": "qwen-1.5b-gsm8k",
-  "gpu_requested": {"type": "L4-24GB", "count": 1},
   "gpu": null,
-  "provider": null,
+  "gpu_requested": {"type": "L4-24GB", "count": 1},
+  "provider": "aws",
+  "region": null,
+  "num_nodes": 1,
   "error": null,
-  "dashboard_url": null,
+  "dashboard_url": "https://veri.studio/training?job=a1b2c3d4e5f6",
   "download_url": null,
   "wandb_run_url": null,
+  "hf_push": null,
+  "hf_repo_url": null,
   "current_step": null,
   "total_steps": null,
   "current_loss": null,
+  "cost_usd": null,
   "duration_seconds": null,
-  "created_at": "2026-05-12T10:23:45Z",
-  "updated_at": "2026-05-12T10:23:45Z",
   "started_at": null,
-  "completed_at": null
+  "completed_at": null,
+  "visibility": "private",
+  "published_at": null,
+  "created_at": "2026-05-12T10:23:45Z",
+  "updated_at": "2026-05-12T10:23:45Z"
 }
 ```
 
 ## GET /v1/training_jobs
 
-List your jobs. Filter by `status` (queued / provisioning / running / completed / failed / cancelled) or `method` (grpo / grpo_harness / sft_text / dpo / sft_video_gen).
+List your jobs, newest first. Filter by `status` (queued / provisioning / configuring / running / completed / failed / cancelled) or `method` (grpo / grpo_harness / sft_text / dpo / custom_script). `limit` is 1 to 100 (default 20); pass the last job's `id` as `after` for the next page. An unknown `status` is a 400.
 
 ```bash
 curl "https://api.veri.studio/v1/training_jobs?status=running&limit=10" \
   -H "Authorization: Bearer vk_..."
 ```
 
-Response is `PaginatedList[TrainingJobResponse]` with `data` + `has_more`.
+Response is `PaginatedList[TrainingJobResponse]`: `{"object": "list", "data": [...], "has_more": false}`.
 
-## GET /v1/training_jobs/{id}
+## GET /v1/training_jobs/\{id\}
 
 Single job. Same shape as the create response, but with timestamps populated as the job progresses.
 
-## GET /v1/training_jobs/{id}/metrics
+## GET /v1/training_jobs/\{id\}/metrics
 
-Sampled training metrics for charting. Server-side stride downsampling if you ask for more than `max_points`.
+Sampled training metrics for charting. Server-side stride downsampling if you ask for more than `max_points`. Metric names are the trainer's own log keys (for GRPO: `loss`, `reward`, `reward_std`, `entropy`, `completions/mean_length`, and `kl` when `kl_coef` is above 0; see [Reading the metrics](/training/grpo#reading-the-metrics)).
 
 **Query params:**
-- `keys` — comma-separated metric names (e.g. `loss,reward_mean,kl_div`). Omit for all available.
-- `from_step`, `to_step` — inclusive bounds
-- `max_points` — cap result size, default `500`, max `5000`
+- `keys`: comma-separated metric names (e.g. `loss,reward,reward_std`). Omit for all available.
+- `from_step`, `to_step`: inclusive bounds
+- `max_points`: cap result size, default `500`, max `5000`
 
 **Response:**
 
 ```json
 {
   "metrics": [
-    {"step": 0, "values": {"loss": 2.401, "reward_mean": -0.15}},
-    {"step": 10, "values": {"loss": 2.156, "reward_mean": 0.42}}
+    {"step": 1, "values": {"loss": 0.012, "reward": 0.44, "reward_std": 0.31}},
+    {"step": 10, "values": {"loss": 0.009, "reward": 0.62, "reward_std": 0.27}}
   ],
-  "available_keys": ["loss", "reward_mean", "kl_div", "policy_entropy"],
+  "available_keys": ["completions/mean_length", "entropy", "grad_norm", "learning_rate", "loss", "reward", "reward_std"],
   "latest_step": 100
 }
 ```
 
-## GET /v1/training_jobs/{id}/events
+## GET /v1/training_jobs/\{id\}/events
 
-Job lifecycle audit trail. Each event has timestamp, level (`info` / `warn` / `error`), event_type, and metadata.
+Job lifecycle audit trail, newest first. Each event has `id`, `job_id`, `level` (`info` / `warning` / `error`), `event_type`, `message`, `metadata`, `request_id`, and `created_at`. `limit` is 1 to 200 (default 50).
 
 ```bash
-curl ".../v1/training_jobs/tj_abc/events?limit=50" -H "Authorization: Bearer vk_..."
+curl "https://api.veri.studio/v1/training_jobs/$JOB_ID/events?limit=50" -H "Authorization: Bearer vk_..."
 ```
 
-## GET /v1/training_jobs/{id}/logs
+## GET /v1/training_jobs/\{id\}/logs
 
-Tail of recent stdout from the worker. Returns chunked plain text. Falls back to the cached `log_tail` if the worker hasn't streamed anything fresh.
+Streams the job's log as server-sent events (`text/event-stream`): each `data:` event is one log line, starting with the instance's boot log and then the worker's output as it arrives. The stream ends with a final `[Job completed]`, `[Job failed]`, or `[Job cancelled]` event. A job that has not reached a GPU yet returns `400` (`Job has not been submitted yet`).
 
 For the **full log** after a job completes, use `/logs/full` instead.
 
-## GET /v1/training_jobs/{id}/logs/full
+## GET /v1/training_jobs/\{id\}/logs/full
 
-Returns the complete stdout as plain text from S3 (uploaded ~30s during the run + a final flush at exit). Returns `206 Partial Content` if the upload hasn't happened yet (early-stage jobs); `404` if neither full log nor tail exists.
+Returns the complete stdout as plain text from S3 (uploaded ~30s during the run + a final flush at exit). Returns `206 Partial Content` with the recent tail (or the boot log) if the full log hasn't been uploaded yet; `404` if no log exists yet.
 
-## POST /v1/training_jobs/{id}/cancel
+## POST /v1/training_jobs/\{id\}/cancel
 
-Cancel a non-terminal job. The worker terminates at the next checkpoint boundary, not instantly — `status` may stay `running` for a few seconds before flipping to `cancelled`.
+Cancel a non-terminal job. Cancellation is synchronous: Veri stops provisioning, terminates the instance, and returns the job with `status: "cancelled"`. The worker gets no chance to flush, so anything not yet uploaded is lost. Cancelling a job that is already `completed`, `failed`, or `cancelled` is a `400`.
 
-## DELETE /v1/training_jobs/{id}
+## DELETE /v1/training_jobs/\{id\}
 
-Hard-delete the job row + cascading metrics + events + S3 artifacts (logs, status files, checkpoints).
+Hard-delete the job row + cascading metrics + events + S3 artifacts (logs, status files, checkpoints). Returns `{"id": "...", "object": "training_job", "deleted": true}`.
 
 **Constraints:**
 - Job must be in a terminal state (`completed`, `failed`, `cancelled`)
-- No active deployments may reference this job (`source="training_job"`, `source_job_id=this_id`)
+- No deployment may reference this job (`source="training_job"`, `source_job_id=this_id`), whatever the deployment's status, including stopped ones
 
-If a deployment still uses the checkpoint, you get `400 Bad Request` — delete the deployment first.
+If a deployment still references the checkpoint, you get `400 Bad Request`: delete the deployment first.
 
-## GET /v1/training_jobs/{id}/model
+## GET /v1/training_jobs/\{id\}/model
 
-Presigned S3 download URL for the final HF-format checkpoint. Only available after `status=completed`.
+Presigned S3 download URLs for the final HF-format checkpoint, one per file. Only available after `status=completed` (`400` before that).
 
 ```json
-{ "download_url": "https://veri-artifacts.s3.amazonaws.com/jobs/tj_abc/final/...?X-Amz-..." }
+{
+  "download_url": "https://.../jobs/a1b2c3d4e5f6/final/hf/adapter_model.safetensors?X-Amz-...",
+  "files": [
+    {"path": "adapter_config.json", "url": "https://...?X-Amz-..."},
+    {"path": "adapter_model.safetensors", "url": "https://...?X-Amz-..."},
+    {"path": "tokenizer.json", "url": "https://...?X-Amz-..."}
+  ]
+}
 ```
 
-URL expires in 1 hour; re-call to get a fresh one.
+A checkpoint is a directory: download every entry of `files`, keeping its `path`, to get something `from_pretrained` can load (the SDK's `job.download()` does this). `download_url` points at the weights file alone. URLs expire in 1 hour; re-call to get fresh ones.
 
 ## Hyperparameter schemas
 
@@ -200,10 +249,10 @@ system_prompt: str | None = None  # wraps each string prompt as a system + user 
 use_unsloth: bool = False
 lora_rank: int | None = None   # set to enable LoRA (null = full fine-tune)
 lora_alpha: int | None = None  # LoRA scaling; pairs with lora_rank
-load_in_4bit: bool = False     # QLoRA: 4-bit base + LoRA (needs use_unsloth + lora_rank)
+load_in_4bit: bool = False     # QLoRA: 4-bit base + LoRA (needs lora_rank, else 400; single GPU)
 ```
 
-LoRA and QLoRA are supported on GRPO — see [GRPO algorithm](/training/grpo).
+LoRA and QLoRA are supported on GRPO: see [GRPO algorithm](/training/grpo). The job object echoes `kl_coef: 0.001` and `max_prompt_length: 1024` for a job that omitted them; the trainer applies neither unless you set it (the omitted values are the ones above).
 
 ### AgenticGRPOHyperparameters (method=grpo_agentic)
 
@@ -237,56 +286,39 @@ cpu_offload: bool = False               # needs zero_stage 2 or 3
 
 `micro_batch_size`, `gradient_accumulation_steps`, `global_batch_size`, `gradient_checkpointing` and `precision` are honoured on single-GPU jobs too; the sharding keys need `gpu_count` above 1.
 
-### SFTVideoGenHyperparameters (method=sft_video_gen)
-
-```python
-learning_rate: float = 1e-3
-num_epochs: int = 30
-max_steps: int | None = None
-lora_rank: int = 64       # required (LoRA SFT)
-lora_alpha: int = 64
-resolution_height: int = 480
-resolution_width: int = 720
-num_frames: int = 49
-fps: int = 8
-batch_size: int = 1
-gradient_accumulation_steps: int = 4
-seed: int = 42
-```
-
 ## GPU config schema
 
 ```python
 gpu = {"gpu_type": "L4-24GB", "gpu_count": 1}
 ```
 
-Supported `gpu_type` values: `A100-80GB`, `H100-80GB`, `L4-24GB`, `A10G-24GB`. AMD `MI300X-192GB` is not yet available for training. On AWS (the default), `A100-80GB` and `H100-80GB` come only as whole 8-GPU nodes (`gpu_count: 8`), and `L4-24GB` and `A10G-24GB` come as 1 or 4 GPUs; any other count is rejected at submit with a `400`. On [`vast`](/training/providers/vast), `A100-80GB` and `H100-80GB` rent as flexible 1-8 GPU chunks; on [`digitalocean`](/training/providers/digitalocean), `H100-80GB` comes in fixed 1x and 8x droplets. Run `veri gpu list` to see current availability and pricing for every shape.
+Training shapes by provider (any other `gpu_type` or `gpu_count` is rejected at submit with a `400` that lists what the provider offers):
+
+| `provider` | `gpu_type` | `gpu_count` |
+| --- | --- | --- |
+| `aws` (default) | `L4-24GB`, `A10G-24GB` | `1` or `4` |
+| `aws` (default) | `A100-80GB`, `H100-80GB` | `8` (whole node) |
+| [`vast`](/training/providers/vast) | `A100-80GB`, `H100-80GB` | `1`, `2`, `4` or `8` |
+| [`digitalocean`](/training/providers/digitalocean) | `H100-80GB` | `1` or `8` |
+| `gcp` | `A100-80GB` | `1` |
+
+AMD `MI300X-192GB` is not yet available for training. Run `veri gpu list` to see current availability and pricing for every shape.
 
 ## Checkpoint destination schema
 
 ```python
-checkpoint_destination = {"type": "veri"}  # default — keep on Veri-managed S3
-
-# Or write directly to your bucket:
-checkpoint_destination = {
-    "type": "s3",
-    "uri": "s3://my-bucket/checkpoints/",
-}
-
-# Or GCS / Azure:
-checkpoint_destination = {"type": "gs", "uri": "gs://..."}
-checkpoint_destination = {"type": "az", "uri": "az://..."}
+checkpoint_destination = {"type": "veri"}  # the default: Veri-managed storage
 ```
 
-For `s3`, `gs`, `az`, you'll need credentials configured via account integrations (or pass them inline — schema accepts a `credentials` field).
+Checkpoints are always stored in Veri storage, so `{"type": "veri"}` (or omitting the field) is the only accepted value. Any other value is a `400` at submit: another `type` (such as `s3` or `gs`), a `uri`, or `credentials`. The destination is not stored. Writing checkpoints directly to your own bucket is not supported yet. To get the weights out, download them (`GET /v1/training_jobs/{id}/model`, `veri jobs download <job_id>`, or `job.download()`), or push them to [Hugging Face](/training/huggingface) with `hf_push`.
 
 ## Worker callbacks (appendix)
 
 These exist for the runner agent and are NOT for users to call directly. Auth is per-job `callback_token` (a 32-byte random secret stored in the DB on job creation), not your API key.
 
-- `POST /v1/training_jobs/{id}/status` — worker reports progress, metrics, terminal state
-- `POST /v1/training_jobs/{id}/presigned-upload` — worker requests a presigned S3 PUT URL for checkpoint files
-- `POST /v1/training_jobs/{id}/logs/presigned-upload` — worker requests a presigned S3 PUT URL for the full stdout
+- `POST /v1/training_jobs/{id}/status`: worker reports progress, metrics, terminal state
+- `POST /v1/training_jobs/{id}/presigned-upload`: worker requests a presigned S3 PUT URL for checkpoint files
+- `POST /v1/training_jobs/{id}/logs/presigned-upload`: worker requests a presigned S3 PUT URL for the full stdout
 
 These are documented for completeness; the worker SDK handles them.
 

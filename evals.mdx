@@ -13,11 +13,12 @@ Target and judge calls are ordinary requests to your own deployments, through th
 
 | Piece | What it is |
 | --- | --- |
-| [Evaluator](/evals/evaluators) | A named, versioned scoring rule: `llm_judge`, `code`, or `human`, scoring one turn or a whole thread, producing a boolean, a label, or a number. |
+| [Evaluator](/evals/evaluators) | A named, versioned scoring rule: `llm_judge`, `jev`, `code`, or `human`, scoring one turn or a whole thread, producing a boolean, a label, or a number. |
 | Score | One evaluator result on one target: a trace, a thread, or an experiment item. Immutable. |
 | [Experiment](/evals/experiments) | A pinned dataset snapshot run through a target (a deployment or a model version) and scored by pinned evaluator versions, with a diff against a baseline run. |
 | [Promotion gate](/evals/promotion-gate) | A per-lineage rule: moving `production` needs a passing experiment of that exact version. |
 | [Annotation queue](/evals/human-review) | Human review of traces, threads, or experiment items; completed reviews become scores and, optionally, corrected dataset rows. |
+| [Monitor](#monitors) | An evaluator that scores a sampled share of one deployment's live traffic as it arrives. |
 
 ## The loop
 
@@ -48,7 +49,7 @@ veri datasets create golden --format eval
 veri datasets append golden golden.jsonl        # {"input": "...", "expected": "..."} per line
 veri evaluators create exact --method code --output-type boolean \
   --source-file exact.py --requires-reference
-veri experiments run --dataset golden --target deployment:dep_ab12cd34 \
+veri experiments run --dataset golden --target deployment:4f2a9c1e7b3d \
   --evaluator exact --local
 ```
 
@@ -62,6 +63,35 @@ def evaluate(args):
 
 `veri experiments run` waits, prints a per-evaluator table, and exits `1` when the run fails, which makes it a CI check.
 
+## Monitors
+
+A monitor runs one evaluator on a sampled share of one deployment's live traffic, so production keeps getting scored between experiments. Monitors are managed through the API (there is no CLI or SDK command yet):
+
+```bash
+curl "https://api.veri.studio/v1/monitors" \
+  -H "Authorization: Bearer $VERI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "helpful-live", "deployment_id": "4f2a9c1e7b3d", "evaluator_id": "helpful", "sampling_rate": 0.1}'
+```
+
+- The deployment must store trace bodies, because the judge reads them: create it with `--trace-bodies` (see [request traces](/deployments/observability#request-traces)). Otherwise the call returns `409 trace_bodies_required`.
+- The evaluator must be an `llm_judge`, a `jev`, or a `cloud` code evaluator that does not set `requires_reference` (live traffic has no expected answer). Human and local code evaluators are refused with `400`.
+- A `single_turn` evaluator scores sampled requests shortly after their traces are stored. A `thread` evaluator scores a conversation once it has had no request for `idle_minutes`, and again if it resumes and goes idle again.
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `name` | required | 1-64 lowercase letters, digits, `.`, `_` or `-`. |
+| `deployment_id` | required | The deployment whose traffic is scored. Fixed at create. |
+| `evaluator_id` | required | The evaluator's id or name. Fixed at create. |
+| `evaluator_version` | latest | Pin a version; `null` tracks the latest. |
+| `sampling_rate` | `1` | Share of the traffic scored, from 0 to 1. |
+| `filter` | `{}` | `{"agent": "support-bot"}` scores only requests sent with that `X-Veri-Agent` header. |
+| `idle_minutes` | `15` | Thread evaluators: minutes without a request before a conversation is scored, 1-1440. |
+| `daily_cap` | `1000` | Most targets queued per UTC day, 1-100000. |
+| `enabled` | `true` | `false` pauses the monitor without deleting it. |
+
+List monitors with `GET /v1/monitors` (`?deployment_id=` for one deployment), and read, edit, or delete one with `GET`, `PATCH`, or `DELETE /v1/monitors/<id>`. Each monitor reports `stats`: scores and flagged scores (those that failed the pass rule) today and over 7 days, `last_scored_at`, and `human_agreement` once human reviews share targets with it. Its scores carry `source: monitor` and its `monitor_id` (`GET /v1/scores?monitor_id=<id>`) and are kept when the monitor is deleted. An evaluation that errors sends the `score.failed` [webhook](/webhooks). Judge calls are ordinary requests to the judge deployment.
+
 ## Limitations
 
 What evaluations do not do today:
@@ -72,7 +102,7 @@ What evaluations do not do today:
 - **No templates.** Veri ships no built-in evaluators, rubrics, or benchmark suites; you write every prompt and function.
 - **Text only.** No multimodal inputs or outputs.
 - **Cloud code evaluators are JavaScript or TypeScript only.** Python code evaluators run locally through the SDK or CLI.
-- **Monitors need traced traffic and a reference-free evaluator.** A monitor scores a sampled share of one deployment's live traffic, so the deployment must capture bodies ([`trace_bodies`](/deployments/observability#request-traces)), and only `llm_judge`, `jev`, and cloud code evaluators that need no reference answer can run on it.
+- **Monitors need traced traffic and a reference-free evaluator.** A monitor scores a sampled share of one deployment's live traffic, so the deployment must capture bodies ([`trace_bodies`](/deployments/observability#request-traces)), and only `llm_judge`, `jev`, and cloud code evaluators that need no reference answer can run on it. [Monitors](#monitors) are API only: there is no CLI or SDK command for them yet.
 
 ## Where to go next
 

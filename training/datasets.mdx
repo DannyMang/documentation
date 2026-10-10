@@ -1,18 +1,17 @@
 ---
 title: "Datasets"
 sidebarTitle: "Datasets"
-description: "JSONL upload + Hugging Face connect + Veri Volumes. Validation, dedup."
-keywords: ["datasets", "jsonl", "huggingface", "volumes", "training data"]
+description: "JSONL upload + Hugging Face connect. Validation, dedup."
+keywords: ["datasets", "jsonl", "huggingface", "training data"]
 ---
 
-A dataset is a collection of training examples Veri reads at job submission time. Four ways to get one in:
+A dataset is a collection of training examples Veri reads at job submission time. Three ways to get one in:
 
 1. **Upload** a JSONL file directly
 2. **Connect** a Hugging Face dataset — Veri pulls from the Hub
-3. **Point at a [Veri Volume](/volumes)** — train from a JSONL file you already uploaded to a managed volume
-4. **Create a [dataset stream](/training/dataset-streams)**: an append-only dataset that grows as data arrives; training pins immutable snapshots (`name@latest`, `name@snap-N`)
+3. **Create a [dataset stream](/training/dataset-streams)**: an append-only dataset that grows as data arrives; training pins immutable snapshots (`name@latest`, `name@snap-N`)
 
-Either way, the result is a dataset record with an `id` you reference in `client.training_jobs.create(dataset_id=...)`. This page covers the one-shot sources (upload, Hugging Face, volumes); streams have [their own page](/training/dataset-streams).
+Either way, the result is a dataset record with an `id` you reference in `client.training_jobs.create(dataset_id=...)`. This page covers the one-shot sources (upload, Hugging Face); streams have [their own page](/training/dataset-streams).
 
 ## JSONL format
 
@@ -30,7 +29,7 @@ Each line is one training example, and the fields depend on the training method.
 
 Upload rejects a row that has none of `prompt`, `messages`, `text`, `chosen` + `rejected`, `conversations`, or `instruction` + `output`. The dataset's `format` records the shape of its first row: `prompt`, `completion`, `preference`, `chat` (chat rows that also carry a `prompt`), `chat_no_prompt` (chat rows without one), `text`, `alpaca`, `sharegpt`, or `eval`.
 
-When you submit a job, Veri checks that format against the method and rejects a clear mismatch with a 400 that names the fields the method needs. For example: GRPO on `chat_no_prompt`, `text`, `alpaca` or `sharegpt` rows (GRPO generates from a `prompt`, so add a `prompt` column), `sft_text` on prompt-only rows, or `dpo` on prompt-completion rows. Datasets with no recorded format (Hugging Face and volume sources) and any other row the trainer can't use fail with `dataset_format_incompatible` at the start of the job.
+When you submit a job, Veri checks that format against the method and rejects a clear mismatch with a 400 that names the fields the method needs. For example: GRPO on `chat_no_prompt`, `text`, `alpaca` or `sharegpt` rows (GRPO generates from a `prompt`, so add a `prompt` column), `sft_text` on prompt-only rows, or `dpo` on prompt-completion rows. Datasets with no recorded format (Hugging Face sources) and any other row the trainer can't use fail with `dataset_format_incompatible` at the start of the job.
 
 ## Source types
 
@@ -38,7 +37,6 @@ When you submit a job, Veri checks that format against the method and rejects a 
 | --- | --- | --- |
 | `upload` | multipart `file` + `name` (via `POST /v1/datasets`) | JSONL only; one row per line |
 | `hf` | `huggingface_dataset`, `huggingface_config` (split + column_mapping; optional `config_name` for multi-config datasets like GSM8K) | Hugging Face Hub |
-| `volume` | `volume` (name), `volume_path` (absolute path inside the volume, e.g. `/train.jsonl`) | Train from a file in a managed [Veri Volume](/volumes) |
 
 ## Connect from Hugging Face
 
@@ -94,38 +92,6 @@ Each method still needs the right shape: SFT trains on `text`, `messages`, or pr
 
 The first training job on a connected HF dataset downloads it from the Hub, converts it, and caches the result. Later jobs on the same dataset read the cache directly: faster starts, and your data can't change mid-experiment if the upstream dataset is edited. To pick up upstream changes, connect the dataset again under a new name.
 
-## Connect from a Veri Volume
-
-If your data is already in a [Veri Volume](/volumes), point a dataset at a JSONL file inside it:
-
-```python
-dataset = client.datasets.from_volume(
-    volume="my-corpus",
-    path="/train.jsonl",
-    name="my-corpus-train",
-)
-```
-
-The dataset stays linked to the volume — re-uploading the file inside the volume updates the data for the next training run.
-
-## Validate before connecting
-
-Test the connection + preview the first row + see total row count without committing.
-
-```python
-result = client.datasets.validate(
-    source_type="hf",
-    huggingface_dataset="openai/gsm8k",
-    huggingface_config={"split": "train", "subset": "main", "column_mapping": {"question": "prompt", "answer": "answer"}},
-)
-
-print(f"Valid: {result['valid']}")
-print(f"Rows: {result['num_rows']}")
-print(f"Columns: {result['columns']}")
-```
-
-If `result.valid` is `false`, `result.error` tells you why.
-
 ## Upload a JSONL file
 
 For one-off experiments:
@@ -143,17 +109,17 @@ veri datasets upload training_data.jsonl --name my-experiment
 ```
 </CodeGroup>
 
-The CLI runs structural validation by default. Pass `--skip-validation` to skip, `--deep-check` for tokenizer-aware checks (slower).
+The CLI runs structural validation by default (every row must carry one of the fields above). Pass `--skip-validation` to skip it. `--deep-check` (tokenizer-aware checks) is reserved and not implemented yet: it only prints a notice.
 
 ## Dedup
 
-Datasets are content-addressed. Uploading the same bytes twice (same file, or two files with identical content) returns the same `id` — one S3 object, one DB row.
+Datasets are content-addressed. Uploading the same bytes twice (same file, or two files with identical content) returns the same `id`: one S3 object, one DB row. The existing record keeps its original `name`, even if the second upload passed a different one.
 
 This means you can re-run a script that uploads the same dataset without worrying about stale duplicates.
 
 ## Preview rows
 
-Click a dataset on the dashboard's Datasets page to open a row viewer that pages through the stored JSONL 50 rows at a time, so large datasets never download in full. The row number in the footer is editable — type a row number and press Enter to jump straight there (the first jump into a large dataset builds a small row index, so it can take a moment; later jumps are instant). Uploaded datasets are previewable immediately. Connected datasets (Hugging Face or volume) become previewable after their first training run creates the [snapshot](#snapshot-caching).
+Click a dataset on the dashboard's Datasets page to open a row viewer that pages through the stored JSONL 50 rows at a time, so large datasets never download in full. The row number in the footer is editable — type a row number and press Enter to jump straight there (the first jump into a large dataset builds a small row index, so it can take a moment; later jumps are instant). Uploaded datasets are previewable immediately. Connected Hugging Face datasets become previewable after their first training run creates the [snapshot](#snapshot-caching).
 
 The same paging is available programmatically via `GET /v1/datasets/{dataset_id}/rows`, with `cursor` for sequential pages or `start_row` to jump to an absolute row.
 
@@ -163,7 +129,9 @@ Datasets persist until you delete them, either from the dashboard or via `DELETE
 
 ## Name conflicts
 
-Connecting two datasets with the same `name` but different source config returns `409 dataset_name_conflict`. Either pick a unique name or reuse the existing dataset (the identity hash on the source config means the same config returns the same `id`).
+Connecting a dataset under a `name` that already exists returns the existing dataset (`200`, same `id`) when the source matches: the same `source_type` and `huggingface_dataset`. A different source under that name is a `409` with `{"error": {"message": "Dataset '...' already exists with a different configuration. ..."}}`.
+
+Only the source is compared, not `huggingface_config`: connecting the same Hugging Face repo under the same name with a different `split`, `subset` or `column_mapping` silently returns the existing dataset with its original configuration. Use a new name when you change them.
 
 ## Where to go next
 

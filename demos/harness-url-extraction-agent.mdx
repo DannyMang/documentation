@@ -1,13 +1,13 @@
 ---
 title: "Train a URL-extraction agent in your own harness"
 sidebarTitle: "Harness RL: URL agent"
-description: "End-to-end harness-in-the-loop RL: improve Qwen3.5-4B on arXiv paper → GitHub/project-page URL extraction, trained inside the same agent harness it deploys in."
+description: "End-to-end harness-in-the-loop RL: improve Qwen3-4B on arXiv paper → GitHub/project-page URL extraction, trained inside the same agent harness it deploys in."
 keywords: ["demo", "harness", "agent", "GRPO", "RL", "tool use", "trajectory", "Claude Agent SDK", "veri run-harness"]
 ---
 
 {/* doctest-page-gpu-required */}
 
-The end-to-end [harness-in-the-loop](/training/harness) flow on one concrete task: **improve Qwen3.5-4B at finding the GitHub and project-page URLs of a given arXiv paper**, trained inside the same agent harness it will be deployed in (the train/serve skew argument in one task). The dataset is public ([`Mithilss/neurips-2025-paperswithcode-artifacts`](https://huggingface.co/datasets/Mithilss/neurips-2025-paperswithcode-artifacts) — 3.4k NeurIPS 2025 papers, ~1k with official repositories), the reward is verifiable (URL match vs. ground truth), and the harness is a plain agent loop with nothing Veri-specific in it.
+The end-to-end [harness-in-the-loop](/training/harness) flow on one concrete task: **improve Qwen3-4B at finding the GitHub and project-page URLs of a given arXiv paper**, trained inside the same agent harness it will be deployed in (the train/serve skew argument in one task). The dataset is public ([`Mithilss/neurips-2025-paperswithcode-artifacts`](https://huggingface.co/datasets/Mithilss/neurips-2025-paperswithcode-artifacts): 3.4k NeurIPS 2025 papers, about 900 with an official repository), the reward is verifiable (URL match vs. ground truth), and the harness is a plain agent loop with nothing Veri-specific in it.
 
 <Note>
   Harness training is **experimental** — expect rough edges on the GPU path and please report them. This spends real GPU credit; check your balance with `veri billing balance` first.
@@ -15,10 +15,9 @@ The end-to-end [harness-in-the-loop](/training/harness) flow on one concrete tas
 
 ## Prerequisites
 
-- Install the SDK: `pip install veri-sdk`
+- Install the SDK: `pip install veri-sdk` (and `pip install datasets` for the dataset prep script)
 - Authenticate: `veri login` (or set `VERI_API_KEY`)
 - Read the concept page once: [Harness-in-the-loop RL](/training/harness) (the env contract below is what makes the "unmodified harness" part work)
-- The complete runnable bundle (all harness variants, prep script, reward, smoke script) lives in the repo at `tests/documentation_tests/Documentation/Demos/Harness URL extraction agent/`
 
 ## 1. Dataset prep
 
@@ -68,10 +67,41 @@ with open("tasks.jsonl", "w") as f:
         written += 1
 ```
 
-A task is only trainable if the harness's fetch can actually surface the ground-truth URL — an unwinnable task scores 0 on every rollout, so its whole GRPO group contributes zero advantage. Filter before uploading (the bundle's `prep_dataset.py --verify` runs the same lookup the harness performs and keeps the winnable rows — about 5 in 6 papers pass):
+A task is only trainable if the harness's fetch can actually surface the ground-truth URL: an unwinnable task scores 0 on every rollout, so its whole GRPO group contributes zero advantage. Filter before uploading: `verify_tasks.py` runs the same lookup the harness performs and keeps the winnable rows (about 9 in 10 papers pass). Run it after `prep_dataset.py`:
 
-```bash
-python prep_dataset.py --verify
+```python verify_tasks.py
+import json
+import re
+import time
+import urllib.request
+
+
+def observation(arxiv_id):
+    # The same lookup the harness performs: HF paper page first, arXiv as fallback.
+    for url in (f"https://huggingface.co/papers/{arxiv_id}", f"https://arxiv.org/abs/{arxiv_id}"):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "veri-demo-agent/1.0"})
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                html = resp.read().decode("utf-8", errors="replace")
+        except Exception:
+            continue
+        links = sorted(set(re.findall(r"https?://(?:www\.)?github\.com/[\w.\-]+/[\w.\-]+", html)))
+        text = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", html))[:2500]
+        return (text + " " + " ".join(links[:10])).lower()
+    return ""
+
+
+rows = [json.loads(line) for line in open("tasks.jsonl")]
+kept = []
+for row in rows:
+    arxiv_id = re.search(r"\b(\d{4}\.\d{4,5})\b", row["prompt"]).group(1)
+    truth = row["answer_github"].strip().rstrip("./").lower()
+    if truth in observation(arxiv_id):
+        kept.append(row)
+    time.sleep(0.3)  # be polite to the paper hosts
+with open("tasks.jsonl", "w") as f:
+    f.writelines(json.dumps(row) + "\n" for row in kept)
+print(f"kept {len(kept)}/{len(rows)} winnable tasks")
 ```
 
 Upload it: `veri datasets upload tasks.jsonl --name paper-url-extraction` → note the dataset id.
@@ -108,13 +138,31 @@ Nothing Veri-specific in any of these — the rollout redirects the SDK with env
 
 <Tabs>
   <Tab title="Anthropic (Claude-style tools)">
-    `agent.py` (the bundle's default) — native `tool_use` blocks over the Anthropic messages API. The model calls `web_fetch`, the harness executes it and returns `tool_result`:
+    `agent.py` (the default) uses native `tool_use` blocks over the Anthropic messages API. The model calls `web_fetch`, the harness executes it and returns `tool_result`:
 
     ```python agent.py
+    import json
+    import os
+    import re
+    import time
+    import urllib.error
+    import urllib.request
+
     import anthropic
 
     client = anthropic.Anthropic()  # ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN injected per rollout
     MODEL = os.environ.get("VERI_POLICY_MODEL", "Qwen/Qwen3-4B")
+    MAX_TURNS = int(os.environ.get("VERI_MAX_TURNS", "10"))
+
+    SYSTEM = (
+        "You find GitHub repository (and project page) URLs for arXiv papers. "
+        "Use the web_fetch tool to look up the paper: "
+        "https://huggingface.co/papers/<id> lists the paper's linked code "
+        "repositories (fall back to https://arxiv.org/abs/<id>), and any "
+        "candidate repository page. When you are confident, reply with "
+        "'ANSWER: <github url>' (plus 'PROJECT: <project page url>' if one "
+        "exists) and nothing else."
+    )
 
     TOOLS = [{
         "name": "web_fetch",
@@ -126,16 +174,45 @@ Nothing Veri-specific in any of these — the rollout redirects the SDK with env
         },
     }]
 
+
+    def web_fetch(url: str) -> str:
+        html = None
+        for delay in (0, 5, 15):  # parallel rollouts can trip HF's 429 rate limit
+            time.sleep(delay)
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": "veri-demo-agent/1.0"})
+                with urllib.request.urlopen(req, timeout=30) as resp:
+                    html = resp.read().decode("utf-8", errors="replace")
+                break
+            except urllib.error.HTTPError as e:
+                if e.code != 429:
+                    raise
+        if html is None:
+            raise RuntimeError(f"rate-limited fetching {url}")
+        # Repo links come from the raw HTML hrefs so they survive the truncation.
+        links = sorted(set(re.findall(r"https?://(?:www\.)?github\.com/[\w.\-]+/[\w.\-]+", html)))
+        text = re.sub(r"<script\b[^>]*>.*?</script\b[^>]*>", " ", html, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", text))[:3500]
+        if links:
+            text += "\nLINKS ON PAGE: " + " ".join(links[:10])
+        return text
+
+
+    task = json.loads(os.environ["VERI_TASK_INPUT"])
     messages = [{"role": "user", "content": task}]
     for turn in range(MAX_TURNS):
         resp = client.messages.create(model=MODEL, max_tokens=1024, system=SYSTEM, tools=TOOLS, messages=messages)
         messages.append({"role": "assistant", "content": resp.content})
-        tool_results = [
-            {"type": "tool_result", "tool_use_id": b.id, "content": web_fetch(b.input["url"])}
-            for b in resp.content if b.type == "tool_use" and b.name == "web_fetch"
-        ]
+        tool_results = []
+        for b in resp.content:
+            if b.type == "tool_use" and b.name == "web_fetch":
+                try:
+                    content = web_fetch(b.input["url"])
+                except Exception as e:
+                    content = f"fetch failed: {e}"
+                tool_results.append({"type": "tool_result", "tool_use_id": b.id, "content": content})
         if not tool_results:
-            break  # final answer
+            break  # no tool call: that was the final answer
         messages.append({"role": "user", "content": tool_results})
     ```
 
@@ -194,27 +271,34 @@ Nothing Veri-specific in any of these — the rollout redirects the SDK with env
             return text
         return f"fetch failed: no page found for {arxiv_id}"
 
-    task = json.loads(os.environ["VERI_TASK_INPUT"])
-    messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": task}]
-    for turn in range(MAX_TURNS):
-        resp = client.chat.completions.create(model=MODEL, messages=messages, temperature=0.7, max_tokens=512)
-        content = (resp.choices[0].message.content or "").strip()
-        messages.append({"role": "assistant", "content": content})
-        if content.upper().startswith("ANSWER:"):
-            break
-        match = re.match(r"(?i)^FETCH:\s*(\S+)", content)
-        observation = fetch_arxiv(match.group(1)) if match else "Reply with FETCH: <arxiv_id> or ANSWER: <url>."
-        messages.append({"role": "user", "content": f"OBSERVATION:\n{observation}"})
+    if __name__ == "__main__":  # lets agent_langchain.py import the helpers above
+        task = json.loads(os.environ["VERI_TASK_INPUT"])
+        messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": task}]
+        for turn in range(MAX_TURNS):
+            resp = client.chat.completions.create(model=MODEL, messages=messages, temperature=0.7, max_tokens=512)
+            content = (resp.choices[0].message.content or "").strip()
+            messages.append({"role": "assistant", "content": content})
+            if content.upper().startswith("ANSWER:"):
+                break
+            match = re.match(r"(?i)^FETCH:\s*(\S+)", content)
+            observation = fetch_arxiv(match.group(1)) if match else "Reply with FETCH: <arxiv_id> or ANSWER: <url>."
+            messages.append({"role": "user", "content": f"OBSERVATION:\n{observation}"})
     ```
 
     Token-id capture is confirmed on this route (as it is on the Anthropic text route).
   </Tab>
   <Tab title="LangChain">
-    `agent_langchain.py` — the same loop with `ChatOpenAI` + message types (`langchain-openai` reads `OPENAI_BASE_URL` from the env):
+    `agent_langchain.py` runs the same loop with `ChatOpenAI` and message types (`langchain-openai` reads `OPENAI_BASE_URL` from the env). It reuses the prompt and fetch helper from `agent_openai.py` (OpenAI tab), so keep both files in `./harness`:
 
     ```python agent_langchain.py
+    import json
+    import os
+    import re
+
     from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
     from langchain_openai import ChatOpenAI
+
+    from agent_openai import MAX_TURNS, SYSTEM, fetch_arxiv  # same prompt and lookup as the OpenAI tab
 
     llm = ChatOpenAI(
         model=os.environ.get("VERI_POLICY_MODEL", "Qwen/Qwen3-4B"),
@@ -222,6 +306,7 @@ Nothing Veri-specific in any of these — the rollout redirects the SDK with env
         max_tokens=512,
     )  # reads OPENAI_BASE_URL / OPENAI_API_KEY from the env
 
+    task = json.loads(os.environ["VERI_TASK_INPUT"])
     messages = [SystemMessage(content=SYSTEM), HumanMessage(content=task)]
     for turn in range(MAX_TURNS):
         content = (llm.invoke(messages).content or "").strip()
@@ -244,14 +329,12 @@ langchain-openai>=0.2
 ```
 
 <Warning>
-  **Both routes are verified training paths** (token-id capture confirmed live on OpenAI and Anthropic `/v1/messages`). The Anthropic route supports native `tool_use` end to end: the `tools` array rides the policy's chat template, tool calls come back as `tool_use` blocks, and `tool_result` blocks round-trip — `agent.py` is a verified live path. Spans without token ids are rejected from training (fail-safe, never silent drift). The stock Claude Agent SDK runtime (`claude -p ...`, via `agent_claude.sh`) is also verified live; image and document content blocks are rejected with a 400 (no token-native path).
+  **Both routes are verified training paths** (token-id capture confirmed live on OpenAI and Anthropic `/v1/messages`). The Anthropic route supports native `tool_use` end to end: the `tools` array rides the policy's chat template, tool calls come back as `tool_use` blocks, and `tool_result` blocks round-trip, so `agent.py` is a verified live path. Spans without token ids are rejected from training (fail-safe, never silent drift). The stock Claude Agent SDK runtime (`claude -p ...`) is also verified live; image and document content blocks are rejected with a 400 (no token-native path).
 </Warning>
-
-The complete, runnable bundle (all harness variants, the dataset prep script, 6 curated smoke tasks, reward, and a local smoke script that runs any variant against any endpoint) lives in the repo at `tests/documentation_tests/Documentation/Demos/Harness URL extraction agent/`.
 
 ## 4. Submit
 
-The bundle's default `agent.py` is the Anthropic tool_use harness — submit it with the matching protocol:
+`agent.py` (the Anthropic tab) is the tool_use harness. Submit it with the matching protocol, from the directory that holds `reward.py` and `harness/`:
 
 ```bash
 veri run-harness ./harness \
@@ -292,11 +375,19 @@ The JSONL schema (rollout record, per-request spans, rendered episode) is docume
 
 ## 6. Deploy the result
 
-The trained checkpoint is on the job like any managed run — **Save as model**, then `veri deploy`, and point the same harness at the deployment endpoint.
+The trained checkpoint is on the job like any managed run. Save it as a model, deploy that model, and point the same harness at the deployment endpoint:
+
+```bash
+veri models save <job id> --name url-agent              # prints the model id
+veri deployments create --from-model <model id> --name url-agent \
+  --gpu-type L4-24GB --gpu-count 1
+```
+
+`veri deploy` only deploys Hugging Face repos, so use `veri deployments create --from-model` for a saved model.
 
 ## Config-file form
 
-`veri run` accepts the same job as TOML. Upload the harness directory first (any `veri run-script ...` upload or `client.code_artifacts.upload(dir)` returns an artifact id), then:
+`veri run` accepts the same job as TOML. Upload the harness directory first (`client.code_artifacts.upload("./harness")` returns an artifact id), then run `veri run configs/harness.toml`:
 
 ```toml configs/harness.toml
 kind = "train"
@@ -308,7 +399,7 @@ base = "Qwen/Qwen3-4B"
 id = "<dataset id>"
 
 [reward]
-file = "./reward.py"
+file = "../reward.py"  # relative to this config file
 
 [resources]
 gpu_type = "L4-24GB"
@@ -318,13 +409,17 @@ gpu_count = 4
 type = "grpo_harness"
 rollouts_per_prompt = 8
 max_steps = 50
-harness_protocol = "openai"
+harness_protocol = "anthropic"
 max_turns = 40
 
 [harness]
 base_image = "veri/base"
 code_artifact_id = "<artifact id>"
 entrypoint = "python agent.py"
+
+[harness.deps]  # same as --requirements ./harness/requirements.txt
+kind = "requirements"
+content = "openai>=1.0\nanthropic>=0.40\nlangchain-openai>=0.2\n"
 ```
 
 Docs: [Harness-in-the-loop RL (reference)](/training/harness) · [Managed training](/training/managed) · [Reward functions](/training/reward-functions)

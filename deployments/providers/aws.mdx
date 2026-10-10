@@ -17,7 +17,7 @@ AWS is the default serving provider — omit the `provider` field to use it.
 | `H100-80GB` | 80 GB | 8 (whole node) | Fastest per-request latency, TP up to 8 |
 
 <Note>
-  AWS has no single-GPU A100/H100 instance — the smallest SKU is the whole 8-GPU node, and you pay for all of it. For a single A100/H100, pick a provider with a genuine 1-GPU shape ([GCP](/deployments/providers/gcp), or DigitalOcean when it lands).
+  AWS has no single-GPU A100/H100 instance: the smallest SKU is the whole 8-GPU node, and you pay for all of it. Single-GPU A100/H100 serving is not available yet. Until then, serve on `L4-24GB` or `A10G-24GB` (x1 or x4) when the model fits, or on the whole 8-GPU node.
 </Note>
 
 ## Creating a deployment
