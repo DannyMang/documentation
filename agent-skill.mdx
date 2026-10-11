@@ -454,7 +454,8 @@ REST routes work from any client.
   (`veri sessions create <env_id> --budget 5`), then `veri sessions send <id> "<task>" --follow`.
   Transcript: `GET /v1/sessions/{id}/events?after_seq=N` or SSE `GET .../stream`
   (resume with `Last-Event-ID`). `pause` / `resume` / `DELETE` (ends it). Billed per hour
-  while the sandbox is awake; paused sessions cost nothing; a message to a paused session is 409.
+  while the sandbox is awake at the environment size's rate (`rate_usd_per_hour` on the
+  session); paused sessions cost nothing; a message to a paused session is 409.
 
 Docs: https://docs.veri.studio/agents/environments · https://docs.veri.studio/agents/sessions
 

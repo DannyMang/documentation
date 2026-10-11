@@ -18,7 +18,7 @@ name = "coder"
 description = "Claude Code on our fine-tuned Qwen"
 
 harness = "claude-code"          # the only harness today
-size = "standard"                # small | standard | large
+size = "standard"                # small | standard | large (sets the hourly rate)
 egress = "restricted"            # restricted (default) | unrestricted
 allowed_hosts = ["api.example.com"]
 secrets = ["GITHUB_TOKEN"]       # names from `veri secrets`
@@ -73,7 +73,7 @@ env["version"]["spec"]   # the normalized spec that sessions will run
 | --- | --- |
 | `harness` | `claude-code`. OpenCode, Codex and custom images are planned and rejected with a clear message until then. |
 | `model` | Exactly one of `deployment_id` (a Veri deployment in this workspace; each session gets a short-lived [model access key](/secrets#model-access-keys) automatically) or `base_url` plus an optional `secret` holding its API key. |
-| `size` | Sandbox CPU and memory tier. |
+| `size` | Sandbox CPU and memory tier, which also sets the session's [hourly rate](/agents/sessions#pricing-and-limits): `small` (1/2 vCPU, 4 GiB memory, 8 GB disk), `standard` (1 vCPU, 6 GiB, 12 GB; the default), `large` (4 vCPU, 12 GiB, 20 GB). `xlarge` is planned and rejected with a clear message until then. |
 | `egress` | `restricted` allows only the built-in hosts (Veri API, GitHub, npm, PyPI), your `allowed_hosts`, the model host and every MCP host, over HTTPS. `unrestricted` is open internet. |
 | `env` | Plain environment variables. The eight names the runtime sets are rejected as `env` keys and in `secrets`: `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_API_KEY`, `VERI_API_KEY`, `VERI_API_URL`, `VERI_SESSION_ID`. Other names with those prefixes are fine. |
 | `secrets` | [Secret](/secrets) names. A secret without `scope_host` becomes an environment variable; one with `scope_host` is attached only to requests for that host and never enters the sandbox. |

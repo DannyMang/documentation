@@ -6219,7 +6219,7 @@
           "Sessions"
         ],
         "summary": "Pause a session",
-        "description": "Snapshots the workspace and stops the sandbox. Billing stops; resume restores the files.",
+        "description": "Snapshots the sandbox filesystem and stops the sandbox. Billing stops. Resume restores the files under /workspace and the conversation; running processes, open ports and background tasks do not survive.",
         "operationId": "pause",
         "parameters": [
           {
@@ -16858,6 +16858,7 @@
                 "status",
                 "awake_seconds",
                 "total_cost_usd",
+                "rate_usd_per_hour",
                 "created_by",
                 "created_at",
                 "updated_at"
@@ -16902,6 +16903,11 @@
                   "type": "number",
                   "format": "double",
                   "description": "Charged so far (USD)."
+                },
+                "rate_usd_per_hour": {
+                  "type": "number",
+                  "format": "double",
+                  "description": "Price per awake hour (USD) this session bills at, fixed at create from\nthe environment's `size`."
                 },
                 "started_at": {
                   "type": [
@@ -19076,6 +19082,7 @@
           "status",
           "awake_seconds",
           "total_cost_usd",
+          "rate_usd_per_hour",
           "created_by",
           "created_at",
           "updated_at"
@@ -19120,6 +19127,11 @@
             "type": "number",
             "format": "double",
             "description": "Charged so far (USD)."
+          },
+          "rate_usd_per_hour": {
+            "type": "number",
+            "format": "double",
+            "description": "Price per awake hour (USD) this session bills at, fixed at create from\nthe environment's `size`."
           },
           "started_at": {
             "type": [

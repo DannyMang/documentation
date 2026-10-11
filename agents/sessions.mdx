@@ -36,11 +36,26 @@ for ev in client.sessions.stream(s["id"]):
 | `provisioning` | The sandbox is starting (or restoring from a pause). |
 | `ready` | Idle, waiting for a message. |
 | `running` | The agent is working on your last message. One run at a time. |
-| `paused` | Workspace snapshotted, sandbox stopped. No compute is billed. |
+| `paused` | Sandbox filesystem snapshotted, sandbox stopped. No compute is billed. See [Pause and resume](#pause-and-resume). |
 | `ended` | You ended it. The transcript stays readable for 30 days. |
 | `failed` | The sandbox or the agent failed terminally. `failure_code` says why. |
 
 Sessions pause themselves after the environment's `idle_timeout_s` without input. Sending a message to a paused session returns `409`; call `resume` first (it takes a few seconds while the workspace is restored).
+
+### Pause and resume
+
+A pause snapshots the sandbox's filesystem and stops the sandbox; a resume starts a fresh sandbox from that snapshot. What survives a pause:
+
+- Files under `/workspace` (and anything else the agent wrote to the sandbox's disk).
+- The conversation: the harness resumes its own transcript, so the agent continues where it left off and the Veri transcript keeps its `seq` numbering.
+
+What does not survive:
+
+- Running processes, open ports and background tasks. A dev server or watcher the agent started is gone after resume; the agent has to start it again.
+- Per-session permission grants the agent collected during the run (anything you approved interactively). The environment's `permissions` rules apply as written.
+- Any in-memory state of the harness or its tools.
+
+A snapshot is tied to the agent image version it was taken from and expires 30 days after it was taken or last restored. A session paused longer than that cannot be resumed; its transcript stays readable for the usual retention and you can start a new session from the same environment.
 
 If the environment's model is a Veri deployment, each session gets a 24-hour [model access key](/secrets#model-access-keys) that can only call that deployment. It is revoked when the session ends.
 
@@ -69,7 +84,14 @@ Lifecycle transitions also fire [webhooks](/webhooks): `session.started`, `sessi
 
 ## Pricing and limits
 
-A session is billed at a flat rate per hour while its sandbox is awake, settled per minute. Paused and ended sessions cost nothing. Model calls to a Veri deployment are billed through that deployment; calls to your own endpoint are billed by its provider.
+A session is billed per hour while its sandbox is awake, settled per minute, at the rate of the environment's `size`. The rate is fixed when the session is created (the API returns it as `rate_usd_per_hour`), so a later price change never affects a running session. Paused and ended sessions cost nothing. Model calls to a Veri deployment are billed through that deployment; calls to your own endpoint are billed by its provider.
+
+| `size` | Sandbox | Price per awake hour |
+| --- | --- | --- |
+| `small` | 1/2 vCPU, 4 GiB memory, 8 GB disk | $0.03 |
+| `standard` (default) | 1 vCPU, 6 GiB, 12 GB | $0.10 |
+| `large` | 4 vCPU, 12 GiB, 20 GB | $0.30 |
+| `xlarge` | 16 vCPU class | planned, not available yet |
 
 Set `budget_usd` to pause the session automatically when its sandbox spend reaches the ceiling; the transcript records a `session.budget_exhausted` event and the session's `failure_code` reads `budget_exhausted`. Resume it to continue (the budget still applies, so raise it first or start a new session).
 
