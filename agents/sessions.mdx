@@ -71,8 +71,8 @@ If the environment's model is a Veri deployment, each session gets a 24-hour [mo
 | `agent.thinking` | `{text}` |
 | `agent.tool_use` | `{id, name, input}` |
 | `tool.result` | `{tool_use_id, content, is_error}` |
-| `usage` | `{awake_seconds, input_tokens, output_tokens, cache_read_tokens}` |
-| `run.completed` | `{stop_reason}`, the agent finished a turn |
+| `usage` | `{scope, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens}` per model call (`scope: "message"`) and per run (`scope: "run"`), or `{awake_seconds}` heartbeats |
+| `run.completed` | `{stop_reason, duration_ms, duration_api_ms, num_turns, total_cost_usd, model_usage, permission_denials}`, the agent finished a turn. `model_usage` maps each model to `{input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, cost_usd}`; `permission_denials` lists `{tool_name, tool_use_id}` for tool calls the harness refused |
 | `session.status` | `{status, from, failure_code, error}` |
 | `session.interrupted` | `{reason, exit_code, run_id, snapshot_id, snapshot_error}`: the sandbox was stopped underneath the session (`reason` is `sigterm` for an inactivity timeout or host eviction, `container_stopped` when the container exited during a run). The session moves to `paused`; after `container_stopped` a `session.status` event then marks it `failed`. |
 | `session.budget_exhausted` | `{budget_usd, accrued_usd, awake_seconds}`, written just before a [budget](#pricing-and-limits) pause |
@@ -81,6 +81,10 @@ If the environment's model is a Veri deployment, each session gets a 24-hour [mo
 Payloads above 64 KiB (a large file read, for example) are stored in object storage; the event carries a 1 KiB preview and `payload_ref`.
 
 Lifecycle transitions also fire [webhooks](/webhooks): `session.started`, `session.paused`, `session.ended`, `session.failed`.
+
+### Usage
+
+Token counts are recorded in two places. For a Veri-hosted model, every model call the agent makes is recorded on the deployment's request history (`GET /v1/deployments/{id}/requests`) with its input, cached and output tokens, the same as any other request to that deployment. For your own endpoint, Veri never sees the model traffic; the per-run totals the harness reports (`usage` with `scope: "run"` and `run.completed.model_usage`) are recorded on the transcript instead. Session token totals in the observability views take their output count from the per-run figure, because the per-message `output_tokens` the harness reports while a turn is in flight is a placeholder.
 
 ## Pricing and limits
 
