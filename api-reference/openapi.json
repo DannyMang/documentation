@@ -6973,6 +6973,174 @@
         ]
       }
     },
+    "/v1/training_jobs/{job_id}/checkpoints": {
+      "get": {
+        "tags": [
+          "Training jobs"
+        ],
+        "summary": "List checkpoints",
+        "operationId": "list",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "description": "Training job ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "description": "Cursor: the previous page's last checkpoint id (or `<job_id>@<step>`).",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A paginated list of the job's checkpoints, newest step first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedList_CheckpointResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Job not found or not owned by the caller"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/training_jobs/{job_id}/checkpoints/{ckpt_id}": {
+      "get": {
+        "tags": [
+          "Training jobs"
+        ],
+        "summary": "Get a checkpoint",
+        "operationId": "get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "description": "Training job ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "ckpt_id",
+            "in": "path",
+            "description": "Checkpoint ID, or <job_id>@<step>",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The checkpoint",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckpointResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found or not owned by the caller"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/training_jobs/{job_id}/checkpoints/{ckpt_id}/download": {
+      "get": {
+        "tags": [
+          "Training jobs"
+        ],
+        "summary": "Get checkpoint download URLs",
+        "operationId": "download",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "description": "Training job ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "ckpt_id",
+            "in": "path",
+            "description": "Checkpoint ID, or <job_id>@<step>",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "artifact",
+            "in": "query",
+            "description": "weights (default) | resumable | adapter.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Presigned per-file manifest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckpointDownload"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The checkpoint is not ready"
+          },
+          "404": {
+            "description": "Not found or not owned by the caller"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/training_jobs/{job_id}/events": {
       "get": {
         "tags": [
@@ -9155,6 +9323,34 @@
           "veri"
         ]
       },
+      "CheckpointDownload": {
+        "type": "object",
+        "required": [
+          "object",
+          "id",
+          "step",
+          "files"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "step": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CheckpointFile"
+            },
+            "description": "Every selected file. Download all of them, preserving relative paths."
+          }
+        }
+      },
       "CheckpointFile": {
         "type": "object",
         "required": [
@@ -9169,6 +9365,74 @@
           "url": {
             "type": "string",
             "description": "Presigned GET URL for this file (expires in 1h)."
+          }
+        }
+      },
+      "CheckpointResponse": {
+        "type": "object",
+        "description": "Note the absence of `s3_prefix`: storage layout is not part of the API. The\ncustom-models design already ruled against exposing bucket paths, and keeping\nthem internal is what let C1 add a new prefix without an API change.",
+        "required": [
+          "object",
+          "id",
+          "job_id",
+          "step",
+          "kind",
+          "payload",
+          "size_bytes",
+          "file_count",
+          "status",
+          "pinned",
+          "created_at"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "job_id": {
+            "type": "string"
+          },
+          "step": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Trainer global_step. Also addressable as `<job_id>@<step>`."
+          },
+          "kind": {
+            "type": "string"
+          },
+          "payload": {
+            "type": "string",
+            "description": "\"resumable\" (includes optimizer state) or \"weights\" (servable only)."
+          },
+          "size_bytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "file_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "status": {
+            "type": "string"
+          },
+          "pinned": {
+            "type": "boolean"
+          },
+          "metrics": {
+            "description": "Loss/reward at this step, so picking the best step is a list call."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expires_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
           }
         }
       },
@@ -14841,6 +15105,93 @@
                   ],
                   "format": "date-time",
                   "description": "When the key stops authenticating. Absent = never."
+                }
+              }
+            }
+          },
+          "has_more": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PaginatedList_CheckpointResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "data",
+          "has_more"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "description": "Note the absence of `s3_prefix`: storage layout is not part of the API. The\ncustom-models design already ruled against exposing bucket paths, and keeping\nthem internal is what let C1 add a new prefix without an API change.",
+              "required": [
+                "object",
+                "id",
+                "job_id",
+                "step",
+                "kind",
+                "payload",
+                "size_bytes",
+                "file_count",
+                "status",
+                "pinned",
+                "created_at"
+              ],
+              "properties": {
+                "object": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "job_id": {
+                  "type": "string"
+                },
+                "step": {
+                  "type": "integer",
+                  "format": "int32",
+                  "description": "Trainer global_step. Also addressable as `<job_id>@<step>`."
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "payload": {
+                  "type": "string",
+                  "description": "\"resumable\" (includes optimizer state) or \"weights\" (servable only)."
+                },
+                "size_bytes": {
+                  "type": "integer",
+                  "format": "int64"
+                },
+                "file_count": {
+                  "type": "integer",
+                  "format": "int32"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "pinned": {
+                  "type": "boolean"
+                },
+                "metrics": {
+                  "description": "Loss/reward at this step, so picking the best step is a list call."
+                },
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "expires_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
                 }
               }
             }
