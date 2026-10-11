@@ -71,7 +71,7 @@ If the environment's model is a Veri deployment, each session gets a 24-hour [mo
 | `agent.thinking` | `{text}` |
 | `agent.tool_use` | `{id, name, input}` |
 | `tool.result` | `{tool_use_id, content, is_error}` |
-| `usage` | `{scope, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens}` per model call (`scope: "message"`) and per run (`scope: "run"`), or `{awake_seconds}` heartbeats |
+| `usage` | `{scope, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens}` per model call as the harness reports it (`scope: "message"`), per run (`scope: "run"`), and, for your own model endpoint, per call as read off the model's reply (`scope: "call"`, with `model`, `duration_ms` and `status`); heartbeats are `{scope: "heartbeat", awake_seconds, load1, mem_bytes, mem_limit_bytes, disk_bytes}` every 60 seconds (resource fields are omitted when the sandbox could not read them) |
 | `run.completed` | `{stop_reason, duration_ms, duration_api_ms, num_turns, total_cost_usd, model_usage, permission_denials}`, the agent finished a turn. `model_usage` maps each model to `{input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, cost_usd}`; `permission_denials` lists `{tool_name, tool_use_id}` for tool calls the harness refused |
 | `session.status` | `{status, from, failure_code, error}` |
 | `session.interrupted` | `{reason, exit_code, run_id, snapshot_id, snapshot_error}`: the sandbox was stopped underneath the session (`reason` is `sigterm` for an inactivity timeout or host eviction, `container_stopped` when the container exited during a run). The session moves to `paused`; after `container_stopped` a `session.status` event then marks it `failed`. |
@@ -82,9 +82,54 @@ Payloads above 64 KiB (a large file read, for example) are stored in object stor
 
 Lifecycle transitions also fire [webhooks](/webhooks): `session.started`, `session.paused`, `session.ended`, `session.failed`.
 
-### Usage
+### Usage and resources
 
-Token counts are recorded in two places. For a Veri-hosted model, every model call the agent makes is recorded on the deployment's request history (`GET /v1/deployments/{id}/requests`) with its input, cached and output tokens, the same as any other request to that deployment. For your own endpoint, Veri never sees the model traffic; the per-run totals the harness reports (`usage` with `scope: "run"` and `run.completed.model_usage`) are recorded on the transcript instead. Session token totals in the observability views take their output count from the per-run figure, because the per-message `output_tokens` the harness reports while a turn is in flight is a placeholder.
+`GET /v1/sessions/{id}` returns a `usage` summary derived from the transcript (the list endpoint leaves it out) and `resources`, the newest sandbox sample from the heartbeat:
+
+```json
+{
+  "id": "9f8e7d6c5b4a",
+  "status": "ready",
+  "awake_seconds": 1860,
+  "total_cost_usd": 0.05,
+  "rate_usd_per_hour": 0.10,
+  "usage": {
+    "boot_ms": 6120,
+    "restore_ms": null,
+    "snapshot_ms": null,
+    "runs": 1,
+    "run_duration_ms": { "p50": 168000, "max": 168000 },
+    "interrupts": 0,
+    "pauses": 0,
+    "llm_calls": 14,
+    "tokens": { "input": 48210, "output": 2380, "cache_read": 41000, "cache_creation": 1200 },
+    "model_cost_usd": 0.41,
+    "permission_denials": 1,
+    "approvals": { "requested": 0, "approved": 0, "denied": 0, "wait_ms_total": 0 }
+  },
+  "resources": {
+    "load1": 0.42,
+    "mem_bytes": 1395864371,
+    "mem_limit_bytes": 6442450944,
+    "disk_bytes": 2254857830,
+    "sampled_at": "2026-10-11T16:02:00Z"
+  }
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `boot_ms` | Create to first `ready`: how long the sandbox took to start. |
+| `restore_ms`, `snapshot_ms` | The latest resume's restore time and the latest pause's snapshot time; `null` until the session has paused or resumed. |
+| `runs`, `run_duration_ms` | Finished turns (`run.completed`, interrupted ones included) and the median and longest wall time of one turn. |
+| `interrupts`, `pauses` | Runs you interrupted plus sandboxes stopped underneath the session; times the session went `paused` (yours, idle or budget). |
+| `llm_calls`, `tokens` | Model calls and their tokens. `output` comes from the per-run figure (the per-message count the harness reports mid-turn is a placeholder). For your own endpoint `llm_calls`, `input` and the cache figures come from the per-call `usage` events read off the model's replies; otherwise from the harness's per-message events. |
+| `model_cost_usd` | The harness's own estimate of model spend at list prices (`total_cost_usd` per run). It is not what Veri bills: the session meter is `total_cost_usd` on the session, and calls to a Veri deployment are billed through that deployment. |
+| `permission_denials` | Tool calls the harness refused under the environment's `permissions`. |
+| `approvals` | Human approvals asked, allowed and denied, and the total time runs spent waiting for them. All zero unless the environment has `ask` rules. |
+| `resources` | CPU load (1-minute average), memory used and limit, and bytes used under `/workspace`, as sampled by the last heartbeat. Absent until the first heartbeat; a field is left out when the sandbox could not read it. |
+
+Token counts are recorded in two places. For a Veri-hosted model, every model call the agent makes is recorded on the deployment's request history (`GET /v1/deployments/{id}/requests`) with its input, cached and output tokens, the same as any other request to that deployment, and each call carries the session id as its thread id, so [monitors](/evals#monitors) scoped to threads score the session's conversation like any other thread. For your own endpoint, Veri never stores the model traffic; the per-call `usage` events (`scope: "call"`) record only the token counts, model name, duration and status read off each reply, and the per-run totals the harness reports (`usage` with `scope: "run"` and `run.completed.model_usage`) are recorded on the transcript as well. Session token totals in the observability views follow the same rules as `usage` above.
 
 ## Pricing and limits
 
