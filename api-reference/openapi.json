@@ -17203,6 +17203,28 @@
                     "null"
                   ],
                   "description": "Set on a forked child: the parent's checkpoint it started from."
+                },
+                "usage": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SessionUsageSummary",
+                      "description": "Lifecycle timings, runs, model calls, tokens and model cost derived\nfrom the transcript. Only on `GET /v1/sessions/{id}`; absent on the\nlist."
+                    }
+                  ]
+                },
+                "resources": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SessionResources",
+                      "description": "The newest sandbox resource sample (CPU load, memory, disk) from the\nruntime's heartbeat; absent until the first one."
+                    }
+                  ]
                 }
               }
             }
@@ -18825,6 +18847,26 @@
           "eval"
         ]
       },
+      "RunDurationMs": {
+        "type": "object",
+        "description": "Run wall time over the session's `run.completed` events, ms.",
+        "properties": {
+          "p50": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "max": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          }
+        }
+      },
       "RunVisibility": {
         "type": "string",
         "enum": [
@@ -19207,6 +19249,35 @@
           }
         }
       },
+      "SessionApprovals": {
+        "type": "object",
+        "description": "Human approvals (`agent.approval_request` / `user.approval`, O6). All\nzero while the environment has no `ask` rules.",
+        "required": [
+          "requested",
+          "approved",
+          "denied",
+          "wait_ms_total"
+        ],
+        "properties": {
+          "requested": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "approved": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "denied": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "wait_ms_total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Sum over answered requests of (answer time - request time), ms."
+          }
+        }
+      },
       "SessionCreateRequest": {
         "type": "object",
         "required": [
@@ -19380,6 +19451,51 @@
           }
         }
       },
+      "SessionResources": {
+        "type": "object",
+        "description": "The sandbox resource sample a heartbeat carries (every field optional:\nthe runtime omits what it could not read), plus when it was taken.",
+        "required": [
+          "sampled_at"
+        ],
+        "properties": {
+          "load1": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "1-minute load average (`/proc/loadavg`)."
+          },
+          "mem_bytes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "cgroup v2 `memory.current`."
+          },
+          "mem_limit_bytes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "cgroup v2 `memory.max`; absent when unlimited."
+          },
+          "disk_bytes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Bytes used on the filesystem holding /workspace."
+          },
+          "sampled_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "SessionResponse": {
         "type": "object",
         "required": [
@@ -19505,6 +19621,28 @@
               "null"
             ],
             "description": "Set on a forked child: the parent's checkpoint it started from."
+          },
+          "usage": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SessionUsageSummary",
+                "description": "Lifecycle timings, runs, model calls, tokens and model cost derived\nfrom the transcript. Only on `GET /v1/sessions/{id}`; absent on the\nlist."
+              }
+            ]
+          },
+          "resources": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SessionResources",
+                "description": "The newest sandbox resource sample (CPU load, memory, disk) from the\nruntime's heartbeat; absent until the first one."
+              }
+            ]
           }
         }
       },
@@ -19516,6 +19654,114 @@
         "properties": {
           "checkpoint_id": {
             "type": "string"
+          }
+        }
+      },
+      "SessionTokens": {
+        "type": "object",
+        "description": "Token totals of one session. `input`, `cache_read` and `cache_creation`\ncome from the per-call rows (`usage{scope:\"call\"}` from the egress tee\nwhen the session has any, else the harness's per-message\n`usage{scope:\"message\"}`); `output` from the per-run rollup\n(`usage{scope:\"run\"}`), because the per-message output count is the\nharness's message_start placeholder.",
+        "required": [
+          "input",
+          "output",
+          "cache_read",
+          "cache_creation"
+        ],
+        "properties": {
+          "input": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "output": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "cache_read": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "cache_creation": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "SessionUsageSummary": {
+        "type": "object",
+        "description": "What `GET /v1/sessions/{id}` reports as `usage`: lifecycle timings,\nrun counts, model tokens and cost, all derived from `session_events`\nin one pass. Never stored; the transcript is the source of truth.",
+        "required": [
+          "runs",
+          "run_duration_ms",
+          "interrupts",
+          "pauses",
+          "llm_calls",
+          "tokens",
+          "model_cost_usd",
+          "permission_denials",
+          "approvals"
+        ],
+        "properties": {
+          "boot_ms": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Create -> first `ready`: the runtime's own `boot_ms` when it stamped\none, else the control plane's created_at -> ready clock."
+          },
+          "restore_ms": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "The latest resume's restore time (snapshot -> ready)."
+          },
+          "snapshot_ms": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "The latest pause's snapshot time."
+          },
+          "runs": {
+            "type": "integer",
+            "format": "int64",
+            "description": "`run.completed` events (turns the agent finished, interrupted or not)."
+          },
+          "run_duration_ms": {
+            "$ref": "#/components/schemas/RunDurationMs"
+          },
+          "interrupts": {
+            "type": "integer",
+            "format": "int64",
+            "description": "`session.interrupted` events plus runs that ended by `user.interrupt`."
+          },
+          "pauses": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Times the session went `paused` (user, idle or budget)."
+          },
+          "llm_calls": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Model calls: per-call `usage` rows from the egress tee when present,\nelse the harness's per-message `usage` rows."
+          },
+          "tokens": {
+            "$ref": "#/components/schemas/SessionTokens"
+          },
+          "model_cost_usd": {
+            "type": "number",
+            "format": "double",
+            "description": "Sum of the harness's `total_cost_usd` per run (falling back to the\nper-model `cost_usd` figures). An estimate at list prices for BYO\nmodels; the billed number is `total_cost_usd` on the session."
+          },
+          "permission_denials": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Tool calls the harness refused for lack of permission."
+          },
+          "approvals": {
+            "$ref": "#/components/schemas/SessionApprovals"
           }
         }
       },
