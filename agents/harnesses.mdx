@@ -56,10 +56,11 @@ How it runs:
 
 - Each message starts one `opencode run --format json` with the message on stdin and `--session <id>` to continue the conversation; the turn ends when OpenCode exits (exit `0` is success). Expect a second or two of start-up per turn. Nothing runs between turns, so pauses and checkpoints are cheap.
 - The model is an OpenAI-compatible provider in `/workspace/opencode.json` at the session's model base URL (OpenCode appends `/chat/completions`, which every Veri deployment serves). `model.name` sets the model it requests; for a Veri deployment it defaults to the deployment id. The key in the config is `{env:VERI_MODEL_KEY}`, a placeholder: the real key is added at the egress edge and never enters the sandbox. `api.anthropic.com` is not supported as an OpenCode model endpoint; use `claude-code` for it.
+- The model's `limit` is in the config too. `context` is the deployment's served context (its `--max-model-len`), or 32768 when Veri cannot know it (a deployment launched without `--max-model-len`, or a `base_url` endpoint). OpenCode asks for at most `min(8192, context / 4)` output tokens per request, so the rest of the window stays for the conversation.
 - MCP servers become `remote` entries in `opencode.json` (bearer tokens are placeholders too). Skills are written to `/workspace/.opencode/skills/<name>/SKILL.md`.
 - Permissions become OpenCode's `permission` map, in the same last-match-wins order (see the [table](#permission-names) below). `ask` is refused when you create the environment: a headless OpenCode run rejects every approval prompt on its own, and there is no way to pause the turn for you.
 - Forking runs `opencode run --session <checkpoint's session> --fork`, so each child continues the conversation as its own session.
-- Model-update checks, model catalog downloads, language-server downloads, default plugins and sharing are disabled.
+- Model-update checks, model catalog downloads, language-server downloads, default plugins and sharing are disabled. The package OpenCode installs into its config directories on start (`@opencode-ai/plugin`) is preinstalled in the image, in `~/.config/opencode` and `/workspace/.opencode`, so a session start downloads nothing.
 - Tool calls arrive when they finish: each produces an `agent.tool_use` and its `tool.result` together. Token usage is reported per model step (`usage` with `scope: "step"`) and per turn (`scope: "run"`).
 
 ## Custom

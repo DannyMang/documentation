@@ -6424,6 +6424,7 @@
           "Sessions"
         ],
         "summary": "Resume a paused session",
+        "description": "Restores the sandbox from its pause snapshot; the session is `provisioning` until the runtime reports `ready`. If the pause denied a pending approval, the agent first finishes the interrupted turn: the denied tool call comes back as an error `tool.result`, the run completes (`run.completed`), and then the session is `ready`.",
         "operationId": "resume",
         "parameters": [
           {

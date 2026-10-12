@@ -112,7 +112,7 @@ for ev in client.sessions.stream(s["id"]):
 
 A request that is not answered in time (the environment's [`permissions.approval_ttl_s`](/agents/environments#permissions), 30 minutes by default) is denied automatically: the transcript shows `user.approval {decision: "deny", reason: "timeout", by: "system"}` and the turn resumes with the denial. Sending `user.message` while an approval is pending returns `409`. One approval is open at a time.
 
-You can pause a session that is waiting for an approval. The pause denies the pending approval (the transcript shows `user.approval {decision: "deny", reason: "paused", by}` with your user id) and the tool call never runs; after a resume, send a new message (ask the agent to try again if you still want the call). Checkpoint, rollback and a fork without `checkpoint_id` return `409` until the approval is answered or the session is paused.
+You can pause a session that is waiting for an approval. The pause denies the pending approval (the transcript shows `user.approval {decision: "deny", reason: "paused", by}` with your user id) and the tool call never runs. When you resume, the agent first finishes the interrupted turn: the denied call comes back to it as an error `tool.result`, the run completes (`run.completed`), and then the session is `ready`. Send a new message after that (ask the agent to try again if you still want the call). Checkpoint, rollback and a fork without `checkpoint_id` return `409` until the approval is answered or the session is paused.
 
 ## Transcript
 
