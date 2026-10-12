@@ -17975,6 +17975,11 @@
             "items": {
               "$ref": "#/components/schemas/PermissionRule"
             }
+          },
+          "approval_ttl_s": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Seconds an `ask` waits for a decision before it is denied (60 ..\n86400). Omitted when it is the default, 1800."
           }
         }
       },
@@ -17994,6 +17999,14 @@
               "$ref": "#/components/schemas/PermissionRuleInput"
             },
             "description": "Evaluated top to bottom; the last matching rule wins."
+          },
+          "approval_ttl_s": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Seconds an `ask` waits for a decision before it is denied (60 .. 86400,\ndefault 1800)."
           }
         }
       },
