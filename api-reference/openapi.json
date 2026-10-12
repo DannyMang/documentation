@@ -3000,7 +3000,7 @@
             }
           },
           "400": {
-            "description": "Invalid spec, unknown secret or skill, or managed agents disabled"
+            "description": "Invalid spec, unknown secret or skill, egress = unrestricted without the Enterprise override (UNRESTRICTED_EGRESS_NOT_ENABLED), or managed agents disabled"
           },
           "404": {
             "description": "model.deployment_id is not a deployment in this workspace"
@@ -3146,7 +3146,7 @@
             }
           },
           "400": {
-            "description": "Invalid spec or managed agents disabled"
+            "description": "Invalid spec, egress = unrestricted without the Enterprise override (UNRESTRICTED_EGRESS_NOT_ENABLED), or managed agents disabled"
           },
           "404": {
             "description": "Not found in this workspace"
@@ -5887,7 +5887,7 @@
             }
           },
           "400": {
-            "description": "Invalid name, empty or oversized value, or malformed scope_host"
+            "description": "Invalid name, empty or oversized value, malformed (or wildcard) scope_host, or malformed scope_path / scope_path without scope_host"
           }
         },
         "security": [
@@ -6142,7 +6142,7 @@
           "Sessions"
         ],
         "summary": "Checkpoint a session",
-        "description": "Snapshots the sandbox filesystem and records the conversation position, without ending the session. The session cannot take a message while the snapshot is taken (about 20 s per GB of workspace). Allowed while `ready` or `paused`; 409 while a run is in progress. Checkpoints expire 30 days after they were taken or last rolled back to.",
+        "description": "Snapshots the sandbox filesystem and records the conversation position, without ending the session. The session cannot take a message while the snapshot is taken (about 20 s per GB of workspace). Allowed while `ready` or `paused`; 409 while a run is in progress or an approval is pending. Checkpoints expire 30 days after they were taken or last rolled back to.",
         "operationId": "create_checkpoint",
         "parameters": [
           {
@@ -6380,7 +6380,7 @@
           "Sessions"
         ],
         "summary": "Pause a session",
-        "description": "Snapshots the sandbox filesystem and stops the sandbox. Billing stops. Resume restores the files under /workspace and the conversation; running processes, open ports and background tasks do not survive.",
+        "description": "Snapshots the sandbox filesystem and stops the sandbox. Billing stops. Resume restores the files under /workspace and the conversation; running processes, open ports and background tasks do not survive. Allowed while `ready`, `running` or `awaiting_approval`; pausing a session that waits for an approval denies that approval (recorded as `user.approval` with `reason: paused`), so the tool call it asked for never runs.",
         "operationId": "pause",
         "parameters": [
           {
@@ -6408,7 +6408,7 @@
             "description": "Not found in this workspace"
           },
           "409": {
-            "description": "Not pausable in its current status"
+            "description": "Not pausable in its current status (provisioning, paused or ended)"
           }
         },
         "security": [
@@ -6467,7 +6467,7 @@
           "Sessions"
         ],
         "summary": "Roll a session back to a checkpoint",
-        "description": "Discards the sandbox's current filesystem and conversation position and restarts it from the checkpoint, in place: same session id, same key, same transcript (the rollback is recorded as an event; earlier events stay readable). Allowed while `ready` or `paused`; the session is `provisioning` until the runtime reports `ready`. Running processes do not survive. Rolling back refreshes the checkpoint's 30-day expiry.",
+        "description": "Discards the sandbox's current filesystem and conversation position and restarts it from the checkpoint, in place: same session id, same key, same transcript (the rollback is recorded as an event; earlier events stay readable). Allowed while `ready` or `paused` (409 while a run is in progress or an approval is pending); the session is `provisioning` until the runtime reports `ready`. Running processes do not survive. Rolling back refreshes the checkpoint's 30-day expiry.",
         "operationId": "rollback",
         "parameters": [
           {
@@ -11724,6 +11724,63 @@
           }
         ]
       },
+      "EgressRule": {
+        "type": "object",
+        "description": "A normalized egress rule (O10). Empty `methods` / `paths` = any.",
+        "required": [
+          "host"
+        ],
+        "properties": {
+          "host": {
+            "type": "string"
+          },
+          "methods": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "EgressRuleInput": {
+        "type": "object",
+        "description": "One egress allow rule as submitted (O10).",
+        "required": [
+          "host"
+        ],
+        "properties": {
+          "host": {
+            "type": "string",
+            "description": "An exact hostname (`api.github.com`) or one leading wildcard label\n(`*.example.com`: every subdomain, not `example.com` itself). No\nscheme, port, path or IP address."
+          },
+          "methods": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "HTTP methods this rule allows (`GET`, `HEAD`, `OPTIONS`, `POST`,\n`PUT`, `PATCH`, `DELETE`). Omit for every method."
+          },
+          "paths": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "URL path prefixes this rule allows (`/repos/my-org/`); the query\nstring is ignored. Omit for every path."
+          }
+        }
+      },
       "EnvironmentCreateRequest": {
         "allOf": [
           {
@@ -11826,11 +11883,22 @@
           "egress": {
             "type": "string"
           },
+          "egress_preset": {
+            "type": "string",
+            "description": "`coding` | `web_research` | `locked_down`. Specs stored before\npresets existed read as `coding`, which is what they ran with."
+          },
           "allowed_hosts": {
             "type": "array",
             "items": {
               "type": "string"
             }
+          },
+          "egress_rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EgressRule"
+            },
+            "description": "Allow rules narrower than a host (empty when the spec has none)."
           },
           "env": {
             "type": "object",
@@ -11895,14 +11963,28 @@
               "string",
               "null"
             ],
-            "description": "`restricted` (default) | `unrestricted`."
+            "description": "`restricted` (default) | `audited_open` | `unrestricted` (Enterprise)."
+          },
+          "egress_preset": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The default egress rules: `coding` (default; GitHub, npm, PyPI, the\nVeri API, scoped secret hosts) | `web_research` (coding + GET/HEAD/\nOPTIONS to any host) | `locked_down` (none)."
           },
           "allowed_hosts": {
             "type": "array",
             "items": {
               "type": "string"
             },
-            "description": "Extra hostnames a restricted session may reach."
+            "description": "Extra hosts a restricted session may reach with any method and path\n(shorthand for an `egress_rules` entry with only `host`)."
+          },
+          "egress_rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EgressRuleInput"
+            },
+            "description": "Allow rules narrower than a host: methods and path prefixes. A rule\nnaming a host replaces the preset's access to that host."
           },
           "env": {
             "type": "object",
@@ -17010,6 +17092,12 @@
                     "null"
                   ]
                 },
+                "scope_path": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
                 "created_at": {
                   "type": "string",
                   "format": "date-time"
@@ -17104,6 +17192,8 @@
                 "awake_seconds",
                 "total_cost_usd",
                 "rate_usd_per_hour",
+                "egress_bytes",
+                "egress_usd_per_gb",
                 "created_by",
                 "created_at",
                 "updated_at"
@@ -17157,6 +17247,16 @@
                   "type": "number",
                   "format": "double",
                   "description": "Price per awake hour (USD) this session bills at, fixed at create from\nthe environment's `size`."
+                },
+                "egress_bytes": {
+                  "type": "integer",
+                  "format": "int64",
+                  "description": "Request + response bytes through the sandbox's egress interceptor\n(every mode; in `unrestricted` only the intercepted hosts)."
+                },
+                "egress_usd_per_gb": {
+                  "type": "number",
+                  "format": "double",
+                  "description": "Price per GB of `egress_bytes` (USD), fixed at create: non-zero only\nfor an `audited_open` environment."
                 },
                 "started_at": {
                   "type": [
@@ -17980,6 +18080,11 @@
             "items": {
               "$ref": "#/components/schemas/PermissionRule"
             }
+          },
+          "approval_ttl_s": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Seconds an `ask` waits for a decision before it is denied (60 ..\n86400). Omitted when it is the default, 1800."
           }
         }
       },
@@ -17999,6 +18104,14 @@
               "$ref": "#/components/schemas/PermissionRuleInput"
             },
             "description": "Evaluated top to bottom; the last matching rule wins."
+          },
+          "approval_ttl_s": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Seconds an `ask` waits for a decision before it is denied (60 .. 86400,\ndefault 1800)."
           }
         }
       },
@@ -18229,6 +18342,13 @@
               "null"
             ],
             "description": "Optional HTTPS host the value is scoped to (e.g. \"api.openai.com\").\nWhen set, agent sessions only attach the value to requests for that\nhost; when absent, the value is injected as an environment variable.\nHostname only: no scheme, port, path or wildcard."
+          },
+          "scope_path": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional URL path prefix (`/repos/my-org/`), only with `scope_host`:\nthe value is attached only to requests whose path starts with it."
           }
         }
       },
@@ -19208,6 +19328,12 @@
               "null"
             ]
           },
+          "scope_path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "created_at": {
             "type": "string",
             "format": "date-time"
@@ -19548,6 +19674,8 @@
           "awake_seconds",
           "total_cost_usd",
           "rate_usd_per_hour",
+          "egress_bytes",
+          "egress_usd_per_gb",
           "created_by",
           "created_at",
           "updated_at"
@@ -19601,6 +19729,16 @@
             "type": "number",
             "format": "double",
             "description": "Price per awake hour (USD) this session bills at, fixed at create from\nthe environment's `size`."
+          },
+          "egress_bytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Request + response bytes through the sandbox's egress interceptor\n(every mode; in `unrestricted` only the intercepted hosts)."
+          },
+          "egress_usd_per_gb": {
+            "type": "number",
+            "format": "double",
+            "description": "Price per GB of `egress_bytes` (USD), fixed at create: non-zero only\nfor an `audited_open` environment."
           },
           "started_at": {
             "type": [

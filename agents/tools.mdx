@@ -101,7 +101,7 @@ If Composio is unavailable when a session starts, the start fails with `502` (`c
 
 ## Veri tools
 
-`tools.veri = true` mints a **session key** for each session: a key that lives as long as the session (at most 24 hours) and is revoked when it ends. The harness reaches the hosted Veri MCP (`https://api.veri.studio/mcp`) with it as a bearer placeholder, bound to `api.veri.studio`.
+`tools.veri = true` mints a **session key** for each session: a key that lives as long as the session (valid 24 hours at a time and renewed while the session is awake, at most 7 days) and is revoked when it ends or fails. The harness reaches the hosted Veri MCP (`https://api.veri.studio/mcp`) with it as a bearer placeholder, bound to `api.veri.studio`.
 
 A session key can:
 
