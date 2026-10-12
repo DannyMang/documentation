@@ -60,7 +60,7 @@ How it runs:
 - MCP servers become `remote` entries in `opencode.json` (bearer tokens are placeholders too). Skills are written to `/workspace/.opencode/skills/<name>/SKILL.md`.
 - Permissions become OpenCode's `permission` map, in the same last-match-wins order (see the [table](#permission-names) below). `ask` is refused when you create the environment: a headless OpenCode run rejects every approval prompt on its own, and there is no way to pause the turn for you.
 - Forking runs `opencode run --session <checkpoint's session> --fork`, so each child continues the conversation as its own session.
-- Model-update checks, model catalog downloads, language-server downloads, default plugins and sharing are disabled.
+- Model-update checks, model catalog downloads, language-server downloads, default plugins and sharing are disabled. The package OpenCode installs into its config directories on start (`@opencode-ai/plugin`) is preinstalled in the image, in `~/.config/opencode` and `/workspace/.opencode`, so a session start downloads nothing.
 - Tool calls arrive when they finish: each produces an `agent.tool_use` and its `tool.result` together. Token usage is reported per model step (`usage` with `scope: "step"`) and per turn (`scope: "run"`).
 
 ## Custom
