@@ -116,6 +116,7 @@
               "agents/skills",
               "agents/tools",
               "agents/sessions",
+              "agents/session-ops",
               "agents/triggers"
             ]
           },
