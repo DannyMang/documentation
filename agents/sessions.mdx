@@ -1,7 +1,7 @@
 ---
 title: "Sessions"
-description: "Run a managed agent: send messages, stream the transcript, pause, resume, end"
-keywords: ["agents", "sessions", "claude code", "sse", "transcript", "pause", "resume"]
+description: "Run a managed agent: send messages, stream the transcript, pause, resume, checkpoint, fork, roll back, end"
+keywords: ["agents", "sessions", "claude code", "sse", "transcript", "pause", "resume", "checkpoint", "fork", "rollback"]
 ---
 
 ## Overview
@@ -13,6 +13,9 @@ veri sessions create 3f9c2a7b1d40 --title "fix the flaky test" --budget 5
 veri sessions send 9f8e7d6c5b4a "Find why tests/test_queue.py is flaky and fix it" --follow
 veri sessions pause 9f8e7d6c5b4a
 veri sessions resume 9f8e7d6c5b4a
+veri sessions checkpoint 9f8e7d6c5b4a --label "deps installed"
+veri sessions fork 9f8e7d6c5b4a --count 2
+veri sessions rollback 9f8e7d6c5b4a 4c1d2e3f5a6b
 veri sessions delete 9f8e7d6c5b4a
 ```
 
@@ -33,7 +36,7 @@ for ev in client.sessions.stream(s["id"]):
 
 | Status | Meaning |
 | --- | --- |
-| `provisioning` | The sandbox is starting (or restoring from a pause). |
+| `provisioning` | The sandbox is starting (or restoring from a pause or a rollback). |
 | `ready` | Idle, waiting for a message. |
 | `running` | The agent is working on your last message. One run at a time. |
 | `awaiting_approval` | A tool call matched an `ask` [permission rule](/agents/environments#permissions); the turn is parked until you answer. The sandbox is snapshotted and stopped meanwhile, so nothing is billed. See [Approvals](#approvals). |
@@ -57,6 +60,31 @@ What does not survive:
 - Any in-memory state of the harness or its tools.
 
 A snapshot is tied to the agent image version it was taken from and expires 30 days after it was taken or last restored. A session paused longer than that cannot be resumed; its transcript stays readable for the usual retention and you can start a new session from the same environment.
+
+### Checkpoints, forks and rollbacks
+
+A checkpoint is the same snapshot a pause takes, without the stop: the sandbox's filesystem and the agent's position in the conversation, recorded while the session keeps running. From a checkpoint you can fork new sessions or roll the session itself back.
+
+```bash
+veri sessions checkpoint 9f8e7d6c5b4a --label "deps installed"   # -> checkpoint 4c1d2e3f5a6b
+veri sessions checkpoints 9f8e7d6c5b4a
+veri sessions fork 9f8e7d6c5b4a --checkpoint 4c1d2e3f5a6b --count 2 --budget 2
+veri sessions rollback 9f8e7d6c5b4a 4c1d2e3f5a6b
+```
+
+```python
+ck = client.sessions.checkpoint(s["id"], label="deps installed")
+forked = client.sessions.fork(s["id"], checkpoint_id=ck["id"], count=2, budget_usd=2)
+for child in forked["sessions"]:
+    client.sessions.send(child["id"], "Try approach A")   # each child continues the same conversation
+client.sessions.rollback(s["id"], ck["id"])
+```
+
+- **Checkpoint** (`POST /v1/sessions/{id}/checkpoints`, optional `label`): allowed while the session is `ready` or `paused`; `409` during a run. Taking one stops the harness for the snapshot (about 20 s per GB of workspace) and relaunches it, so the session cannot take a message meanwhile. A paused session's pause snapshot is recorded as the checkpoint without restarting anything. The transcript gets a `session.checkpoint` event.
+- **Fork** (`POST /v1/sessions/{id}/fork`, `{checkpoint_id?, count, budget_usd?, title?}`): starts `count` (1 to 4) new sessions from the checkpoint; without `checkpoint_id` a fresh checkpoint is taken first. Each child gets the checkpoint's files and the conversation up to that point, then continues it as its own conversation (the agent remembers everything the parent was told). Children are ordinary sessions: they pin the parent's environment version and hourly rate, get their own model access key and their own `budget_usd` (the parent's unless you pass one), are billed per awake hour individually and each takes a slot under the workspace's concurrent-session cap. A fork that does not fit under the cap starts no child (`429 CONCURRENT_SESSION_LIMIT`). Children carry `parent_session_id` and `forked_from_checkpoint_id`; the parent's transcript records `session.forked` with the children's ids.
+- **Rollback** (`POST /v1/sessions/{id}/rollback`, `{checkpoint_id}`): puts the session back to the checkpoint in place: same id, same key, same transcript (earlier events stay readable; a `session.rolled_back` event marks the point). Allowed while `ready` or `paused`; the session is `provisioning` until the sandbox is back, like a resume. Rolling back refreshes the checkpoint's expiry.
+
+What a checkpoint carries is exactly what a pause carries: files on the sandbox's disk and the conversation. Running processes, open ports, background tasks and in-memory state are not part of it, in children or after a rollback. A checkpoint belongs to one session (`404` from any other) and expires 30 days after it was taken or last rolled back to; expired checkpoints disappear from the list and cannot be used. Checkpoints cannot be deleted explicitly today.
 
 If the environment's model is a Veri deployment, each session gets a 24-hour [model access key](/secrets#model-access-keys) that can only call that deployment. It is revoked when the session ends.
 
@@ -103,6 +131,9 @@ A request that is not answered within 30 minutes is denied automatically: the tr
 | `session.status` | `{status, from, failure_code, error}` |
 | `session.interrupted` | `{reason, exit_code, run_id, snapshot_id, snapshot_error}`: the sandbox was stopped underneath the session (`reason` is `sigterm` for an inactivity timeout or host eviction, `container_stopped` when the container exited during a run). The session moves to `paused`; after `container_stopped` a `session.status` event then marks it `failed`. |
 | `session.budget_exhausted` | `{budget_usd, accrued_usd, awake_seconds}`, written just before a [budget](#pricing-and-limits) pause |
+| `session.checkpoint` | `{checkpoint_id, label, bytes, expires_at}`, a [checkpoint](#checkpoints-forks-and-rollbacks) was recorded |
+| `session.forked` | on the parent `{checkpoint_id, children}`; on each child `{parent_session_id, checkpoint_id}` |
+| `session.rolled_back` | `{checkpoint_id}`, the session is being restored to that checkpoint |
 | `error` | `{message, fatal}` |
 
 Payloads above 64 KiB (a large file read, for example) are stored in object storage; the event carries a 1 KiB preview and `payload_ref`.
@@ -171,4 +202,4 @@ A session is billed per hour while its sandbox is awake, settled per minute, at 
 
 Set `budget_usd` to pause the session automatically when its sandbox spend reaches the ceiling; the transcript records a `session.budget_exhausted` event and the session's `failure_code` reads `budget_exhausted`. Resume it to continue (the budget still applies, so raise it first or start a new session).
 
-A workspace can have two sessions that are not ended at a time, paused sessions included. Creating a third returns `429 CONCURRENT_SESSION_LIMIT`. Contact us to raise the limit.
+A workspace can have two sessions that are not ended at a time, paused sessions and forked children included. Creating a third (or forking more children than fit) returns `429 CONCURRENT_SESSION_LIMIT`. Contact us to raise the limit.

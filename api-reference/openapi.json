@@ -6098,6 +6098,104 @@
         ]
       }
     },
+    "/v1/sessions/{session_id}/checkpoints": {
+      "get": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "List a session's checkpoints",
+        "operationId": "list_checkpoints",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Live (unexpired) checkpoints, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedList_CheckpointResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in this workspace"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Checkpoint a session",
+        "description": "Snapshots the sandbox filesystem and records the conversation position, without ending the session. The session cannot take a message while the snapshot is taken (about 20 s per GB of workspace). Allowed while `ready` or `paused`; 409 while a run is in progress. Checkpoints expire 30 days after they were taken or last rolled back to.",
+        "operationId": "create_checkpoint",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckpointCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "The new checkpoint",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckpointResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid label or managed agents disabled"
+          },
+          "404": {
+            "description": "Not found in this workspace"
+          },
+          "409": {
+            "description": "Not checkpointable in its current status"
+          },
+          "501": {
+            "description": "The sandbox runtime does not support checkpoints"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/sessions/{session_id}/events": {
       "get": {
         "tags": [
@@ -6213,6 +6311,69 @@
         ]
       }
     },
+    "/v1/sessions/{session_id}/fork": {
+      "post": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Fork a session",
+        "description": "Starts `count` new sessions from a checkpoint of this one. Each child gets the checkpoint's files and conversation (the agent continues from that point in its own, new conversation), the parent's environment version and rate, its own model access key and its own budget. Children are ordinary sessions: billed, capped and ended individually. Without `checkpoint_id` a fresh checkpoint is taken first.",
+        "operationId": "fork",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionForkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "The checkpoint used and the children",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionForkResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "count outside 1..=4, invalid budget, or managed agents disabled"
+          },
+          "404": {
+            "description": "Session or checkpoint not found in this workspace"
+          },
+          "409": {
+            "description": "A fresh checkpoint was needed but the session is not ready or paused"
+          },
+          "429": {
+            "description": "The children would exceed the workspace's concurrent-session cap"
+          },
+          "501": {
+            "description": "No sandbox backend configured, or it does not support checkpoints"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/sessions/{session_id}/pause": {
       "post": {
         "tags": [
@@ -6291,6 +6452,63 @@
           },
           "409": {
             "description": "Not paused"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/sessions/{session_id}/rollback": {
+      "post": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Roll a session back to a checkpoint",
+        "description": "Discards the sandbox's current filesystem and conversation position and restarts it from the checkpoint, in place: same session id, same key, same transcript (the rollback is recorded as an event; earlier events stay readable). Allowed while `ready` or `paused`; the session is `provisioning` until the runtime reports `ready`. Running processes do not survive. Rolling back refreshes the checkpoint's 30-day expiry.",
+        "operationId": "rollback",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionRollbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The session, provisioning again until the runtime reports ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session or checkpoint not found in this workspace"
+          },
+          "409": {
+            "description": "Not ready or paused"
+          },
+          "501": {
+            "description": "The sandbox runtime does not support rollback"
           }
         },
         "security": [
@@ -9305,6 +9523,18 @@
             "items": {
               "$ref": "#/components/schemas/ActiveDeploymentEntry"
             }
+          }
+        }
+      },
+      "CheckpointCreateRequest": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Free-text label, at most 128 characters."
           }
         }
       },
@@ -16960,6 +17190,20 @@
                   "type": "string",
                   "format": "date-time"
                 },
+                "parent_session_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Set on a forked child: the session it was forked from."
+                },
+                "forked_from_checkpoint_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Set on a forked child: the parent's checkpoint it started from."
+                },
                 "usage": {
                   "oneOf": [
                     {
@@ -19101,6 +19345,70 @@
           }
         }
       },
+      "SessionForkRequest": {
+        "type": "object",
+        "properties": {
+          "checkpoint_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Checkpoint to fork from (default: take a fresh checkpoint first, which\nneeds the session `ready` or `paused`)."
+          },
+          "count": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Children to start, 1..=4 (default 1). Every child needs a free slot\nunder the workspace's concurrent-session cap; a fork that does not\nfit starts no child.",
+            "minimum": 0
+          },
+          "budget_usd": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Spend ceiling per child in USD (default: the parent's)."
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Title for the children (default: the parent's)."
+          }
+        }
+      },
+      "SessionForkResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "parent_session_id",
+          "checkpoint_id",
+          "sessions"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "parent_session_id": {
+            "type": "string"
+          },
+          "checkpoint_id": {
+            "type": "string",
+            "description": "The checkpoint every child started from."
+          },
+          "sessions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionResponse"
+            },
+            "description": "The children, `provisioning` until each runtime reports `ready`; a\nchild whose sandbox failed to start is listed as `failed`."
+          }
+        }
+      },
       "SessionInputRequest": {
         "type": "object",
         "required": [
@@ -19300,6 +19608,20 @@
             "type": "string",
             "format": "date-time"
           },
+          "parent_session_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Set on a forked child: the session it was forked from."
+          },
+          "forked_from_checkpoint_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Set on a forked child: the parent's checkpoint it started from."
+          },
           "usage": {
             "oneOf": [
               {
@@ -19321,6 +19643,17 @@
                 "description": "The newest sandbox resource sample (CPU load, memory, disk) from the\nruntime's heartbeat; absent until the first one."
               }
             ]
+          }
+        }
+      },
+      "SessionRollbackRequest": {
+        "type": "object",
+        "required": [
+          "checkpoint_id"
+        ],
+        "properties": {
+          "checkpoint_id": {
+            "type": "string"
           }
         }
       },
