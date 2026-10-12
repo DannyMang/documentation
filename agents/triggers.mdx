@@ -152,7 +152,7 @@ Every finished execution fires `trigger.execution.succeeded` or `trigger.executi
 
 ## Guardrails
 
-- **No approvals.** A triggered session runs with nobody to answer an `ask` [permission rule](/agents/environments#permissions), so a trigger cannot be created on an environment whose latest version uses `ask` (`400 ask_not_allowed`), and while an environment has triggers a new version that asks is refused the same way. Use `allow` with targeted `deny` rules, or `default = "deny"` with targeted `allow` rules.
+- **No approvals.** A triggered session runs with nobody to answer an `ask` [permission rule](/agents/environments#permissions), so a trigger cannot be created on an environment whose latest version uses `ask` (`400 ask_not_allowed`), and while an environment has triggers a new version that asks is refused the same way. A `reuse` session runs the version it was started on, so that version must not ask either. Use `allow` with targeted `deny` rules, or `default = "deny"` with targeted `allow` rules.
 - **Budget per session.** Each `fresh` session gets the trigger's `budget_usd` (default $2.00) and pauses itself when it reaches it, which fails the execution.
 - **No overlap.** One firing per trigger at a time.
 - **Concurrent session limit.** A `fresh` firing that finds the workspace at its session limit retries for up to 3 minutes, then fails with `concurrent_session_limit`. A `reuse` firing that finds its session busy waits up to 3 minutes, then fails with `session_busy`.
