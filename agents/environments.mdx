@@ -19,7 +19,8 @@ description = "Claude Code on our fine-tuned Qwen"
 
 harness = "claude-code"          # the only harness today
 size = "standard"                # small | standard | large (sets the hourly rate)
-egress = "restricted"            # restricted (default) | unrestricted
+egress = "restricted"            # restricted (default) | audited_open | unrestricted (Enterprise)
+egress_preset = "coding"         # coding (default) | web_research | locked_down
 allowed_hosts = ["api.example.com"]
 secrets = ["GITHUB_TOKEN"]       # names from `veri secrets`
 skills = ["pdf-processing", "git-hygiene@2"]
@@ -29,6 +30,11 @@ idle_timeout_s = 900
 deployment_id = "1a2b3c4d5e6f"   # a Veri deployment id, OR:
 # base_url = "https://api.openai.com/v1"
 # secret = "OPENAI_API_KEY"      # sent only to that host
+
+[[egress_rules]]                  # GitHub's API: read-only, one organization
+host = "api.github.com"
+methods = ["GET", "HEAD"]
+paths = ["/repos/my-org/"]
 
 [env]
 LOG_LEVEL = "info"
@@ -74,7 +80,10 @@ env["version"]["spec"]   # the normalized spec that sessions will run
 | `harness` | `claude-code`. OpenCode, Codex and custom images are planned and rejected with a clear message until then. |
 | `model` | Exactly one of `deployment_id` (a Veri deployment in this workspace; each session gets a short-lived [model access key](/secrets#model-access-keys) automatically) or `base_url` plus an optional `secret` holding its API key. |
 | `size` | Sandbox CPU and memory tier, which also sets the session's [hourly rate](/agents/sessions#pricing-and-limits): `small` (1/2 vCPU, 4 GiB memory, 8 GB disk), `standard` (1 vCPU, 6 GiB, 12 GB; the default), `large` (4 vCPU, 12 GiB, 20 GB). `xlarge` is planned and rejected with a clear message until then. |
-| `egress` | `restricted` allows only the built-in hosts (Veri API, GitHub, npm, PyPI), your `allowed_hosts`, the model host and every MCP host, over HTTPS. `unrestricted` is open internet. |
+| `egress` | What the sandbox may reach on the network: `restricted` (default), `audited_open` or `unrestricted`. See [Egress](#egress). |
+| `egress_preset` | The default allow list: `coding` (default: GitHub, npm, PyPI and the Veri API), `web_research` (`coding` plus read-only access to every host) or `locked_down` (nothing beyond the model, MCP servers and your own rules). |
+| `allowed_hosts` | Hosts the session may reach with any method and path: exact (`api.example.com`) or `*.example.com` (every subdomain, not `example.com` itself). |
+| `egress_rules` | Allow rules narrower than a host: `host`, plus optional `methods` and `paths` (URL path prefixes; the query string is ignored). See [Egress rules](#egress-rules). |
 | `env` | Plain environment variables. The eight names the runtime sets are rejected as `env` keys and in `secrets`: `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_API_KEY`, `VERI_API_KEY`, `VERI_API_URL`, `VERI_SESSION_ID`. Other names with those prefixes are fine. |
 | `secrets` | [Secret](/secrets) names. A secret without `scope_host` becomes an environment variable; one with `scope_host` is attached only to requests for that host and never enters the sandbox. |
 | `mcp_servers` | Streamable-HTTP MCP servers written into the harness's MCP config. The URL must be HTTPS and resolve to a public address when you create the environment. `secret` is sent as a bearer token, or as the raw value in `header` when set (`header = "x-api-key"`). |
@@ -85,9 +94,87 @@ env["version"]["spec"]   # the normalized spec that sessions will run
 
 The API returns the **normalized** spec: defaults filled in, hostnames lowercased, duplicate entries removed, skills pinned, and every secret the spec references (including the model's and each MCP server's) listed in `secrets`. That is exactly what the sandbox is built from, and what `veri environments get --toml` prints.
 
+## Egress
+
+Every session runs behind an egress proxy at the edge of its sandbox. It terminates TLS, decides each HTTP request against the environment's rules, attaches [scoped secrets](/secrets) to the hosts they belong to, and records the request on the transcript.
+
+| `egress` | What the sandbox can reach | Audited and metered | Billed |
+| --- | --- | --- | --- |
+| `restricted` (default) | Only what a rule allows: the preset, your `allowed_hosts` and `egress_rules`, the model host, every MCP host. Everything else gets a `403`. | Every request | No |
+| `audited_open` | Any host over HTTPS. A host that one of your rules names is still held to that rule's methods and paths. | Every request | Per GB ([pricing](/agents/sessions#pricing-and-limits)) |
+| `unrestricted` | Raw internet, any port. Enterprise workspaces only. | Only requests to hosts that carry a secret | No |
+
+In `restricted` and `audited_open` the sandbox has no other way out: only ports 80 and 443 exist, and every request on them passes the proxy. Plain HTTP is refused with a `403` (a secret must never travel in the clear). `unrestricted` needs an Enterprise workspace; creating or updating an environment with it otherwise returns `400 UNRESTRICTED_EGRESS_NOT_ENABLED`. The check runs when an environment version is created, so versions that already use `unrestricted` keep starting sessions.
+
+### Presets
+
+| `egress_preset` | Default rules |
+| --- | --- |
+| `coding` (default) | Any request to `github.com`, `api.github.com`, `codeload.github.com`, `objects.githubusercontent.com`, `raw.githubusercontent.com`, `registry.npmjs.org`, `pypi.org`, `files.pythonhosted.org`, the Veri API, and the host of each scoped secret the environment uses. |
+| `web_research` | `coding`, plus `GET`, `HEAD` and `OPTIONS` to every host: the agent can read the web but not post to it. |
+| `locked_down` | None. The session reaches only its model, its MCP servers and the hosts your rules name. |
+
+The model host, every MCP host (including the [Tools](/agents/tools) servers: `backend.composio.dev` and the Veri MCP on `api.veri.studio`) and the approval endpoint are always reachable, whatever the preset and the rules say.
+
+### Egress rules
+
+```toml
+egress = "restricted"
+egress_preset = "locked_down"
+allowed_hosts = ["pypi.org", "*.pythonhosted.org"]   # any method, any path
+
+[[egress_rules]]
+host = "api.github.com"
+methods = ["GET", "HEAD"]           # optional: omit for every method
+paths = ["/repos/my-org/"]          # optional: path prefixes, omit for every path
+
+[[egress_rules]]
+host = "*.s3.amazonaws.com"
+methods = ["GET", "PUT"]
+```
+
+- `host` is an exact hostname or one leading wildcard label: `*.example.com` matches `a.example.com` and `a.b.example.com`, never `example.com` itself. A bare `*`, inner wildcards and IP addresses are refused.
+- `methods` are `GET`, `HEAD`, `OPTIONS`, `POST`, `PUT`, `PATCH`, `DELETE`. `GET` does not imply `HEAD`; list both if a tool needs them.
+- `paths` are prefixes of the URL path, compared before any decoding; end one with `/` to mean a directory (`/repos/my-org` also matches `/repos/my-org-other`). A request whose path contains an encoded `/`, `\` or `.` (`%2F`, `%5C`, `%2E`) is refused under a path rule.
+- Rules only allow. A request passes when any rule for its host allows its method and its path.
+- A rule (or an `allowed_hosts` entry) that names a host replaces the preset's access to that host. The example above makes GitHub's API read-only under `/repos/my-org/` even with the `coding` preset, which otherwise allows every request to it.
+- At most 200 `egress_rules` and `allowed_hosts` together.
+
+A refused request gets a `403` with a JSON body that says why, so the agent (and you, in the transcript) can tell which rule to add:
+
+```json
+{"error": "egress_denied", "message": "veri egress: method POST not allowed for api.github.com",
+ "host": "api.github.com", "method": "POST", "path": "/repos/my-org/app/issues", "constraint": "method", "rule": "egress_rules[0]"}
+```
+
+`constraint` is `host` (`host not allowed: example.com`), `method`, `path`, `scheme` (plain HTTP) or `host_header` (a `Host` header that names a different host than the URL). Every request, allowed or refused, is recorded as an [`agent.egress` event](/agents/sessions#transcript).
+
+### Certificates in the sandbox
+
+The proxy terminates TLS with a certificate authority that exists only inside the running sandbox. The system trust store (`/etc/ssl/certs/ca-certificates.crt`) includes it, and the harness's environment points the common clients at it: `NODE_EXTRA_CA_CERTS` (Node), `REQUESTS_CA_BUNDLE`, `SSL_CERT_FILE` and `PIP_CERT` (Python, pip, Go and OpenSSL-based tools), `CURL_CA_BUNDLE` (curl), `GIT_SSL_CAINFO` (git's `http.sslCAInfo`) and `DENO_CERT`. A tool that ships its own certificate list or pins certificates (a Java keystore, some prebuilt binaries) fails TLS until you point it at the system store, for example `keytool -importcert` for Java. If you override one of these variables in `env`, keep it pointing at the system store.
+
+### Private endpoints
+
+The sandbox has no static egress IP, so an IP allowlist on your side cannot single it out. To let an agent reach a private service, publish it through [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) on a hostname protected by Cloudflare Access with a [service token](https://developers.cloudflare.com/cloudflare-one/identity/service-tokens/), then store the token as two secrets bound to that hostname:
+
+```bash
+veri secrets set CF_ACCESS_CLIENT_ID --from-env CF_ID --scope-host internal-api.example.com
+veri secrets set CF_ACCESS_CLIENT_SECRET --from-env CF_SECRET --scope-host internal-api.example.com
+```
+
+```toml
+secrets = ["CF_ACCESS_CLIENT_ID", "CF_ACCESS_CLIENT_SECRET"]
+
+[[egress_rules]]
+host = "internal-api.example.com"
+methods = ["GET"]
+```
+
+The agent sends `CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID` and `CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET`. The sandbox only ever holds placeholders; the proxy swaps in the real values on requests to `internal-api.example.com` and nowhere else. A reverse proxy of your own that checks a bearer secret works the same way.
+
 ## Permissions
 
-- `default = "allow"` runs the harness in Claude Code's `bypassPermissions` mode: every tool call that no `deny` rule matches runs without a prompt. Sessions are unattended, so this is the mode to use when the sandbox and the egress allowlist are the boundary you rely on.
+- `default = "allow"` runs the harness in Claude Code's `bypassPermissions` mode: every tool call that no `deny` rule matches runs without a prompt. Sessions are unattended, so this is the mode to use when the sandbox and the egress rules are the boundary you rely on.
 - `default = "deny"` runs it in `dontAsk` mode: only tools matched by an `allow` rule run; everything else is refused without a prompt and the agent is told so.
 - `deny` rules bind in every mode, including `bypassPermissions`. `allow` rules only matter under `default = "deny"`.
 - `ask` stops the session for a human decision. When the agent calls a tool whose last matching rule is `ask` (or any tool, under `default = "ask"`), the harness parks the turn before the call runs, the session becomes `awaiting_approval`, the transcript gets an `agent.approval_request` and the `session.approval_requested` [webhook](/webhooks) fires. Answer with `user.approval` (`veri sessions approve <session> <approval> allow|deny [--message]`, the session page, or `POST /v1/sessions/{id}/events`); on `allow` the call runs and the turn continues, on `deny` the agent reads your message as the reason and continues without it. If the approval check itself cannot complete, the call is refused, never run. See [Approvals](/agents/sessions#approvals). [Triggers](/agents/triggers) run with nobody to answer, so an environment that uses `ask` cannot be triggered.
@@ -99,7 +186,7 @@ What to expect while a session waits:
 - Nothing bills: the sandbox is snapshotted and stopped the moment the turn parks, and restored when you decide (a few seconds, like a resume).
 - A request expires after `permissions.approval_ttl_s` seconds without an answer (60 to 86400, default 1800, so 30 minutes) and counts as a `deny` (the transcript shows `user.approval` with `reason: "timeout"`); the turn resumes so the agent can finish without the call. Set it per environment, for example `approval_ttl_s = 7200` under `[permissions]` for a two-hour window.
 - `user.message` returns `409` until the pending approval is answered. One approval is open at a time; a second `ask` that fires meanwhile is denied, not queued.
-- `ask` is best effort, like every rule that governs `Bash` and file tools: it is enforced by the harness's own permission system inside the sandbox. `deny` rules, the egress allowlist and secret scoping are the hard boundaries.
+- `ask` is best effort, like every rule that governs `Bash` and file tools: it is enforced by the harness's own permission system inside the sandbox. `deny` rules, the egress rules and secret scoping are the hard boundaries. A `deny` on `WebFetch` stops the harness's fetch tool, not `curl`; to keep the agent away from a host, leave it out of the egress rules.
 
 ## Versions
 
