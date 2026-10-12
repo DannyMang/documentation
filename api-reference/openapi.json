@@ -6260,7 +6260,7 @@
           "Sessions"
         ],
         "summary": "Send input to a session",
-        "description": "`user.message` appends the message to the transcript and starts an agent run (409 while a run is in progress or the session is paused). `user.interrupt` stops the current run.",
+        "description": "`user.message` appends the message to the transcript and starts an agent run (409 while a run is in progress, the session is paused, or it is waiting for an approval). `user.interrupt` stops the current run. `user.approval` answers the pending `agent.approval_request` with `approval_id` and `decision` (`allow` or `deny`, optional `message`) and resumes the parked turn (409 unless the session is `awaiting_approval` on that approval).",
         "operationId": "post_event",
         "parameters": [
           {
@@ -17109,7 +17109,7 @@
                 },
                 "status": {
                   "type": "string",
-                  "description": "provisioning | ready | running | paused | ended | failed"
+                  "description": "provisioning | ready | running | awaiting_approval | paused | ended | failed"
                 },
                 "title": {
                   "type": [
@@ -17942,7 +17942,7 @@
           },
           "action": {
             "type": "string",
-            "description": "`allow` or `deny`. `ask` (human approval) is not available yet and is\nrejected."
+            "description": "`allow`, `ask` (pause the session for a human decision; see\ndocs/agents/environments.mdx) or `deny`."
           }
         }
       },
@@ -17972,7 +17972,7 @@
               "string",
               "null"
             ],
-            "description": "`allow` (default) or `deny`: what happens to tools no rule matches."
+            "description": "`allow` (default), `ask` or `deny`: what happens to tools no rule matches."
           },
           "rules": {
             "type": "array",
@@ -19417,13 +19417,34 @@
         "properties": {
           "type": {
             "type": "string",
-            "description": "`user.message` (requires `text`) or `user.interrupt`."
+            "description": "`user.message` (requires `text`), `user.interrupt`, or `user.approval`\n(requires `approval_id` and `decision`; only while the session is\n`awaiting_approval`)."
           },
           "text": {
             "type": [
               "string",
               "null"
             ]
+          },
+          "approval_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`user.approval`: the `approval_id` of the pending `agent.approval_request`."
+          },
+          "decision": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`user.approval`: `allow` or `deny`."
+          },
+          "message": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`user.approval`: optional note, at most 4 KiB. On `deny` the agent\nreads it as the reason and continues its turn without the tool call."
           }
         }
       },
@@ -19527,7 +19548,7 @@
           },
           "status": {
             "type": "string",
-            "description": "provisioning | ready | running | paused | ended | failed"
+            "description": "provisioning | ready | running | awaiting_approval | paused | ended | failed"
           },
           "title": {
             "type": [
