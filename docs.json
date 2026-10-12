@@ -112,6 +112,7 @@
             "icon": "robot",
             "pages": [
               "agents/environments",
+              "agents/harnesses",
               "agents/skills",
               "agents/sessions"
             ]

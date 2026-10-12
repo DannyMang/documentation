@@ -1,0 +1,147 @@
+---
+title: "Harnesses"
+description: "The agent program a session runs: Claude Code, OpenCode, or your own process, and what each supports"
+keywords: ["agents", "harness", "claude code", "opencode", "custom", "permissions", "mcp", "skills"]
+---
+
+## Overview
+
+The harness is the agent program inside a session's sandbox: it reads your messages, calls the model, runs tools and writes the transcript. You pick it with `harness` on the [environment](/agents/environments); everything else (model, egress, secrets, MCP servers, skills, permissions) is written once and rendered into that harness's own config.
+
+<Note>
+OpenCode and `custom` are in preview. Until they are enabled for your account, creating an environment with them returns `400` with "planned, not available yet". `claude-code` is available everywhere and is the default.
+</Note>
+
+| | `claude-code` | `opencode` | `custom` |
+| --- | --- | --- | --- |
+| Runs | Claude Code (stock binary), one long-lived process | OpenCode 1.19.0, one `opencode run` per turn | your command, one long-lived process, in the Claude Code image |
+| Model API | Anthropic Messages | OpenAI chat completions | whatever your process calls (`VERI_MODEL_*`) |
+| `ask` approvals | yes | no | no |
+| `allow` / `deny` rules | yes (`.claude/settings.json`) | yes (`opencode.json` `permission`) | no |
+| MCP servers | `.mcp.json` | `opencode.json` `mcp` | `.mcp.json`, for your process to read |
+| Skills | `.claude/skills/` | `.opencode/skills/` | `.veri/skills/`, for your process to read |
+| Fork from a checkpoint | yes | yes | no (`409 harness_does_not_support_fork`) |
+| Checkpoint, rollback, pause | yes | yes | yes (files only: your process restarts) |
+
+Every harness gets the same sandbox, egress rules and secret handling: credentials stay outside the sandbox, the model key is a placeholder swapped at the egress edge, and the transcript uses one [event vocabulary](/agents/sessions#transcript).
+
+## Claude Code
+
+The default. Each session runs the unmodified Claude Code CLI in headless stream-json mode. Permissions map onto Claude Code's permission modes and rules (see [Permissions](/agents/environments#permissions)), `ask` rules park the turn for your approval, and a fork resumes the checkpoint's conversation as a new Claude Code session.
+
+The model must speak the Anthropic Messages API: a Veri deployment (served through `/v1/deployments/{id}/v1/messages`), Anthropic itself, or any compatible gateway.
+
+## OpenCode
+
+```toml environment.toml
+kind = "environment"
+name = "opencode-coder"
+harness = "opencode"
+
+[model]
+deployment_id = "1a2b3c4d5e6f"   # any Veri deployment, OR:
+# base_url = "https://api.example.com/v1"   # an OpenAI-compatible endpoint
+# secret = "EXAMPLE_API_KEY"
+# name = "my-model"                          # required with base_url
+
+[permissions]
+default = "allow"
+rules = [
+  { tool = "bash(rm *)", action = "deny" },
+  { tool = "web.fetch", action = "deny" },
+]
+```
+
+How it runs:
+
+- Each message starts one `opencode run --format json` with the message on stdin and `--session <id>` to continue the conversation; the turn ends when OpenCode exits (exit `0` is success). Expect a second or two of start-up per turn. Nothing runs between turns, so pauses and checkpoints are cheap.
+- The model is an OpenAI-compatible provider in `/workspace/opencode.json` at the session's model base URL (OpenCode appends `/chat/completions`, which every Veri deployment serves). `model.name` sets the model it requests; for a Veri deployment it defaults to the deployment id. The key in the config is `{env:VERI_MODEL_KEY}`, a placeholder: the real key is added at the egress edge and never enters the sandbox. `api.anthropic.com` is not supported as an OpenCode model endpoint; use `claude-code` for it.
+- MCP servers become `remote` entries in `opencode.json` (bearer tokens are placeholders too). Skills are written to `/workspace/.opencode/skills/<name>/SKILL.md`.
+- Permissions become OpenCode's `permission` map, in the same last-match-wins order (see the [table](#permission-names) below). `ask` is refused when you create the environment: a headless OpenCode run rejects every approval prompt on its own, and there is no way to pause the turn for you.
+- Forking runs `opencode run --session <checkpoint's session> --fork`, so each child continues the conversation as its own session.
+- Model-update checks, model catalog downloads, language-server downloads, default plugins and sharing are disabled.
+- Tool calls arrive when they finish: each produces an `agent.tool_use` and its `tool.result` together. Token usage is reported per model step (`usage` with `scope: "step"`) and per turn (`scope: "run"`).
+
+## Custom
+
+Run your own agent program inside the session sandbox. Veri starts your command in the stock session image (Debian with Node.js 22, Python 3, git, curl and ripgrep), feeds it your messages and turns what it prints into the transcript.
+
+```toml environment.toml
+kind = "environment"
+name = "my-agent"
+harness = "custom"
+
+[custom]
+# Fetch your code and run it (GitHub, npm and PyPI are reachable by default).
+command = ["sh", "-c", "[ -d agent ] || git clone --depth 1 https://github.com/you/agent agent; exec python3 -u agent/agent.py"]
+workdir = "/workspace"            # default; must be /workspace or under it
+
+[model]
+deployment_id = "1a2b3c4d5e6f"
+```
+
+The protocol:
+
+- Your process starts on the first message and keeps running. If it exits, the next message starts it again, so a command that fetches code should tolerate the checkout already being there (as above). A checkpoint, rollback or resume restarts it too: the files survive, the process does not.
+- `command` is up to 64 arguments of up to 4096 bytes each, so a short script can also be passed inline (`["python3", "-c", "..."]`).
+- Each message arrives as one JSON line on stdin: `{"type": "user.message", "text": "..."}`.
+- Every line you print to stdout that is a JSON object with one of these `type`s is recorded as that event, with the other fields as its payload: `agent.message`, `agent.thinking`, `agent.tool_use`, `tool.result`, `usage`, `error`, `agent.raw`. Any other JSON line is recorded as `agent.raw`, and any other text line as `agent.message`.
+- Print `{"type": "run.completed"}` when you have answered (add `"is_error": true` or a `"stop_reason"` if you like). Exiting also ends the turn: exit `0` is success, anything else an error with your stderr attached.
+- The model: `VERI_MODEL_BASE_URL` (OpenAI-compatible for a Veri deployment), `VERI_MODEL_KEY` (a placeholder that is swapped for the real key on requests to that host only; send it as `Authorization: Bearer $VERI_MODEL_KEY`) and `VERI_MODEL_NAME` (`model.name`, or the deployment id).
+- MCP servers are in `/workspace/.mcp.json` and skills in `/workspace/.veri/skills/` for your program to use as it sees fit.
+
+A complete example that answers with the model and runs shell commands itself (pass it inline with `python3 -c` or keep it in your repository):
+
+```python agent.py
+import json, os, subprocess, sys, urllib.request
+
+base = os.environ["VERI_MODEL_BASE_URL"].rstrip("/")
+key = os.environ["VERI_MODEL_KEY"]
+model = os.environ.get("VERI_MODEL_NAME") or "default"
+history = []
+
+def emit(**event):
+    print(json.dumps(event), flush=True)
+
+for line in sys.stdin:
+    text = json.loads(line)["text"]
+    if text.startswith("!sh "):
+        emit(type="agent.tool_use", id="sh-1", name="sh", input={"command": text[4:]}, kind="command")
+        p = subprocess.run(text[4:], shell=True, capture_output=True, text=True)
+        emit(type="tool.result", tool_use_id="sh-1", content=p.stdout + p.stderr,
+             is_error=p.returncode != 0, exit_code=p.returncode)
+        emit(type="run.completed")
+        continue
+    history.append({"role": "user", "content": text})
+    req = urllib.request.Request(base + "/chat/completions",
+        data=json.dumps({"model": model, "messages": history}).encode(),
+        headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"})
+    reply = json.load(urllib.request.urlopen(req))["choices"][0]["message"]["content"]
+    history.append({"role": "assistant", "content": reply})
+    emit(type="agent.message", text=reply)
+    emit(type="run.completed")
+```
+
+What Veri cannot do for a custom harness: it does not see or govern the tool calls your program makes, so `permissions` must be `default = "allow"` with no rules (egress rules and secret scoping still apply to everything the process does), there are no `ask` approvals, and there is no conversation to fork. Status, approval and billing events are the runtime's own: a `session.status` line from your process is recorded as `agent.raw`, `usage` lines never carry billed time, and `error` lines cannot fail the session.
+
+Your own container image is not supported: sandbox images are built when Veri deploys its runtime and cannot be pulled per session. Install what you need from your command (npm and PyPI are reachable by default) or ask us about a custom base image.
+
+## Permission names
+
+Rules can use these harness-neutral names. Each harness renders them into its own config; Claude Code's own names (`Bash(git *)`, `Read`, `mcp__server__tool`) keep working for `claude-code`, and OpenCode accepts the ones it has an equivalent for.
+
+| Name | Claude Code | OpenCode |
+| --- | --- | --- |
+| `*` | every tool | `"*"` |
+| `bash` | `Bash` | `bash` |
+| `bash(git *)` | `Bash(git *)` | `bash` patterns `git` and `git *` |
+| `file.read` | `Read`, `Glob`, `Grep` | `read`, `glob`, `grep`, `list` |
+| `file.write` | `Edit`, `Write`, `MultiEdit`, `NotebookEdit` | `edit` (covers writes) |
+| `web.fetch` | `WebFetch` | `webfetch` |
+| `web.search` | `WebSearch` | `websearch` |
+| `git.*` | `Bash(git *)` | `bash` patterns `git` and `git *` |
+| `mcp` | `mcp__<server>__*` for every configured server | `<server>_*` for every configured server |
+| `mcp.<server>` | `mcp__<server>__*` | `<server>_*` |
+| `mcp.<server>.<tool>` | `mcp__<server>__<tool>` | `<server>_<tool>` |
+
+The last matching rule wins on every harness. Creating an environment fails with `400` when a rule cannot be expressed: `ask` on OpenCode or custom (`harness_does_not_support_ask`), any rule on custom (`harness_does_not_support_permissions`), a Claude-only rule such as `Read(./src/**)` or `Task` on OpenCode, or a lowercase name that is not in the table.
