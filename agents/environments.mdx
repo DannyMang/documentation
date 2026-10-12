@@ -39,9 +39,9 @@ url = "https://example.com/mcp"  # your MCP server
 secret = "TOOLS_TOKEN"
 
 [permissions]
-default = "allow"                # allow | deny
+default = "allow"                # allow | ask | deny
 rules = [
-  { tool = "Bash(rm *)", action = "deny" },
+  { tool = "Bash(rm *)", action = "ask" },   # stop and wait for you
   { tool = "WebFetch", action = "deny" },
 ]
 ```
@@ -79,7 +79,7 @@ env["version"]["spec"]   # the normalized spec that sessions will run
 | `secrets` | [Secret](/secrets) names. A secret without `scope_host` becomes an environment variable; one with `scope_host` is attached only to requests for that host and never enters the sandbox. |
 | `mcp_servers` | Streamable-HTTP MCP servers written into the harness's MCP config. The URL must be HTTPS and resolve to a public address when you create the environment. `secret` is sent as a bearer token. |
 | `skills` | [Skills](/agents/skills) by name (latest) or `name@N`. The resolved versions are pinned in the spec. |
-| `permissions` | `default` (`allow` or `deny`) plus `rules`, tool patterns in the harness's own syntax (`Bash(rm *)`, `WebFetch`) evaluated top to bottom with the last match winning. See [Permissions](#permissions). |
+| `permissions` | `default` (`allow`, `ask` or `deny`) plus `rules`, tool patterns in the harness's own syntax (`Bash(rm *)`, `WebFetch`) evaluated top to bottom with the last match winning. See [Permissions](#permissions). |
 | `idle_timeout_s` | Seconds without input before the session snapshots its workspace and pauses (60 to 21600). |
 
 The API returns the **normalized** spec: defaults filled in, hostnames lowercased, duplicate entries removed, skills pinned, and every secret the spec references (including the model's and each MCP server's) listed in `secrets`. That is exactly what the sandbox is built from, and what `veri environments get --toml` prints.
@@ -89,7 +89,16 @@ The API returns the **normalized** spec: defaults filled in, hostnames lowercase
 - `default = "allow"` runs the harness in Claude Code's `bypassPermissions` mode: every tool call that no `deny` rule matches runs without a prompt. Sessions are unattended, so this is the mode to use when the sandbox and the egress allowlist are the boundary you rely on.
 - `default = "deny"` runs it in `dontAsk` mode: only tools matched by an `allow` rule run; everything else is refused without a prompt and the agent is told so.
 - `deny` rules bind in every mode, including `bypassPermissions`. `allow` rules only matter under `default = "deny"`.
-- `ask` (pause the session for a human decision) is not available yet; a spec that uses it as the default or in a rule is rejected.
+- `ask` stops the session for a human decision. When the agent calls a tool whose last matching rule is `ask` (or any tool, under `default = "ask"`), the harness parks the turn before the call runs, the session becomes `awaiting_approval`, the transcript gets an `agent.approval_request` and the `session.approval_requested` [webhook](/webhooks) fires. Answer with `user.approval` (`veri sessions approve <session> <approval> allow|deny [--message]`, the session page, or `POST /v1/sessions/{id}/events`); on `allow` the call runs and the turn continues, on `deny` the agent reads your message as the reason and continues without it. See [Approvals](/agents/sessions#approvals).
+
+Rules are a flat list and the **last match wins**: `[{tool = "Bash", action = "ask"}, {tool = "Bash(git *)", action = "allow"}, {tool = "Bash(rm *)", action = "deny"}]` asks for every shell command except `git ...` (allowed) and `rm ...` (denied). `Bash(prefix *)` matches commands starting with `prefix`; `Read(/etc/*)`, `Edit(*.md)` match the file path; `mcp__server__*` matches every tool of an MCP server; `*` matches everything.
+
+What to expect while a session waits:
+
+- Nothing bills: the sandbox is snapshotted and stopped the moment the turn parks, and restored when you decide (a few seconds, like a resume).
+- A request expires after 30 minutes without an answer and counts as a `deny` (the transcript shows `user.approval` with `reason: "timeout"`); the turn resumes so the agent can finish without the call.
+- `user.message` returns `409` until the pending approval is answered. One approval is open at a time; a second `ask` that fires meanwhile is denied, not queued.
+- `ask` is best effort, like every rule that governs `Bash` and file tools: it is enforced by the harness's own permission system inside the sandbox. `deny` rules, the egress allowlist and secret scoping are the hard boundaries.
 
 ## Versions
 

@@ -36,6 +36,7 @@ for ev in client.sessions.stream(s["id"]):
 | `provisioning` | The sandbox is starting (or restoring from a pause). |
 | `ready` | Idle, waiting for a message. |
 | `running` | The agent is working on your last message. One run at a time. |
+| `awaiting_approval` | A tool call matched an `ask` [permission rule](/agents/environments#permissions); the turn is parked until you answer. The sandbox is snapshotted and stopped meanwhile, so nothing is billed. See [Approvals](#approvals). |
 | `paused` | Sandbox filesystem snapshotted, sandbox stopped. No compute is billed. See [Pause and resume](#pause-and-resume). |
 | `ended` | You ended it. The transcript stays readable for 30 days. |
 | `failed` | The sandbox or the agent failed terminally. `failure_code` says why. |
@@ -59,6 +60,30 @@ A snapshot is tied to the agent image version it was taken from and expires 30 d
 
 If the environment's model is a Veri deployment, each session gets a 24-hour [model access key](/secrets#model-access-keys) that can only call that deployment. It is revoked when the session ends.
 
+### Approvals
+
+When the agent calls a tool whose last matching [permission rule](/agents/environments#permissions) is `ask` (or any tool under `default = "ask"`), the harness stops before the call runs:
+
+1. The transcript gets `agent.approval_request {approval_id, tool_name, tool_input, tool_use_id, matched_rule, expires_at}`, the session becomes `awaiting_approval`, the turn ends with `run.completed {stop_reason: "awaiting_approval"}` and the `session.approval_requested` [webhook](/webhooks) fires (with `approval_id`, `tool_name` and `expires_at`, never the tool input). The sandbox is snapshotted and stopped, so no compute is billed while you think.
+2. You answer with a `user.approval` event: `{type: "user.approval", approval_id, decision: "allow" | "deny", message?}`. `409` unless the session is `awaiting_approval` on that `approval_id`.
+3. The sandbox is restored and the agent's turn continues. On `allow` the tool call runs; on `deny` the agent reads `message` as the reason and carries on without it. The turn ends with its usual `run.completed`.
+
+```bash
+veri sessions stream 9f8e7d6c5b4a            # prints the request and the command to answer it
+veri sessions approve 9f8e7d6c5b4a ap_3c1f allow
+veri sessions approve 9f8e7d6c5b4a ap_3c1f deny --message "not on the production bucket"
+```
+
+```python
+for ev in client.sessions.stream(s["id"]):
+    if ev["type"] == "agent.approval_request":
+        p = ev["payload"]
+        print(p["tool_name"], p["tool_input"])
+        client.sessions.approve(s["id"], p["approval_id"], "allow")
+```
+
+A request that is not answered within 30 minutes is denied automatically: the transcript shows `user.approval {decision: "deny", reason: "timeout", by: "system"}` and the turn resumes with the denial. Sending `user.message` while an approval is pending returns `409`. One approval is open at a time.
+
 ## Transcript
 
 `GET /v1/sessions/{id}/events?after_seq=N` returns a page of events, oldest first. `GET /v1/sessions/{id}/stream` is a server-sent-events stream of the same rows: `id` is the event's `seq`, `event` is its type. Reconnect with `Last-Event-ID` (or `?after_seq=`) to continue without gaps; the stream closes after the session's terminal status event.
@@ -67,6 +92,8 @@ If the environment's model is a Veri deployment, each session gets a 24-hour [mo
 | --- | --- |
 | `user.message` | `{text}`, what you sent |
 | `user.interrupt` | you stopped a run; the run ends with `run.completed{stop_reason: "interrupted"}` |
+| `agent.approval_request` | `{approval_id, tool_name, tool_input, tool_use_id, matched_rule, expires_at}`: an `ask` rule stopped a tool call; the session is `awaiting_approval` (see [Approvals](#approvals)) |
+| `user.approval` | `{approval_id, decision, message, by}` with `by` your user id, or `by: "system"` and `reason: "timeout"` when the request expired |
 | `agent.message` | `{text}`, the agent's reply |
 | `agent.thinking` | `{text}` |
 | `agent.tool_use` | `{id, name, input}` |
@@ -80,7 +107,7 @@ If the environment's model is a Veri deployment, each session gets a 24-hour [mo
 
 Payloads above 64 KiB (a large file read, for example) are stored in object storage; the event carries a 1 KiB preview and `payload_ref`.
 
-Lifecycle transitions also fire [webhooks](/webhooks): `session.started`, `session.paused`, `session.ended`, `session.failed`.
+Lifecycle transitions also fire [webhooks](/webhooks): `session.started`, `session.approval_requested`, `session.paused`, `session.ended`, `session.failed`.
 
 ### Usage
 
