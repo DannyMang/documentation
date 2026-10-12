@@ -126,11 +126,13 @@ A request that is not answered within 30 minutes is denied automatically: the tr
 | `agent.thinking` | `{text}` |
 | `agent.tool_use` | `{id, name, input}` |
 | `tool.result` | `{tool_use_id, content, is_error}` |
-| `usage` | `{scope, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens}` per model call as the harness reports it (`scope: "message"`), per run (`scope: "run"`), and, for your own model endpoint, per call as read off the model's reply (`scope: "call"`, with `model`, `duration_ms` and `status`); heartbeats are `{scope: "heartbeat", awake_seconds, load1, mem_bytes, mem_limit_bytes, disk_bytes}` every 60 seconds (resource fields are omitted when the sandbox could not read them) |
+| `usage` | `{scope, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens}` per model call as the harness reports it (`scope: "message"`), per run (`scope: "run"`), and, for your own model endpoint, per call as read off the model's reply (`scope: "call"`, with `model`, `duration_ms` and `status`); heartbeats are `{scope: "heartbeat", awake_seconds, egress_bytes, load1, mem_bytes, mem_limit_bytes, disk_bytes}` every 60 seconds (`egress_bytes` is the traffic since the previous heartbeat; resource fields are omitted when the sandbox could not read them) |
+| `agent.egress` | `{host, method, path, status, decision, rule, constraint, bytes_out, bytes_in, duration_ms, secrets_swapped}`, one per request that passed the [egress proxy](/agents/environments#egress): `decision` is `allow` or `deny`, `rule` names the rule that decided (`egress_rules[0]`, `allowed_hosts`, `preset:coding`, `model`, `mcp:<name>`, `open` in `audited_open`), `constraint` says what failed on a deny (`host`, `method`, `path`, `scheme`, `host_header`, `secret_scope`), `secrets_swapped` counts the secrets attached. `path` never includes the query string; headers, bodies and secret values are never recorded. Past 120 requests in a minute the rest are summed into one `{rollup: true, dropped, denied, bytes_out, bytes_in, window_start, window_s}` event when the minute ends. |
 | `run.completed` | `{stop_reason, duration_ms, duration_api_ms, num_turns, total_cost_usd, model_usage, permission_denials}`, the agent finished a turn. `model_usage` maps each model to `{input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, cost_usd}`; `permission_denials` lists `{tool_name, tool_use_id}` for tool calls the harness refused |
 | `session.status` | `{status, from, failure_code, error}` |
 | `session.interrupted` | `{reason, exit_code, run_id, snapshot_id, snapshot_error}`: the sandbox was stopped underneath the session (`reason` is `sigterm` for an inactivity timeout or host eviction, `container_stopped` when the container exited during a run). The session moves to `paused`; after `container_stopped` a `session.status` event then marks it `failed`. |
 | `session.budget_exhausted` | `{budget_usd, accrued_usd, awake_seconds}`, written just before a [budget](#pricing-and-limits) pause |
+| `session.egress_cap_reached` | `{egress_bytes, cap_bytes}`, written just before an [egress cap](#pricing-and-limits) pause |
 | `session.checkpoint` | `{checkpoint_id, label, bytes, expires_at}`, a [checkpoint](#checkpoints-forks-and-rollbacks) was recorded |
 | `session.forked` | on the parent `{checkpoint_id, children}`; on each child `{parent_session_id, checkpoint_id}` |
 | `session.rolled_back` | `{checkpoint_id}`, the session is being restored to that checkpoint |
@@ -151,6 +153,8 @@ Lifecycle transitions also fire [webhooks](/webhooks): `session.started`, `sessi
   "awake_seconds": 1860,
   "total_cost_usd": 0.05,
   "rate_usd_per_hour": 0.10,
+  "egress_bytes": 48211904,
+  "egress_usd_per_gb": 0,
   "usage": {
     "boot_ms": 6120,
     "restore_ms": null,
@@ -186,6 +190,7 @@ Lifecycle transitions also fire [webhooks](/webhooks): `session.started`, `sessi
 | `permission_denials` | Tool calls the harness refused under the environment's `permissions`. |
 | `approvals` | Human approvals asked, allowed and denied, and the total time runs spent waiting for them. All zero unless the environment has `ask` rules. |
 | `resources` | CPU load (1-minute average), memory used and limit, and bytes used under `/workspace`, as sampled by the last heartbeat. Absent until the first heartbeat; a field is left out when the sandbox could not read it. |
+| `egress_bytes`, `egress_usd_per_gb` | Request plus response bytes that passed the egress proxy (in `unrestricted` mode, only the traffic to hosts that carry a secret), and the per-GB price they bill at: non-zero only for an `audited_open` environment. |
 
 Token counts are recorded in two places. For a Veri-hosted model, every model call the agent makes is recorded on the deployment's request history (`GET /v1/deployments/{id}/requests`) with its input, cached and output tokens, the same as any other request to that deployment, and each call carries the session id as its thread id, so [monitors](/evals#monitors) scoped to threads score the session's conversation like any other thread. For your own endpoint, Veri never stores the model traffic; the per-call `usage` events (`scope: "call"`) record only the token counts, model name, duration and status read off each reply, and the per-run totals the harness reports (`usage` with `scope: "run"` and `run.completed.model_usage`) are recorded on the transcript as well. Session token totals in the observability views follow the same rules as `usage` above.
 
@@ -200,6 +205,8 @@ A session is billed per hour while its sandbox is awake, settled per minute, at 
 | `large` | 4 vCPU, 12 GiB, 20 GB | $0.30 |
 | `xlarge` | 16 vCPU class | planned, not available yet |
 
-Set `budget_usd` to pause the session automatically when its sandbox spend reaches the ceiling; the transcript records a `session.budget_exhausted` event and the session's `failure_code` reads `budget_exhausted`. Resume it to continue (the budget still applies, so raise it first or start a new session).
+Egress is billed only in `audited_open` mode, at $0.025 per GB of request plus response bytes through the egress proxy (`egress_bytes`), settled with the session and fixed when the session is created (`egress_usd_per_gb`). `restricted` traffic is metered on the session but never billed, and `unrestricted` traffic is neither. Every session pauses when its `egress_bytes` reaches 10 GiB: the transcript records `session.egress_cap_reached` and `failure_code` reads `egress_cap`. Contact us to raise the cap for a workspace.
+
+Set `budget_usd` to pause the session automatically when its awake-time spend reaches the ceiling (egress has its own cap, above); the transcript records a `session.budget_exhausted` event and the session's `failure_code` reads `budget_exhausted`. Resume it to continue (the budget still applies, so raise it first or start a new session).
 
 A workspace can have two sessions that are not ended at a time, paused sessions and forked children included. Creating a third (or forking more children than fit) returns `429 CONCURRENT_SESSION_LIMIT`. Contact us to raise the limit.
