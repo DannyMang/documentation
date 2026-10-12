@@ -6,7 +6,7 @@ keywords: ["agents", "sessions", "claude code", "sse", "transcript", "pause", "r
 
 ## Overview
 
-A session is one running agent, started from an [environment](/agents/environments). The harness runs unmodified inside an isolated sandbox. You send messages, the agent works, and every step lands in an ordered transcript you can read back or stream live.
+A session is one running agent, started from an [environment](/agents/environments). The harness runs unmodified inside an isolated sandbox. You send messages, the agent works, and every step lands in an ordered transcript you can read back or stream live. To work in the sandbox yourself (run a command, copy files, open a shell, expose a port), see [Session ops](/agents/session-ops).
 
 ```bash
 veri sessions create 3f9c2a7b1d40 --title "fix the flaky test" --budget 5
