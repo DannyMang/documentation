@@ -6358,7 +6358,7 @@
             "description": "Session or checkpoint not found in this workspace"
           },
           "409": {
-            "description": "A fresh checkpoint was needed but the session is not ready or paused"
+            "description": "A fresh checkpoint was needed but the session is not ready or paused, or the session's harness cannot fork (`harness_does_not_support_fork`)"
           },
           "429": {
             "description": "The children would exceed the workspace's concurrent-session cap"
@@ -17099,6 +17099,7 @@
                 "id",
                 "environment_id",
                 "environment_version",
+                "harness",
                 "status",
                 "awake_seconds",
                 "total_cost_usd",
@@ -17120,6 +17121,10 @@
                 "environment_version": {
                   "type": "integer",
                   "format": "int32"
+                },
+                "harness": {
+                  "type": "string",
+                  "description": "The agent harness the session runs (`claude-code`), from its pinned\nenvironment version."
                 },
                 "status": {
                   "type": "string",
@@ -17952,7 +17957,7 @@
         "properties": {
           "tool": {
             "type": "string",
-            "description": "Tool pattern as the harness understands it (e.g. `Bash`,\n`Bash(git *)`, `Read`, `WebFetch`, `mcp__composio__*`)."
+            "description": "Tool pattern: a harness-neutral name (`bash`, `bash(git *)`,\n`file.read`, `file.write`, `web.fetch`, `web.search`, `git.*`, `mcp`,\n`mcp.<server>.<tool>`, `*`) or Claude Code's own syntax (`Bash`,\n`Bash(git *)`, `Read`, `WebFetch`, `mcp__composio__*`)."
           },
           "action": {
             "type": "string",
@@ -19538,6 +19543,7 @@
           "id",
           "environment_id",
           "environment_version",
+          "harness",
           "status",
           "awake_seconds",
           "total_cost_usd",
@@ -19559,6 +19565,10 @@
           "environment_version": {
             "type": "integer",
             "format": "int32"
+          },
+          "harness": {
+            "type": "string",
+            "description": "The agent harness the session runs (`claude-code`), from its pinned\nenvironment version."
           },
           "status": {
             "type": "string",
@@ -19694,7 +19704,7 @@
       },
       "SessionTokens": {
         "type": "object",
-        "description": "Token totals of one session. `input`, `cache_read` and `cache_creation`\ncome from the per-call rows (`usage{scope:\"call\"}` from the egress tee\nwhen the session has any, else the harness's per-message\n`usage{scope:\"message\"}`); `output` from the per-run rollup\n(`usage{scope:\"run\"}`), because the per-message output count is the\nharness's message_start placeholder.",
+        "description": "Token totals of one session. `input`, `cache_read` and `cache_creation`\ncome from the per-call rows (`usage{scope:\"call\"}` from the egress tee\nwhen the session has any, else the harness's per-message\n`usage{scope:\"message\"}`, or per-step `usage{scope:\"step\"}` for OpenCode,\nO8); `output` from the per-run rollup\n(`usage{scope:\"run\"}`), because the per-message output count is the\nharness's message_start placeholder.",
         "required": [
           "input",
           "output",
@@ -19779,7 +19789,7 @@
           "llm_calls": {
             "type": "integer",
             "format": "int64",
-            "description": "Model calls: per-call `usage` rows from the egress tee when present,\nelse the harness's per-message `usage` rows."
+            "description": "Model calls: per-call `usage` rows from the egress tee when present,\nelse the harness's per-message (OpenCode: per-step) `usage` rows."
           },
           "tokens": {
             "$ref": "#/components/schemas/SessionTokens"
