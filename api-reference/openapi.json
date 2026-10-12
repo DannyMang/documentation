@@ -13907,7 +13907,14 @@
               "string",
               "null"
             ],
-            "description": "Optional secret name sent as `Authorization: Bearer <value>`."
+            "description": "Optional secret name. Sent as `Authorization: Bearer <value>`, or as\nthe raw value in `header` when that is set."
+          },
+          "header": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The request header the secret travels in, for servers that do not\ntake a bearer token (an API-key header such as `x-api-key`). Default\n`authorization` (sent as `Bearer <value>`); any other name gets the\nraw value. Needs `secret`."
           }
         }
       },
@@ -13929,6 +13936,13 @@
               "string",
               "null"
             ]
+          },
+          "header": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Lowercased header name the secret is sent in; absent = `authorization`\nwith `Bearer <value>`."
           }
         }
       },

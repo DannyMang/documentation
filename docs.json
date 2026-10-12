@@ -114,7 +114,9 @@
               "agents/environments",
               "agents/harnesses",
               "agents/skills",
-              "agents/sessions"
+              "agents/tools",
+              "agents/sessions",
+              "agents/triggers"
             ]
           },
           {
