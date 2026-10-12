@@ -80,13 +80,13 @@ for child in forked["sessions"]:
 client.sessions.rollback(s["id"], ck["id"])
 ```
 
-- **Checkpoint** (`POST /v1/sessions/{id}/checkpoints`, optional `label`): allowed while the session is `ready` or `paused`; `409` during a run. Taking one stops the harness for the snapshot (about 20 s per GB of workspace) and relaunches it, so the session cannot take a message meanwhile. A paused session's pause snapshot is recorded as the checkpoint without restarting anything. The transcript gets a `session.checkpoint` event.
+- **Checkpoint** (`POST /v1/sessions/{id}/checkpoints`, optional `label`): allowed while the session is `ready` or `paused`; `409` during a run or while an approval is pending. Taking one stops the harness for the snapshot (about 20 s per GB of workspace) and relaunches it, so the session cannot take a message meanwhile. A paused session's pause snapshot is recorded as the checkpoint without restarting anything. The transcript gets a `session.checkpoint` event.
 - **Fork** (`POST /v1/sessions/{id}/fork`, `{checkpoint_id?, count, budget_usd?, title?}`): starts `count` (1 to 4) new sessions from the checkpoint; without `checkpoint_id` a fresh checkpoint is taken first. Each child gets the checkpoint's files and the conversation up to that point, then continues it as its own conversation (the agent remembers everything the parent was told). Children are ordinary sessions: they pin the parent's environment version and hourly rate, get their own model access key and their own `budget_usd` (the parent's unless you pass one), are billed per awake hour individually and each takes a slot under the workspace's concurrent-session cap. A fork that does not fit under the cap starts no child (`429 CONCURRENT_SESSION_LIMIT`). Children carry `parent_session_id` and `forked_from_checkpoint_id`; the parent's transcript records `session.forked` with the children's ids.
-- **Rollback** (`POST /v1/sessions/{id}/rollback`, `{checkpoint_id}`): puts the session back to the checkpoint in place: same id, same key, same transcript (earlier events stay readable; a `session.rolled_back` event marks the point). Allowed while `ready` or `paused`; the session is `provisioning` until the sandbox is back, like a resume. Rolling back refreshes the checkpoint's expiry.
+- **Rollback** (`POST /v1/sessions/{id}/rollback`, `{checkpoint_id}`): puts the session back to the checkpoint in place: same id, same key, same transcript (earlier events stay readable; a `session.rolled_back` event marks the point). Allowed while `ready` or `paused` (`409` during a run or while an approval is pending); the session is `provisioning` until the sandbox is back, like a resume. Rolling back refreshes the checkpoint's expiry.
 
 What a checkpoint carries is exactly what a pause carries: files on the sandbox's disk and the conversation. Running processes, open ports, background tasks and in-memory state are not part of it, in children or after a rollback. A checkpoint belongs to one session (`404` from any other) and expires 30 days after it was taken or last rolled back to; expired checkpoints disappear from the list and cannot be used. Checkpoints cannot be deleted explicitly today.
 
-If the environment's model is a Veri deployment, each session gets a 24-hour [model access key](/secrets#model-access-keys) that can only call that deployment. It is revoked when the session ends.
+If the environment's model is a Veri deployment, each session gets a [model access key](/secrets#model-access-keys) that can only call that deployment. It is valid for 24 hours at a time and renewed while the session is awake and when it resumes, up to 7 days after it was issued. It is revoked when the session ends or fails.
 
 ### Approvals
 
@@ -112,6 +112,8 @@ for ev in client.sessions.stream(s["id"]):
 
 A request that is not answered within 30 minutes is denied automatically: the transcript shows `user.approval {decision: "deny", reason: "timeout", by: "system"}` and the turn resumes with the denial. Sending `user.message` while an approval is pending returns `409`. One approval is open at a time.
 
+You can pause a session that is waiting for an approval. The pause denies the pending approval (the transcript shows `user.approval {decision: "deny", reason: "paused", by}` with your user id) and the tool call never runs; after a resume, send a new message (ask the agent to try again if you still want the call). Checkpoint, rollback and a fork without `checkpoint_id` return `409` until the approval is answered or the session is paused.
+
 ## Transcript
 
 `GET /v1/sessions/{id}/events?after_seq=N` returns a page of events, oldest first. `GET /v1/sessions/{id}/stream` is a server-sent-events stream of the same rows: `id` is the event's `seq`, `event` is its type. Reconnect with `Last-Event-ID` (or `?after_seq=`) to continue without gaps; the stream closes after the session's terminal status event.
@@ -121,7 +123,7 @@ A request that is not answered within 30 minutes is denied automatically: the tr
 | `user.message` | `{text}`, what you sent |
 | `user.interrupt` | you stopped a run; the run ends with `run.completed{stop_reason: "interrupted"}` |
 | `agent.approval_request` | `{approval_id, tool_name, tool_input, tool_use_id, matched_rule, expires_at}`: an `ask` rule stopped a tool call; the session is `awaiting_approval` (see [Approvals](#approvals)) |
-| `user.approval` | `{approval_id, decision, message, by}` with `by` your user id, or `by: "system"` and `reason: "timeout"` when the request expired |
+| `user.approval` | `{approval_id, decision, message, by}` with `by` your user id, or `by: "system"` and `reason: "timeout"` when the request expired; `reason: "paused"` when you paused the session while it waited |
 | `agent.message` | `{text}`, the agent's reply |
 | `agent.thinking` | `{text}` |
 | `agent.tool_use` | `{id, name, input}` |

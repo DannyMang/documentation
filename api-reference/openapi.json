@@ -6142,7 +6142,7 @@
           "Sessions"
         ],
         "summary": "Checkpoint a session",
-        "description": "Snapshots the sandbox filesystem and records the conversation position, without ending the session. The session cannot take a message while the snapshot is taken (about 20 s per GB of workspace). Allowed while `ready` or `paused`; 409 while a run is in progress. Checkpoints expire 30 days after they were taken or last rolled back to.",
+        "description": "Snapshots the sandbox filesystem and records the conversation position, without ending the session. The session cannot take a message while the snapshot is taken (about 20 s per GB of workspace). Allowed while `ready` or `paused`; 409 while a run is in progress or an approval is pending. Checkpoints expire 30 days after they were taken or last rolled back to.",
         "operationId": "create_checkpoint",
         "parameters": [
           {
@@ -6380,7 +6380,7 @@
           "Sessions"
         ],
         "summary": "Pause a session",
-        "description": "Snapshots the sandbox filesystem and stops the sandbox. Billing stops. Resume restores the files under /workspace and the conversation; running processes, open ports and background tasks do not survive.",
+        "description": "Snapshots the sandbox filesystem and stops the sandbox. Billing stops. Resume restores the files under /workspace and the conversation; running processes, open ports and background tasks do not survive. Allowed while `ready`, `running` or `awaiting_approval`; pausing a session that waits for an approval denies that approval (recorded as `user.approval` with `reason: paused`), so the tool call it asked for never runs.",
         "operationId": "pause",
         "parameters": [
           {
@@ -6408,7 +6408,7 @@
             "description": "Not found in this workspace"
           },
           "409": {
-            "description": "Not pausable in its current status"
+            "description": "Not pausable in its current status (provisioning, paused or ended)"
           }
         },
         "security": [
@@ -6467,7 +6467,7 @@
           "Sessions"
         ],
         "summary": "Roll a session back to a checkpoint",
-        "description": "Discards the sandbox's current filesystem and conversation position and restarts it from the checkpoint, in place: same session id, same key, same transcript (the rollback is recorded as an event; earlier events stay readable). Allowed while `ready` or `paused`; the session is `provisioning` until the runtime reports `ready`. Running processes do not survive. Rolling back refreshes the checkpoint's 30-day expiry.",
+        "description": "Discards the sandbox's current filesystem and conversation position and restarts it from the checkpoint, in place: same session id, same key, same transcript (the rollback is recorded as an event; earlier events stay readable). Allowed while `ready` or `paused` (409 while a run is in progress or an approval is pending); the session is `provisioning` until the runtime reports `ready`. Running processes do not survive. Rolling back refreshes the checkpoint's 30-day expiry.",
         "operationId": "rollback",
         "parameters": [
           {
