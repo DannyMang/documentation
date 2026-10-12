@@ -114,7 +114,8 @@
               "agents/environments",
               "agents/skills",
               "agents/tools",
-              "agents/sessions"
+              "agents/sessions",
+              "agents/triggers"
             ]
           },
           {
