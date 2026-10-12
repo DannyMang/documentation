@@ -2682,6 +2682,62 @@
         ]
       }
     },
+    "/v1/deployments/{deployment_id}/responses": {
+      "post": {
+        "tags": [
+          "Deployments"
+        ],
+        "summary": "OpenAI Responses API (proxy)",
+        "description": "Forwards an OpenAI Responses request to the deployment's serving replica (vLLM's native `/v1/responses`, tool calls through the deployment's `--tool-call-parser`). Point a Responses client (the OpenAI SDK, the Codex CLI with `wire_api = \"responses\"`) at `/v1/deployments/{id}` and use a model access key or workspace key as the bearer; the same route is served at `/v1/deployments/{id}/v1/responses` for clients that append `/v1/responses`. Streaming (`stream: true`) is passed through as SSE. `model` is rewritten to the deployment's served name. Token usage is recorded on the deployment's request log.",
+        "operationId": "responses",
+        "parameters": [
+          {
+            "name": "deployment_id",
+            "in": "path",
+            "description": "Deployment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {}
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The Responses object (or an SSE stream of response events)",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "Not serving, multi-adapter / BYOC deployment, or malformed body"
+          },
+          "404": {
+            "description": "Not found or not owned by the caller"
+          },
+          "413": {
+            "description": "Body larger than 8 MB"
+          },
+          "503": {
+            "description": "Deployment waking or no serving replica; retry after Retry-After"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/deployments/{deployment_id}/stop": {
       "post": {
         "tags": [

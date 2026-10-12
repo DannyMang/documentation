@@ -17,7 +17,7 @@ kind = "environment"
 name = "coder"
 description = "Claude Code on our fine-tuned Qwen"
 
-harness = "claude-code"          # see Harnesses: claude-code (default), opencode, custom
+harness = "claude-code"          # see Harnesses: claude-code (default), opencode, codex, custom
 size = "standard"                # small | standard | large (sets the hourly rate)
 egress = "restricted"            # restricted (default) | audited_open | unrestricted (Enterprise)
 egress_preset = "coding"         # coding (default) | web_research | locked_down
@@ -77,7 +77,7 @@ env["version"]["spec"]   # the normalized spec that sessions will run
 
 | Field | Meaning |
 | --- | --- |
-| `harness` | `claude-code` (the default). `opencode` and `custom` are in preview; see [Harnesses](/agents/harnesses) for what each supports. Codex, LangGraph, CrewAI and Hermes are planned and rejected with a clear message until then. |
+| `harness` | `claude-code` (the default). `opencode`, `codex` and `custom` are in preview; see [Harnesses](/agents/harnesses) for what each supports. LangGraph, CrewAI and Hermes are planned and rejected with a clear message until then. |
 | `model` | Exactly one of `deployment_id` (a Veri deployment in this workspace; each session gets a short-lived [model access key](/secrets#model-access-keys) automatically) or `base_url` plus an optional `secret` holding its API key. |
 | `size` | Sandbox CPU and memory tier, which also sets the session's [hourly rate](/agents/sessions#pricing-and-limits): `small` (1/2 vCPU, 4 GiB memory, 8 GB disk), `standard` (1 vCPU, 6 GiB, 12 GB; the default), `large` (4 vCPU, 12 GiB, 20 GB). `xlarge` is planned and rejected with a clear message until then. |
 | `egress` | What the sandbox may reach on the network: `restricted` (default), `audited_open` or `unrestricted`. See [Egress](#egress). |
