@@ -162,6 +162,7 @@ Lifecycle transitions also fire [webhooks](/webhooks): `session.started`, `sessi
     "llm_calls": 14,
     "tokens": { "input": 48210, "output": 2380, "cache_read": 41000, "cache_creation": 1200 },
     "model_cost_usd": 0.41,
+    "harness_estimated_cost_usd": 0.41,
     "permission_denials": 1,
     "approvals": { "requested": 0, "approved": 0, "denied": 0, "wait_ms_total": 0 }
   },
@@ -182,7 +183,7 @@ Lifecycle transitions also fire [webhooks](/webhooks): `session.started`, `sessi
 | `runs`, `run_duration_ms` | Finished turns (`run.completed`, interrupted ones included) and the median and longest wall time of one turn. |
 | `interrupts`, `pauses` | Runs you interrupted plus sandboxes stopped underneath the session; times the session went `paused` (yours, idle or budget). |
 | `llm_calls`, `tokens` | Model calls and their tokens. `output` comes from the per-run figure (the per-message count the harness reports mid-turn is a placeholder). For your own endpoint `llm_calls`, `input` and the cache figures come from the per-call `usage` events read off the model's replies; otherwise from the harness's per-message events. |
-| `model_cost_usd` | The harness's own estimate of model spend at list prices (`total_cost_usd` per run). It is not what Veri bills: the session meter is `total_cost_usd` on the session, and calls to a Veri deployment are billed through that deployment. |
+| `model_cost_usd`, `harness_estimated_cost_usd` | Model spend. `null` when the environment's model is a Veri deployment: those calls are billed through the deployment (its GPU time), not per session, and the harness has no price for them. For your own endpoint both carry the harness's own estimate at Anthropic list prices for the model name it reports, which may not be what your provider charges. Neither is what Veri bills for the session: that is `total_cost_usd` on the session. |
 | `permission_denials` | Tool calls the harness refused under the environment's `permissions`. |
 | `approvals` | Human approvals asked, allowed and denied, and the total time runs spent waiting for them. All zero unless the environment has `ask` rules. |
 | `resources` | CPU load (1-minute average), memory used and limit, and bytes used under `/workspace`, as sampled by the last heartbeat. Absent until the first heartbeat; a field is left out when the sandbox could not read it. |

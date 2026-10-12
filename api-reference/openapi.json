@@ -19716,7 +19716,6 @@
           "pauses",
           "llm_calls",
           "tokens",
-          "model_cost_usd",
           "permission_denials",
           "approvals"
         ],
@@ -19772,9 +19771,20 @@
             "$ref": "#/components/schemas/SessionTokens"
           },
           "model_cost_usd": {
-            "type": "number",
+            "type": [
+              "number",
+              "null"
+            ],
             "format": "double",
-            "description": "Sum of the harness's `total_cost_usd` per run (falling back to the\nper-model `cost_usd` figures). An estimate at list prices for BYO\nmodels; the billed number is `total_cost_usd` on the session."
+            "description": "Model spend. `null` when the session's environment version uses a\nVeri deployment: those calls bill through the deployment (GPU time),\nand the harness's figure is an Anthropic list-price guess keyed by its\nown model alias, wrong for that model (VS-498). For an external\nendpoint, the harness estimate (same as `harness_estimated_cost_usd`).\nNever what Veri bills: that is `total_cost_usd` on the session."
+          },
+          "harness_estimated_cost_usd": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Claude Code's own cost estimate (`total_cost_usd`, else the sum of\n`model_usage[*].cost_usd`) for an external endpoint; `null` for a Veri\ndeployment. The harness reports a running total per process, so this\nis the last figure of each harness process, summed."
           },
           "permission_denials": {
             "type": "integer",
