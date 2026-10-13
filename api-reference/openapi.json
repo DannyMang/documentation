@@ -6035,7 +6035,7 @@
           "Sessions"
         ],
         "summary": "Start a session",
-        "description": "Creates a session pinned to an environment version and starts its sandbox. The session is `provisioning` until the runtime reports `ready`; watch the stream or poll GET.",
+        "description": "Creates a session pinned to an environment version and starts its sandbox. The session is `provisioning` until the runtime reports `ready`; watch the stream or poll GET. The response comes within 90 s: a sandbox still starting then is returned `provisioning` and keeps starting, as it does when the client disconnects. A session still `provisioning` after 10 minutes is `failed` with `failure_code` `provisioning_timeout`.",
         "operationId": "create",
         "requestBody": {
           "content": {

@@ -61,6 +61,8 @@ Sessions created before pip was added keep the image they started on (a snapshot
 
 Sessions pause themselves after the environment's `idle_timeout_s` without input. Sending a message to a paused session returns `409`; call `resume` first (it takes a few seconds while the workspace is restored).
 
+Creating a session answers within 90 seconds. If the sandbox is still starting by then, the response is the session in `provisioning` and it keeps starting on its own. The same happens when your client disconnects mid-request, so do not retry a create that timed out: list your sessions (`GET /v1/sessions`) and follow the one it started. A session still `provisioning` 10 minutes after it was created, resumed or rolled back is `failed` with `failure_code` `provisioning_timeout`, and its keys are revoked.
+
 ### Pause and resume
 
 A pause snapshots the sandbox's filesystem and stops the sandbox; a resume starts a fresh sandbox from that snapshot. What survives a pause:
