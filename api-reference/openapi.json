@@ -19899,7 +19899,7 @@
       },
       "SessionTokens": {
         "type": "object",
-        "description": "Token totals of one session. `input`, `cache_read` and `cache_creation`\ncome from the per-call rows (`usage{scope:\"call\"}` from the egress tee\nwhen the session has any, else the harness's per-message\n`usage{scope:\"message\"}`, or per-step `usage{scope:\"step\"}` for OpenCode,\nO8); `output` from the per-run rollup\n(`usage{scope:\"run\"}`), because the per-message output count is the\nharness's message_start placeholder.",
+        "description": "Token totals of one session. `input`, `cache_read` and `cache_creation`\ncome from the most specific `usage` scope the session has, and only that\none, so a token reported per call and again in a roll-up counts once:\nthe per-call rows from the egress tee (`usage{scope:\"call\"}`), else the\nharness's per-message rows (`scope:\"message\"`: Claude Code, LangGraph,\nCrewAI), per-step rows (`scope:\"step\"`: OpenCode), per-turn rows\n(`scope:\"turn\"`: Codex), else the per-run roll-up (`scope:\"run\"`).\n`output` comes from the per-run roll-up, because Claude Code's\nper-message output count is its message_start placeholder.",
         "required": [
           "input",
           "output",
@@ -19984,7 +19984,7 @@
           "llm_calls": {
             "type": "integer",
             "format": "int64",
-            "description": "Model calls: per-call `usage` rows from the egress tee when present,\nelse the harness's per-message (OpenCode: per-step) `usage` rows."
+            "description": "Model calls: per-call `usage` rows from the egress tee when present,\nelse the harness's per-message (OpenCode: per-step) `usage` rows. 0\nwhen the harness reports usage only per turn or per run (Codex): those\nrows do not say how many model calls a turn made."
           },
           "tokens": {
             "$ref": "#/components/schemas/SessionTokens"

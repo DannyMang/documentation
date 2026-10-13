@@ -113,6 +113,7 @@
             "pages": [
               "agents/environments",
               "agents/harnesses",
+              "agents/python-agents",
               "agents/skills",
               "agents/tools",
               "agents/sessions",
