@@ -136,7 +136,7 @@ How it runs:
 
 ## Custom
 
-Run your own agent program inside the session sandbox. Veri starts your command in the stock session image (Debian with Node.js 22, Python 3, git, curl and ripgrep), feeds it your messages and turns what it prints into the transcript.
+Run your own agent program inside the session sandbox. Veri starts your command in the stock session image (Debian with Node.js 22, Python 3 with pip and venv, git, curl, ripgrep and a C toolchain; see [Sandbox](/agents/sessions#sandbox)), feeds it your messages and turns what it prints into the transcript.
 
 ```toml environment.toml
 kind = "environment"
