@@ -1,7 +1,7 @@
 ---
 title: "Harnesses"
-description: "The agent program a session runs: Claude Code, OpenCode, or your own process, and what each supports"
-keywords: ["agents", "harness", "claude code", "opencode", "custom", "permissions", "mcp", "skills"]
+description: "The agent program a session runs: Claude Code, OpenCode, Codex, or your own process, and what each supports"
+keywords: ["agents", "harness", "claude code", "opencode", "codex", "custom", "permissions", "mcp", "skills"]
 ---
 
 ## Overview
@@ -9,19 +9,19 @@ keywords: ["agents", "harness", "claude code", "opencode", "custom", "permission
 The harness is the agent program inside a session's sandbox: it reads your messages, calls the model, runs tools and writes the transcript. You pick it with `harness` on the [environment](/agents/environments); everything else (model, egress, secrets, MCP servers, skills, permissions) is written once and rendered into that harness's own config.
 
 <Note>
-OpenCode and `custom` are in preview. Until they are enabled for your account, creating an environment with them returns `400` with "planned, not available yet". `claude-code` is available everywhere and is the default.
+OpenCode, Codex and `custom` are in preview. Until they are enabled for your account, creating an environment with them returns `400` with "planned, not available yet". `claude-code` is available everywhere and is the default.
 </Note>
 
-| | `claude-code` | `opencode` | `custom` |
-| --- | --- | --- | --- |
-| Runs | Claude Code (stock binary), one long-lived process | OpenCode 1.19.0, one `opencode run` per turn | your command, one long-lived process, in the Claude Code image |
-| Model API | Anthropic Messages | OpenAI chat completions | whatever your process calls (`VERI_MODEL_*`) |
-| `ask` approvals | yes | no | no |
-| `allow` / `deny` rules | yes (`.claude/settings.json`) | yes (`opencode.json` `permission`) | no |
-| MCP servers | `.mcp.json` | `opencode.json` `mcp` | `.mcp.json`, for your process to read |
-| Skills | `.claude/skills/` | `.opencode/skills/` | `.veri/skills/`, for your process to read |
-| Fork from a checkpoint | yes | yes | no (`409 harness_does_not_support_fork`) |
-| Checkpoint, rollback, pause | yes | yes | yes (files only: your process restarts) |
+| | `claude-code` | `opencode` | `codex` | `custom` |
+| --- | --- | --- | --- | --- |
+| Runs | Claude Code (stock binary), one long-lived process | OpenCode 1.19.0, one `opencode run` per turn | Codex CLI 0.162.1, one `codex exec` per turn | your command, one long-lived process, in the Claude Code image |
+| Model API | Anthropic Messages | OpenAI chat completions | OpenAI Responses | whatever your process calls (`VERI_MODEL_*`) |
+| `ask` approvals | yes | no | no | no |
+| `allow` / `deny` rules | yes (`.claude/settings.json`) | yes (`opencode.json` `permission`) | `deny` only (`.codex/rules/veri.rules`, `mcp_servers`) | no |
+| MCP servers | `.mcp.json` | `opencode.json` `mcp` | `.codex/config.toml` `mcp_servers` | `.mcp.json`, for your process to read |
+| Skills | `.claude/skills/` | `.opencode/skills/` | `.agents/skills/` | `.veri/skills/`, for your process to read |
+| Fork from a checkpoint | yes | yes | yes | no (`409 harness_does_not_support_fork`) |
+| Checkpoint, rollback, pause | yes | yes | yes | yes (files only: your process restarts) |
 
 Every harness gets the same sandbox, egress rules and secret handling: credentials stay outside the sandbox, the model key is a placeholder swapped at the egress edge, and the transcript uses one [event vocabulary](/agents/sessions#transcript).
 
@@ -62,6 +62,38 @@ How it runs:
 - Forking runs `opencode run --session <checkpoint's session> --fork`, so each child continues the conversation as its own session.
 - Model-update checks, model catalog downloads, language-server downloads, default plugins and sharing are disabled. The package OpenCode installs into its config directories on start (`@opencode-ai/plugin`) is preinstalled in the image, in `~/.config/opencode` and `/workspace/.opencode`, so a session start downloads nothing.
 - Tool calls arrive when they finish: each produces an `agent.tool_use` and its `tool.result` together. Token usage is reported per model step (`usage` with `scope: "step"`) and per turn (`scope: "run"`).
+
+## Codex
+
+```toml environment.toml
+kind = "environment"
+name = "codex-coder"
+harness = "codex"
+
+[model]
+deployment_id = "1a2b3c4d5e6f"   # any Veri deployment, OR:
+# base_url = "https://api.example.com/v1"   # an endpoint that serves {base_url}/responses
+# secret = "EXAMPLE_API_KEY"
+# name = "my-model"                          # required with base_url
+
+[permissions]
+default = "allow"
+rules = [
+  { tool = "bash(rm *)", action = "deny" },
+  { tool = "mcp.github.delete_repo", action = "deny" },
+]
+```
+
+How it runs:
+
+- Each message starts one `codex exec --json` (Codex CLI 0.162.1) with the message on stdin and `resume <thread id>` to continue the conversation; the turn ends when Codex exits (exit `0` is success). Nothing runs between turns, so pauses and checkpoints are cheap.
+- Codex speaks only the OpenAI Responses API. For a Veri deployment it calls the deployment's [`/v1/deployments/{id}/responses`](/deployments/openai-compat#responses-api) route, which vLLM serves natively (tool calls go through the deployment's `--tool-call-parser`). A `base_url` endpoint must serve `{base_url}/responses`, and `model.name` sets the model Codex requests. The key is `VERI_MODEL_KEY`, a placeholder: the real key is added at the egress edge and never enters the sandbox. `api.anthropic.com` is not supported as a Codex model endpoint; use `claude-code` for it.
+- The config is `/workspace/.codex/config.toml` (Codex's home directory, `CODEX_HOME`, which also keeps its session history). It runs with `approval_policy = "never"` and `sandbox_mode = "danger-full-access"`: the session container is the sandbox, so Codex's own Linux sandbox is not used. `model_context_window` is the deployment's served context (its `--max-model-len`), or 32768 when Veri cannot know it, and Codex compacts the conversation before less than `min(8192, context / 4)` tokens are left for the reply. Web search is off (it runs on OpenAI's servers), and so are plugin sync, Codex's bundled skills, analytics and update checks, so a session start downloads nothing.
+- MCP servers become `mcp_servers` entries (streamable HTTP). Each server's credential is a placeholder in an environment variable that Codex reads (`bearer_token_env_var`, or `env_http_headers` for a named header such as `x-api-key`). Skills are written to `/workspace/.agents/skills/<name>/SKILL.md`.
+- Permissions: Codex runs every tool it has unless a rule forbids it, so `default` must be `allow` and the rules that take effect are `deny` rules (see the [table](#permission-names) below). Command rules become Codex execpolicy prefix rules in `/workspace/.codex/rules/veri.rules`: Codex matches the leading words of every command it reads out of a shell script, so `bash(git push *)` and `bash(git push)` both forbid `git push --force`. A forbidden command does not run: Codex hands the rejection back to the model, and the command does not appear as a tool call in the transcript. Like every command rule, this guards against mistakes, not against an agent set on getting around it; egress rules and secret scoping are the boundary.
+- `ask` is refused when you create the environment (`harness_does_not_support_ask`): `codex exec` cancels every approval request on its own.
+- Forking runs `codex exec fork <checkpoint's thread>`, so each child continues the conversation as its own thread.
+- Tool calls arrive as `agent.tool_use` when they start and `tool.result` when they finish, with `kind` `command` (and the `exit_code`), `file_change`, `mcp`, `todo` or `web_search`. Reasoning arrives as `agent.thinking`. Token usage is reported once per turn (`usage` with `scope: "turn"`, and `scope: "run"`); retried model calls are `error` events with `subtype: "api_retry"`. Codex's warnings (every model it has no metadata for triggers "Model metadata for `<name>` not found") are kept as `agent.raw` with `native_type: "warning"`.
 
 ## Custom
 
@@ -129,20 +161,20 @@ Your own container image is not supported: sandbox images are built when Veri de
 
 ## Permission names
 
-Rules can use these harness-neutral names. Each harness renders them into its own config; Claude Code's own names (`Bash(git *)`, `Read`, `mcp__server__tool`) keep working for `claude-code`, and OpenCode accepts the ones it has an equivalent for.
+Rules can use these harness-neutral names. Each harness renders them into its own config; Claude Code's own names (`Bash(git *)`, `Read`, `mcp__server__tool`) keep working for `claude-code`, and OpenCode and Codex accept the ones they have an equivalent for.
 
-| Name | Claude Code | OpenCode |
-| --- | --- | --- |
-| `*` | every tool | `"*"` |
-| `bash` | `Bash` | `bash` |
-| `bash(git *)` | `Bash(git *)` | `bash` patterns `git` and `git *` |
-| `file.read` | `Read`, `Glob`, `Grep` | `read`, `glob`, `grep`, `list` |
-| `file.write` | `Edit`, `Write`, `MultiEdit`, `NotebookEdit` | `edit` (covers writes) |
-| `web.fetch` | `WebFetch` | `webfetch` |
-| `web.search` | `WebSearch` | `websearch` |
-| `git.*` | `Bash(git *)` | `bash` patterns `git` and `git *` |
-| `mcp` | `mcp__<server>__*` for every configured server | `<server>_*` for every configured server |
-| `mcp.<server>` | `mcp__<server>__*` | `<server>_*` |
-| `mcp.<server>.<tool>` | `mcp__<server>__<tool>` | `<server>_<tool>` |
+| Name | Claude Code | OpenCode | Codex (`deny` only) |
+| --- | --- | --- | --- |
+| `*` | every tool | `"*"` | must be `allow` (Codex has no default-deny mode) |
+| `bash` | `Bash` | `bash` | refused (Codex cannot turn its shell off) |
+| `bash(git *)` | `Bash(git *)` | `bash` patterns `git` and `git *` | prefix rule `git` |
+| `file.read` | `Read`, `Glob`, `Grep` | `read`, `glob`, `grep`, `list` | refused (Codex reads through its shell) |
+| `file.write` | `Edit`, `Write`, `MultiEdit`, `NotebookEdit` | `edit` (covers writes) | refused (Codex writes through its shell) |
+| `web.fetch` | `WebFetch` | `webfetch` | refused (Codex fetches through its shell) |
+| `web.search` | `WebSearch` | `websearch` | always off |
+| `git.*` | `Bash(git *)` | `bash` patterns `git` and `git *` | prefix rule `git` |
+| `mcp` | `mcp__<server>__*` for every configured server | `<server>_*` for every configured server | every server off |
+| `mcp.<server>` | `mcp__<server>__*` | `<server>_*` | the server off |
+| `mcp.<server>.<tool>` | `mcp__<server>__<tool>` | `<server>_<tool>` | `disabled_tools` on the server |
 
-The last matching rule wins on every harness. Creating an environment fails with `400` when a rule cannot be expressed: `ask` on OpenCode or custom (`harness_does_not_support_ask`), any rule on custom (`harness_does_not_support_permissions`), a Claude-only rule such as `Read(./src/**)` or `Task` on OpenCode, or a lowercase name that is not in the table.
+The last matching rule wins on every harness. Codex applies the strictest matching rule instead, so an `allow` that would re-allow something an earlier `deny` forbids is refused for Codex rather than rendered; any other `allow` is already the default there. Creating an environment fails with `400` when a rule cannot be expressed: `ask` on OpenCode, Codex or custom (`harness_does_not_support_ask`), any rule on custom (`harness_does_not_support_permissions`), a Claude-only rule such as `Read(./src/**)` or `Task` on OpenCode or Codex, a refused name above on Codex, or a lowercase name that is not in the table.

@@ -264,6 +264,7 @@
               "POST /v1/deployments/{deployment_id}/chat/completions",
               "POST /v1/deployments/{deployment_id}/messages",
               "POST /v1/deployments/{deployment_id}/messages/count_tokens",
+              "POST /v1/deployments/{deployment_id}/responses",
               "GET /v1/deployments/{deployment_id}/metrics",
               "GET /v1/deployments/{deployment_id}/metrics/timeseries",
               "GET /v1/deployments/{deployment_id}/metrics/engine-timeseries",

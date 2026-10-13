@@ -2,7 +2,7 @@
 title: "OpenAI compatibility"
 sidebarTitle: "OpenAI compatibility"
 description: "What works with the OpenAI SDK, LangChain, LlamaIndex, etc. — and what doesn't."
-keywords: ["OpenAI compatible", "LangChain", "LlamaIndex", "interop", "chat completions"]
+keywords: ["OpenAI compatible", "LangChain", "LlamaIndex", "interop", "chat completions", "responses api", "codex"]
 ---
 
 A Veri deployment exposes the OpenAI Chat Completions API at `https://api.veri.studio/v1/deployments/{deployment_id}`. Anything that already speaks OpenAI works — point `base_url` at the deployment and pass your Veri API key.
@@ -164,6 +164,41 @@ curl https://api.veri.studio/v1/deployments/$DEPLOYMENT_ID/chat/completions \
     "messages": [{"role": "user", "content": "Hello"}]
   }'
 ```
+
+## Responses API
+
+Every deployment also serves the OpenAI Responses API at `https://api.veri.studio/v1/deployments/{deployment_id}/responses`, for clients that speak only Responses, such as the Codex CLI. Point the client's base URL at the deployment (`/responses` is appended for you) and authenticate with your Veri API key or a model access key for that deployment.
+
+```python
+from openai import OpenAI
+
+oai = OpenAI(
+    base_url=f"https://api.veri.studio/v1/deployments/{dep.id}",
+    api_key="vk_your_api_key",
+)
+resp = oai.responses.create(model=dep.name, input="Write a haiku about GPUs.")
+print(resp.output_text, resp.usage)
+```
+
+```toml ~/.codex/config.toml
+model = "your-deployment-name"
+model_provider = "veri"
+
+[model_providers.veri]
+name = "Veri"
+base_url = "https://api.veri.studio/v1/deployments/1a2b3c4d5e6f"
+env_key = "VERI_API_KEY"
+wire_api = "responses"
+```
+
+How it behaves:
+
+- The request goes to the deployment's own vLLM `/v1/responses`, the same model server as `/chat/completions`. Tool calls (`tools`, `function_call` items) go through the deployment's `--tool-call-parser`, so launch the deployment with `--enable-auto-tool-choice --tool-call-parser <parser>` for your model (for example `hermes` for Qwen). A deployment on its own `vllm_image` needs a vLLM that serves `/v1/responses`.
+- `model` is rewritten to the deployment's served name; the rest of the body is passed through. `stream: true` streams the Responses events (`response.created` ... `response.completed`) as server-sent events, untouched.
+- Clients that append `/v1/responses` to a base without the version can use `https://api.veri.studio/v1/deployments/{deployment_id}/v1/responses`, the same route.
+- Every call lands in the deployment's [request log](/deployments/api#get-v1deploymentsidrequests) with its tokens (`prompt_tokens` = the response's `input_tokens`, cached tokens included; `cached_prompt_tokens` = `input_tokens_details.cached_tokens`; `completion_tokens` = `output_tokens`).
+- The same wake and retry contract as chat: a parked deployment answers `503` `deployment_waking` while it boots, and `503` `upstream_unavailable` covers a replica that cannot be reached; both carry `Retry-After`. Errors from vLLM itself (a prompt longer than the served context, say) come back as vLLM sent them. Request bodies are capped at 8 MB.
+- vLLM does not store responses (`store` is ignored), so `previous_response_id` is not available: send the conversation in `input`, as Codex does.
 
 ## What about embeddings?
 
