@@ -241,4 +241,4 @@ Egress and tool calls count toward the workspace's prepaid credit balance in rea
 
 Set `budget_usd` to pause the session automatically when its awake-time spend reaches the ceiling (egress and tool calls have their own caps, above); the transcript records a `session.budget_exhausted` event and the session's `failure_code` reads `budget_exhausted`. Resume it to continue (the budget still applies, so raise it first or start a new session).
 
-A workspace can have two sessions that are not ended at a time, paused sessions and forked children included. Creating a third (or forking more children than fit) returns `429 CONCURRENT_SESSION_LIMIT`. Contact us to raise the limit.
+A workspace can have ten sessions that are not ended at a time, paused sessions and forked children included. Creating an eleventh (or forking more children than fit) returns `429 CONCURRENT_SESSION_LIMIT`. Contact us to raise the limit.
