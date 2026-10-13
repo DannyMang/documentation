@@ -237,6 +237,8 @@ Egress is billed only in `audited_open` mode, at $0.025 per GB of request plus r
 
 [Composio tool calls](/agents/tools#pricing) are billed per call after a monthly free allowance, with their own per-session cap (`failure_code` `tool_call_cap`).
 
+Egress and tool calls count toward the workspace's prepaid credit balance in real time, like awake time, before they are settled (tool calls still inside the monthly free allowance count as free): when the balance runs out, every session in the workspace stops with status `failed` and `failure_code` `insufficient_credits`.
+
 Set `budget_usd` to pause the session automatically when its awake-time spend reaches the ceiling (egress and tool calls have their own caps, above); the transcript records a `session.budget_exhausted` event and the session's `failure_code` reads `budget_exhausted`. Resume it to continue (the budget still applies, so raise it first or start a new session).
 
 A workspace can have two sessions that are not ended at a time, paused sessions and forked children included. Creating a third (or forking more children than fit) returns `429 CONCURRENT_SESSION_LIMIT`. Contact us to raise the limit.
