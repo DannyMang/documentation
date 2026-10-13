@@ -95,9 +95,25 @@ With `workbench` off, Composio does not offer the two remote-execution tools and
 
 ### How the credential stays out
 
-Composio's session endpoint takes Veri's Composio key in an `x-api-key` header. The sandbox's `.mcp.json` carries a placeholder in that header, bound to `backend.composio.dev`; the egress proxy swaps it on requests to that host and refuses to send it anywhere else. An agent that reads its own config, or is talked into sending the header elsewhere, only ever holds the placeholder.
+Composio's session endpoint takes Veri's Composio key in an `x-api-key` header. The sandbox's `.mcp.json` carries a placeholder in that header, bound to `backend.composio.dev` and to the session's own MCP path; the egress proxy swaps it only on requests to that endpoint and refuses to send it anywhere else, other Composio paths included. An agent that reads its own config, or is talked into sending the header elsewhere, only ever holds the placeholder.
 
 If Composio is unavailable when a session starts, the start fails with `502` (`composio_unavailable`) rather than run without the tools the environment promised. The Composio session is deleted when the Veri session ends.
+
+### Pricing
+
+Composio tool calls are billed per execution: every app tool the agent runs through `COMPOSIO_MULTI_EXECUTE_TOOL` counts once, so one call that runs three tools counts three. Searching, reading schemas and managing connections (`COMPOSIO_SEARCH_TOOLS`, `COMPOSIO_GET_TOOL_SCHEMAS`, `COMPOSIO_MANAGE_CONNECTIONS`) are free, and a call that Composio answers with an error status is not counted.
+
+| | Default |
+| --- | --- |
+| Price | $1.00 per 1,000 tool calls |
+| Free each month | 5,000 tool calls per workspace (calendar month, UTC), used before any charge |
+| Cap per session | 2,000 tool calls |
+
+These are configurable defaults and the price is not final until Composio tools launch. The price is fixed when a session is created and returned as `tool_call_usd_per_1k`; the session's running count is `tool_calls` (also in its `usage` summary). Tool calls are settled with the session's other charges and draw from the same credit balance. Each metered call also appears in the [transcript](/agents/sessions#transcript) as a `usage` event with `scope: "tool_call"` and its `count`.
+
+A session pauses when its `tool_calls` reach the cap: a run in progress is interrupted, the transcript records `session.tool_call_cap_reached {tool_calls, cap}` and `failure_code` reads `tool_call_cap`. Resuming does not reset the count, so a resumed session pauses again at its next report; start a new session to keep using tools. Contact us to raise the cap.
+
+What the agent launches through `tools.veri` (training jobs, deployments) is billed like any other job or deployment, not as tool calls.
 
 ## Veri tools
 
