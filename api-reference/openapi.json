@@ -17251,6 +17251,8 @@
                 "rate_usd_per_hour",
                 "egress_bytes",
                 "egress_usd_per_gb",
+                "tool_calls",
+                "tool_call_usd_per_1k",
                 "created_by",
                 "created_at",
                 "updated_at"
@@ -17314,6 +17316,16 @@
                   "type": "number",
                   "format": "double",
                   "description": "Price per GB of `egress_bytes` (USD), fixed at create: non-zero only\nfor an `audited_open` environment."
+                },
+                "tool_calls": {
+                  "type": "integer",
+                  "format": "int64",
+                  "description": "Billable third-party tool executions (Composio): each app tool run\nthrough `COMPOSIO_MULTI_EXECUTE_TOOL` counts one; search, schema and\nconnection tools are free."
+                },
+                "tool_call_usd_per_1k": {
+                  "type": "number",
+                  "format": "double",
+                  "description": "Price per 1,000 `tool_calls` (USD), fixed at create: non-zero only\nwhen the environment has Composio tools. The workspace's monthly free\nallowance is applied when the calls are settled."
                 },
                 "started_at": {
                   "type": [
@@ -19733,6 +19745,8 @@
           "rate_usd_per_hour",
           "egress_bytes",
           "egress_usd_per_gb",
+          "tool_calls",
+          "tool_call_usd_per_1k",
           "created_by",
           "created_at",
           "updated_at"
@@ -19796,6 +19810,16 @@
             "type": "number",
             "format": "double",
             "description": "Price per GB of `egress_bytes` (USD), fixed at create: non-zero only\nfor an `audited_open` environment."
+          },
+          "tool_calls": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Billable third-party tool executions (Composio): each app tool run\nthrough `COMPOSIO_MULTI_EXECUTE_TOOL` counts one; search, schema and\nconnection tools are free."
+          },
+          "tool_call_usd_per_1k": {
+            "type": "number",
+            "format": "double",
+            "description": "Price per 1,000 `tool_calls` (USD), fixed at create: non-zero only\nwhen the environment has Composio tools. The workspace's monthly free\nallowance is applied when the calls are settled."
           },
           "started_at": {
             "type": [
@@ -19936,7 +19960,8 @@
           "llm_calls",
           "tokens",
           "permission_denials",
-          "approvals"
+          "approvals",
+          "tool_calls"
         ],
         "properties": {
           "boot_ms": {
@@ -20012,6 +20037,11 @@
           },
           "approvals": {
             "$ref": "#/components/schemas/SessionApprovals"
+          },
+          "tool_calls": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Billable third-party tool executions (Composio): the session's\n`tool_calls`."
           }
         }
       },
