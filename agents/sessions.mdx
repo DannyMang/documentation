@@ -41,7 +41,7 @@ Claude Code and `custom` sessions run in the same sandbox image: Debian 12 with
 - git, curl, ripgrep (`rg`), jq, unzip, procps
 - a C/C++ toolchain (gcc, g++, make) and the Python headers, so packages without a prebuilt wheel still install
 
-The agent runs as the unprivileged user `agent` (no `sudo`), with `HOME=/home/agent` and `/workspace` as its working directory. `pip install <package>` installs into the user's site directory (`~/.local`); for an isolated environment use `python3 -m venv .venv`. `npm install -g` needs root, so install into the project (`npm install`, `npx`) instead. OpenCode sessions run in their own image (see [Harnesses](/agents/harnesses)).
+The agent runs as the unprivileged user `agent` (no `sudo`), with `HOME=/home/agent` and `/workspace` as its working directory. `pip install <package>` installs into the user's site directory (`~/.local`); for an isolated environment use `python3 -m venv .venv`. `npm install -g` needs root, so install into the project (`npm install`, `npx`) instead. OpenCode and Codex sessions run in their own images (see [Harnesses](/agents/harnesses)).
 
 Package downloads are ordinary egress: `pip` and `npm` traffic goes through the session's [egress rules](/agents/environments#egress) like every other request. The default `coding` preset allows PyPI (`pypi.org`, `files.pythonhosted.org`) and npm (`registry.npmjs.org`); under `locked_down` add them to `allowed_hosts` or `egress_rules` yourself. `pip`, `npm`, git, curl and Python already trust the egress proxy's certificate.
 
