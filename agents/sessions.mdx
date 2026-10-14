@@ -224,7 +224,7 @@ Token counts are recorded in two places. For a Veri-hosted model, every model ca
 
 ## Pricing and limits
 
-A session is billed per hour while its sandbox is awake, settled per minute, at the rate of the environment's `size`. The rate is fixed when the session is created (the API returns it as `rate_usd_per_hour`), so a later price change never affects a running session. Paused and ended sessions cost nothing. Model calls to a Veri deployment are billed through that deployment; calls to your own endpoint are billed by its provider.
+A session is billed per hour while its sandbox is awake, settled per minute, at the rate of the environment's `size`. The awake-time charge is rounded up to the next cent per session, once over the session's whole life rather than per minute: any awake time costs at least $0.01, and a session never pays more than 1 cent over the exact cost of its awake time. The rate is fixed when the session is created (the API returns it as `rate_usd_per_hour`), so a later price change never affects a running session. Paused and ended sessions cost nothing. Model calls to a Veri deployment are billed through that deployment; calls to your own endpoint are billed by its provider.
 
 | `size` | Sandbox | Price per awake hour |
 | --- | --- | --- |
