@@ -117,6 +117,19 @@ Three fields report the wake state of a [scale-to-zero](#waking-from-zero) deplo
 | `wake_failure_count` | Failed wake boots in a row since the deployment last reached `serving`. `0` when the last boot served; it resets to `0` when a wake reaches `serving`, not when a new wake starts. |
 | `next_wake_not_before` | Set after a failed wake: the earliest time a chat request (or, with `min_replicas` of 1 or more and fewer than 3 failed wakes in a row, Veri itself) starts the next wake. `POST /wake` and a PATCH that raises `min_replicas` to 1 or more do not wait for it. `null` until a wake fails, and cleared when a wake reaches `serving`; a time in the past means the backoff is over. |
 
+### Extra vLLM flags {#vllm-extra-args}
+
+`vllm_extra_args` (vllm engine only) appends tokens to the engine command, for example `["--max-model-len", "8192"]` or `["--enable-auto-tool-choice", "--tool-call-parser", "hermes"]`. Only these flags are accepted. `_` may stand for `-`, and a value goes either as the next token or after `=`.
+
+| Area | Flags |
+| --- | --- |
+| Context, memory, batching | `--max-model-len`, `--gpu-memory-utilization`, `--kv-cache-memory-bytes`, `--max-num-seqs`, `--max-num-batched-tokens`, `--[no-]enable-chunked-prefill`, `--[no-]enable-prefix-caching`, `--block-size`, `--kv-cache-dtype`, `--calculate-kv-scales`, `--cpu-offload-gb`, `--long-prefill-token-threshold`, `--scheduling-policy`, `--[no-]async-scheduling` |
+| Model | `--dtype`, `--quantization` (`-q`), `--seed`, `--max-logprobs`, `--enforce-eager`, `--disable-sliding-window`, `--disable-cascade-attn`, `--model-impl`, `--hf-overrides`, `--override-generation-config`, `--tokenizer-mode`, `--config-format`, `--attention-backend` |
+| Parallelism and speed | `--tensor-parallel-size` (`-tp`), `--pipeline-parallel-size` (`-pp`), `--data-parallel-size` (`-dp`), `--enable-expert-parallel` (`-ep`), `--disable-custom-all-reduce`, `--speculative-config`, `--optimization-level` (`-O0` to `-O3`), `--cudagraph-capture-sizes`, `--max-cudagraph-capture-size` |
+| OpenAI frontend | `--enable-auto-tool-choice`, `--tool-call-parser`, `--reasoning-parser`, `--exclude-tools-when-tool-choice-none`, `--chat-template-content-format`, `--default-chat-template-kwargs`, `--api-server-count`, `--limit-mm-per-prompt`, `--allowed-media-domains` |
+
+Any other flag returns `400` with code `invalid_vllm_extra_args` and the flag's name. That includes abbreviations (`--max-model`), dotted JSON keys (`--speculative-config.method ngram`: pass the whole JSON value instead), flags Veri manages (`--model`, `--port`, `--host`, `--api-key`, `--served-model-name`), and flags that load code, read files on the box, or open ports (for example `--trust-remote-code`, `--chat-template`, `--tool-parser-plugin`, `--middleware`, `--allowed-local-media-path`, `--grpc`). The stored list is checked again each time a replica boots, so a deployment created with a flag outside this list starts without its extra args.
+
 ### Multi-adapter fleets (beta) {#multi-adapter-fleets}
 
 A deployment created with `"serving_mode": "multi_adapter"` serves its base model plus LoRA adapters attached under aliases: a chat request whose `model` is an alias is answered by that adapter, and one deployment can serve many adapters of the same base. Optional create fields `max_loras` (default 32), `max_lora_rank` (default 64) and `max_cpu_loras` (default 128) size the fleet. Attach an adapter with `POST /v1/deployments/{id}/adapters` and a body of `{"serve_name": "<alias>", "model_id": "<library model id>"}`.

@@ -11402,7 +11402,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Extra vLLM CLI flags appended verbatim to the engine command\n(argv list, e.g. [\"--speculative-config\", \"{...}\", \"--kv-cache-dtype\",\n\"fp8\"]). vllm engine only. Flags the platform owns (--model, --port,\n--host, --api-key, --served-model-name) and --trust-remote-code are\nrejected at create."
+            "description": "Extra vLLM CLI flags appended verbatim to the engine command\n(argv list, e.g. [\"--speculative-config\", \"{...}\", \"--kv-cache-dtype\",\n\"fp8\"]). vllm engine only. Only vLLM tuning flags are accepted\n(context, memory, batching, quantization, parallelism, speculative\ndecoding, tool/reasoning parsers); platform-owned flags (--model,\n--port, --host, --api-key, --served-model-name), --trust-remote-code\nand flags that load code, read files or open ports are rejected at\ncreate."
           },
           "vllm_image": {
             "type": [
