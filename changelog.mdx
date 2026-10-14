@@ -5,6 +5,14 @@ description: "Recent product and platform changes in Veri"
 keywords: ["changelog", "releases", "platform updates"]
 ---
 
+## 2026-10-14: managed agents: every harness, triggers and session ops
+
+- All six [harnesses](/agents/harnesses) are available on every workspace: `claude-code` (the default), `opencode`, `codex`, `langgraph`, `crewai` and `custom`.
+- [Triggers](/agents/triggers): start sessions on a cron schedule or from a signed webhook (GitHub, GitLab or Standard Webhooks), with results to your webhook endpoints or a Slack channel.
+- [Session ops](/agents/session-ops): run a command (`veri sessions exec`), copy files in and out (`veri sessions cp`) and open a shell (`veri sessions attach`) in a running session. Preview ports and GitHub access are coming soon.
+- `ask` [approvals](/agents/sessions#approvals) park a Claude Code turn until you allow or deny the tool call.
+- A workspace can have ten non-ended sessions at a time.
+
 ## 2026-10-09: volume-backed training, intermediate checkpoints, resume
 
 - A dataset connected from a volume (`datasets.from_volume`) now trains: the file is downloaded to the training machine when the job starts, on every provider. The connect call checks the file exists (404 otherwise) and refuses paths with `..`.

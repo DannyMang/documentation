@@ -8,10 +8,6 @@ keywords: ["agents", "langgraph", "crewai", "python", "repository", "requirement
 
 With `harness = "langgraph"` or `harness = "crewai"` a session runs your own Python agent against a Veri model. Point the environment at a git repository and the entry to load; Veri clones it into the sandbox, installs its requirements, and turns each message into one run whose messages, tool calls and token usage land in the session transcript. Everything else (egress rules, secrets, MCP servers, checkpoints, pause and resume) works as for every other [harness](/agents/harnesses).
 
-<Note>
-LangGraph and CrewAI sessions are in preview. Until they are enabled for your account, creating an environment with them returns `400` with "planned, not available yet".
-</Note>
-
 ## LangGraph
 
 A repository in the layout `langgraph dev` uses works as is:
@@ -91,7 +87,7 @@ entry = "support_crew.crew:build"
 
 ## Requirements and the sandbox
 
-- The repository is cloned into `/workspace/agent` at the first message (`ref` is a branch, tag or commit; `subdir` is the agent's directory). A private GitHub repository needs `github_auth = true` on the environment.
+- The repository is cloned into `/workspace/agent` at the first message (`ref` is a branch, tag or commit; `subdir` is the agent's directory). The repository must be public for now: private repositories need [GitHub access](/agents/session-ops#github-access), which is coming soon.
 - `agent.requirements` (default: `requirements.txt` in the agent directory, when present) and, for LangGraph, the package names in `langgraph.json` `dependencies` are installed into `/workspace/.veri/venv`, on top of the preinstalled LangGraph, langchain-openai, langchain-mcp-adapters and CrewAI. The agent directory and its `src/` are importable.
 - A fetch, install or import that fails ends the first turn and fails the session with an `error` whose `source` is `harness_setup`; its message has the git, pip or Python error.
 - Everything lives under `/workspace`, so a resumed, rolled-back or forked session neither clones nor installs again.

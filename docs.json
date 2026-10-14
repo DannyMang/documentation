@@ -519,7 +519,38 @@
               "GET /v1/sessions/{session_id}/stream",
               "POST /v1/sessions/{session_id}/pause",
               "POST /v1/sessions/{session_id}/resume",
+              "POST /v1/sessions/{session_id}/checkpoints",
+              "GET /v1/sessions/{session_id}/checkpoints",
+              "POST /v1/sessions/{session_id}/fork",
+              "POST /v1/sessions/{session_id}/rollback",
               "DELETE /v1/sessions/{session_id}"
+            ]
+          },
+          {
+            "group": "Session ops",
+            "openapi": "api-reference/openapi.json",
+            "pages": [
+              "POST /v1/sessions/{session_id}/exec",
+              "GET /v1/sessions/{session_id}/files",
+              "GET /v1/sessions/{session_id}/files/content",
+              "PUT /v1/sessions/{session_id}/files/content",
+              "POST /v1/sessions/{session_id}/attach-token"
+            ]
+          },
+          {
+            "group": "Triggers",
+            "openapi": "api-reference/openapi.json",
+            "pages": [
+              "POST /v1/environments/{env_id}/triggers",
+              "GET /v1/environments/{env_id}/triggers",
+              "GET /v1/triggers/{trigger_id}",
+              "PATCH /v1/triggers/{trigger_id}",
+              "DELETE /v1/triggers/{trigger_id}",
+              "POST /v1/triggers/{trigger_id}/pause",
+              "POST /v1/triggers/{trigger_id}/resume",
+              "POST /v1/triggers/{trigger_id}/rotate-secret",
+              "POST /v1/triggers/{trigger_id}/run",
+              "GET /v1/triggers/{trigger_id}/executions"
             ]
           },
           {

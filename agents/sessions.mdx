@@ -235,7 +235,7 @@ A session is billed per hour while its sandbox is awake, settled per minute, at 
 
 Egress is billed only in `audited_open` mode, at $0.025 per GB of request plus response bytes through the egress proxy (`egress_bytes`), settled with the session and fixed when the session is created (`egress_usd_per_gb`). `restricted` traffic is metered on the session but never billed, and `unrestricted` traffic is neither. Every session pauses when its `egress_bytes` reaches 10 GiB: the transcript records `session.egress_cap_reached` and `failure_code` reads `egress_cap`. Contact us to raise the cap for a workspace.
 
-[Composio tool calls](/agents/tools#pricing) are billed per call after a monthly free allowance, with their own per-session cap (`failure_code` `tool_call_cap`).
+[Composio tool calls](/agents/tools#pricing) (coming soon) will be billed per call after a monthly free allowance, with their own per-session cap (`failure_code` `tool_call_cap`).
 
 Egress and tool calls count toward the workspace's prepaid credit balance in real time, like awake time, before they are settled (tool calls still inside the monthly free allowance count as free): when the balance runs out, every session in the workspace stops with status `failed` and `failure_code` `insufficient_credits`.
 

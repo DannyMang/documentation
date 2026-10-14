@@ -3161,6 +3161,101 @@
         ]
       }
     },
+    "/v1/environments/{env_id}/triggers": {
+      "get": {
+        "tags": [
+          "Triggers"
+        ],
+        "summary": "List an environment's triggers",
+        "operationId": "list",
+        "parameters": [
+          {
+            "name": "env_id",
+            "in": "path",
+            "description": "Environment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The environment's triggers, newest first, each with its last execution",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedList_TriggerResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Environment not in this workspace"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Triggers"
+        ],
+        "summary": "Create a trigger",
+        "description": "Creates a cron or webhook trigger that starts sessions on this environment unattended. A webhook trigger's response carries `webhook_url` and the signing `secret`, shown only here and on rotate-secret. Refused (400 `ask_not_allowed`) when the environment's latest version asks for approval: nobody is there to answer.",
+        "operationId": "create",
+        "parameters": [
+          {
+            "name": "env_id",
+            "in": "path",
+            "description": "Environment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TriggerCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "The new trigger (with its secret, for a webhook trigger)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TriggerResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid definition, an environment that asks for approval, or triggers disabled"
+          },
+          "404": {
+            "description": "Environment (or reuse session) not in this workspace"
+          },
+          "429": {
+            "description": "The workspace already has its maximum of active triggers"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/environments/{env_id}/versions": {
       "post": {
         "tags": [
@@ -6154,6 +6249,56 @@
         ]
       }
     },
+    "/v1/sessions/{session_id}/attach-token": {
+      "post": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Open an interactive shell in a session's sandbox",
+        "description": "Returns a single-use WebSocket URL, valid for 60 seconds, that opens a login shell (`bash`, in a pseudo-terminal) as the sandbox's agent user in `/workspace`. `veri sessions attach` uses it. The shell's traffic goes through the session's egress rules. While a shell is attached the session stays awake (and bills); a shell idle for 30 minutes is closed. The runtime records `session.attach` and `session.detach` on the transcript. Allowed while the session is `ready`.",
+        "operationId": "attach_token",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "The URL to connect to",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionAttachToken"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Session ops disabled"
+          },
+          "404": {
+            "description": "Not found in this workspace"
+          },
+          "409": {
+            "description": "The session is not ready"
+          },
+          "501": {
+            "description": "The sandbox runtime does not support attach"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/sessions/{session_id}/checkpoints": {
       "get": {
         "tags": [
@@ -6367,6 +6512,264 @@
         ]
       }
     },
+    "/v1/sessions/{session_id}/exec": {
+      "post": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Run a command in a session's sandbox",
+        "description": "Runs one command as the sandbox's agent user (never root) in `/workspace` or a directory under it, and returns its exit code and output (stdout capped at 64 KiB, stderr at 16 KiB). The command's network traffic goes through the session's egress rules like the agent's. Allowed while the session is `ready` (409 during a run, while an approval is pending, or paused); at most 30 per minute per session (429). Recorded on the transcript as `session.exec` (argv and exit code, never env values).",
+        "operationId": "exec",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionExecRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The command ran (any exit code)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionExecResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid argv, cwd outside /workspace, bad env or timeout, or session ops disabled"
+          },
+          "404": {
+            "description": "Not found in this workspace"
+          },
+          "409": {
+            "description": "The session is not ready"
+          },
+          "422": {
+            "description": "Unknown field in the body (`root` / `harness_env` are refused: exec never runs as root)"
+          },
+          "429": {
+            "description": "More than 30 execs in the last minute on this session"
+          },
+          "501": {
+            "description": "The sandbox runtime does not support exec"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/sessions/{session_id}/files": {
+      "get": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "List a directory in a session's sandbox",
+        "description": "Stats a path under `/workspace` (symlinks resolved; a link that leads outside `/workspace` is a 400) and, for a directory, lists its entries (name and type, at most 1000). Allowed while the session is `ready`.",
+        "operationId": "list_files",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "description": "Absolute path under /workspace (listing default: /workspace). Other\nquery parameters (`list=1`) are accepted and ignored: a directory is\nalways listed.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The path and, for a directory, its entries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionFileListing"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Path outside /workspace, or session ops disabled"
+          },
+          "404": {
+            "description": "Session not found in this workspace, or no such path"
+          },
+          "409": {
+            "description": "The session is not ready"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/sessions/{session_id}/files/content": {
+      "get": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Download a file from a session's sandbox",
+        "description": "Returns one regular file under `/workspace` as `application/octet-stream` (at most 32 MiB; 413 above). Symlinks are resolved and the target must stay under `/workspace`. Allowed while the session is `ready`. Recorded as `session.file_read` (path and size).",
+        "operationId": "read_file",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "description": "Absolute path under /workspace (listing default: /workspace). Other\nquery parameters (`list=1`) are accepted and ignored: a directory is\nalways listed.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The file's bytes",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Path outside /workspace, not a regular file, or session ops disabled"
+          },
+          "404": {
+            "description": "Session not found in this workspace, or no such file"
+          },
+          "409": {
+            "description": "The session is not ready"
+          },
+          "413": {
+            "description": "The file is larger than 32 MiB"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Upload a file into a session's sandbox",
+        "description": "Creates or replaces one file under `/workspace` with the request body (at most 32 MiB; larger files are out of scope: fetch them from inside the sandbox with exec). Missing parent directories are created; symlinks are resolved and the target must stay under `/workspace`. The file is owned by the agent user. Allowed while the session is `ready`. Recorded as `session.file_write` (path and size).",
+        "operationId": "write_file",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "description": "Absolute path under /workspace (listing default: /workspace). Other\nquery parameters (`list=1`) are accepted and ignored: a directory is\nalways listed.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "int32",
+                  "minimum": 0
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Written",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionFileWritten"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Path outside /workspace, a directory, or session ops disabled"
+          },
+          "404": {
+            "description": "Not found in this workspace"
+          },
+          "409": {
+            "description": "The session is not ready"
+          },
+          "413": {
+            "description": "The body is larger than 32 MiB"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/sessions/{session_id}/fork": {
       "post": {
         "tags": [
@@ -6465,6 +6868,124 @@
           },
           "409": {
             "description": "Not pausable in its current status (provisioning, paused or ended)"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/sessions/{session_id}/ports": {
+      "post": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Expose a port of a session's sandbox",
+        "description": "Returns a preview URL (`https://<port>-<session>-<token>.<preview domain>`) that reaches the port from the internet, WebSockets included, for `ttl_s` seconds (default 1 hour) or until closed. The token in the hostname is the permission: anyone with the URL gets through, so share it like a password. Opening the same port again rotates the token. At most 5 links per session. Preview traffic is inbound and is not subject to the egress rules; the session must be running for the URL to answer (503 while paused). 501 `preview_domain_not_configured` until the platform's preview domain is set up. Recorded as `session.port_open` (never the URL).",
+        "operationId": "open_port",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionPortRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "The preview link",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionPortResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Port outside 1024..=65535, ttl_s outside 60..=86400, or session ops disabled"
+          },
+          "404": {
+            "description": "Not found in this workspace"
+          },
+          "409": {
+            "description": "The session is not ready, or it has 5 links already"
+          },
+          "501": {
+            "description": "No preview domain configured (`preview_domain_not_configured`)"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/sessions/{session_id}/ports/{port}": {
+      "delete": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Close a session's preview port",
+        "description": "Revokes the preview link for the port at once. Idempotent. Recorded as `session.port_close`.",
+        "operationId": "close_port",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "port",
+            "in": "path",
+            "description": "Port",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Closed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionPortResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Session ops disabled"
+          },
+          "404": {
+            "description": "Not found in this workspace"
+          },
+          "501": {
+            "description": "No preview domain configured (`preview_domain_not_configured`)"
           }
         },
         "security": [
@@ -7916,6 +8437,389 @@
           },
           "404": {
             "description": "Not found or not owned by the caller"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/triggers/{trigger_id}": {
+      "get": {
+        "tags": [
+          "Triggers"
+        ],
+        "summary": "Get a trigger",
+        "operationId": "get",
+        "parameters": [
+          {
+            "name": "trigger_id",
+            "in": "path",
+            "description": "Trigger ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The trigger (never its secret)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TriggerResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in this workspace"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Triggers"
+        ],
+        "summary": "Delete a trigger",
+        "description": "Deletes the trigger and its execution history. A fresh session started by an in-flight firing is ended; a reused session is left as it is.",
+        "operationId": "delete",
+        "parameters": [
+          {
+            "name": "trigger_id",
+            "in": "path",
+            "description": "Trigger ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deletion result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in this workspace"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "Triggers"
+        ],
+        "summary": "Update a trigger",
+        "description": "Changes the name, schedule, prompt, session mode, budget or output. `kind` and `provider` cannot change. A schedule change recomputes the next firing from now.",
+        "operationId": "update",
+        "parameters": [
+          {
+            "name": "trigger_id",
+            "in": "path",
+            "description": "Trigger ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TriggerUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The updated trigger",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TriggerResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid definition"
+          },
+          "404": {
+            "description": "Not found in this workspace"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/triggers/{trigger_id}/executions": {
+      "get": {
+        "tags": [
+          "Triggers"
+        ],
+        "summary": "List a trigger's executions",
+        "operationId": "executions",
+        "parameters": [
+          {
+            "name": "trigger_id",
+            "in": "path",
+            "description": "Trigger ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size, 1..200 (default 50).",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Only executions in this status.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Executions, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedList_TriggerExecutionResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in this workspace"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/triggers/{trigger_id}/pause": {
+      "post": {
+        "tags": [
+          "Triggers"
+        ],
+        "summary": "Pause a trigger",
+        "description": "Stops cron firings and refuses webhook deliveries (409 `trigger_paused`) until resumed. A firing already in flight finishes. Missed firings are not replayed.",
+        "operationId": "pause",
+        "parameters": [
+          {
+            "name": "trigger_id",
+            "in": "path",
+            "description": "Trigger ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The paused trigger",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TriggerResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in this workspace"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/triggers/{trigger_id}/resume": {
+      "post": {
+        "tags": [
+          "Triggers"
+        ],
+        "summary": "Resume a trigger",
+        "description": "Reactivates a paused trigger (also one auto-paused after five consecutive failures) and resets its failure count. A cron trigger's next firing is computed from now; nothing missed is replayed.",
+        "operationId": "resume",
+        "parameters": [
+          {
+            "name": "trigger_id",
+            "in": "path",
+            "description": "Trigger ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The active trigger",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TriggerResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in this workspace"
+          },
+          "429": {
+            "description": "The workspace already has its maximum of active triggers"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/triggers/{trigger_id}/rotate-secret": {
+      "post": {
+        "tags": [
+          "Triggers"
+        ],
+        "summary": "Rotate a webhook trigger's secret",
+        "description": "Issues a new signing secret (returned once). The previous one keeps verifying for `grace_s` seconds (default 300, at most 3600) so deliveries already in flight still land; 0 revokes it at once.",
+        "operationId": "rotate_secret",
+        "parameters": [
+          {
+            "name": "trigger_id",
+            "in": "path",
+            "description": "Trigger ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RotateSecretRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The trigger with its new secret",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TriggerResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a webhook trigger, or grace_s out of range"
+          },
+          "404": {
+            "description": "Not found in this workspace"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/triggers/{trigger_id}/run": {
+      "post": {
+        "tags": [
+          "Triggers"
+        ],
+        "summary": "Fire a trigger now",
+        "description": "Queues one firing now (allowed while paused), with an optional `payload` rendered into the prompt like a webhook body. 409 `trigger_busy` while a firing is still pending or running.",
+        "operationId": "run",
+        "parameters": [
+          {
+            "name": "trigger_id",
+            "in": "path",
+            "description": "Trigger ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TriggerRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "The queued execution",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TriggerExecutionResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in this workspace"
+          },
+          "409": {
+            "description": "A firing of this trigger is still pending or running"
           }
         },
         "security": [
@@ -12863,6 +13767,58 @@
           }
         }
       },
+      "FileEntry": {
+        "type": "object",
+        "required": [
+          "name",
+          "type"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        }
+      },
+      "FileListing": {
+        "type": "object",
+        "description": "O11: what a path in /workspace is (`GET /v1/sessions/{id}/files`):\nsymlinks resolved; a directory carries its immediate entries.",
+        "required": [
+          "path",
+          "type"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "The resolved path (symlinks followed; always under /workspace)."
+          },
+          "type": {
+            "type": "string",
+            "description": "`file` | `directory` | `symlink` | ..."
+          },
+          "size": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Bytes, for a file."
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FileEntry"
+            },
+            "description": "A directory's entries, sorted by name (at most 1000)."
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "More than 1000 entries: the rest were left out."
+          }
+        }
+      },
       "FromScoresRequest": {
         "type": "object",
         "description": "Add the targets of the workspace's ok scores from one evaluator that\nmatch every given filter, newest score first.",
@@ -17747,6 +18703,277 @@
           }
         }
       },
+      "PaginatedList_TriggerExecutionResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "data",
+          "has_more"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "object",
+                "id",
+                "trigger_id",
+                "kind",
+                "status",
+                "created_at"
+              ],
+              "properties": {
+                "object": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "trigger_id": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string",
+                  "description": "What fired it: cron | webhook | manual"
+                },
+                "status": {
+                  "type": "string",
+                  "description": "pending | running | succeeded | failed | cancelled"
+                },
+                "delivery_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "The provider's delivery id (webhook-id, X-GitHub-Delivery,\nX-Gitlab-Event-UUID); a second delivery with the same id is ignored."
+                },
+                "session_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "failure_reason": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "payload_excerpt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "The first 4 KiB of the webhook body."
+                },
+                "result_excerpt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "The first 2 KiB of the run's last agent message."
+                },
+                "output_error": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Set when the Slack output (or the session teardown) failed."
+                },
+                "started_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "finished_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "has_more": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PaginatedList_TriggerResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "data",
+          "has_more"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "object",
+                "id",
+                "environment_id",
+                "kind",
+                "session_mode",
+                "prompt",
+                "budget_usd",
+                "output",
+                "status",
+                "consecutive_failures",
+                "created_by",
+                "created_at",
+                "updated_at"
+              ],
+              "properties": {
+                "object": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "environment_id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "kind": {
+                  "type": "string",
+                  "description": "cron | webhook"
+                },
+                "provider": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "webhook: github | gitlab | custom"
+                },
+                "cron": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "timezone": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "session_mode": {
+                  "type": "string",
+                  "description": "fresh | reuse"
+                },
+                "reuse_session_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "prompt": {
+                  "type": "string"
+                },
+                "budget_usd": {
+                  "type": "number",
+                  "format": "double"
+                },
+                "output": {
+                  "$ref": "#/components/schemas/TriggerOutput",
+                  "description": "Slack URLs are masked."
+                },
+                "status": {
+                  "type": "string",
+                  "description": "active | paused"
+                },
+                "paused_reason": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Why the trigger is paused, when it was not paused by hand (five\nconsecutive failures, a deleted environment, ...)."
+                },
+                "consecutive_failures": {
+                  "type": "integer",
+                  "format": "int32"
+                },
+                "next_fire_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time",
+                  "description": "cron: when it fires next (absent while paused)."
+                },
+                "webhook_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "webhook: the URL to give the provider."
+                },
+                "secret": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "webhook: the signing secret. Returned ONLY by create and\nrotate-secret; store it then."
+                },
+                "previous_secret_expires_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time",
+                  "description": "webhook: until when the previous secret still verifies (rotation\ngrace)."
+                },
+                "last_execution": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$ref": "#/components/schemas/TriggerExecutionResponse"
+                    }
+                  ]
+                },
+                "created_by": {
+                  "type": "string"
+                },
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "updated_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "has_more": {
+            "type": "boolean"
+          }
+        }
+      },
       "PaginatedList_VolumeResponse": {
         "type": "object",
         "required": [
@@ -19044,6 +20271,19 @@
           }
         }
       },
+      "RotateSecretRequest": {
+        "type": "object",
+        "properties": {
+          "grace_s": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Seconds the old secret keeps verifying, 0..=3600 (default 300). 0\nrevokes it at once (compromise)."
+          }
+        }
+      },
       "RowFormat": {
         "type": "string",
         "description": "The locked row format of a stream. Detected from the first row and\nenforced on every later append (a mismatched row 400s the whole batch).",
@@ -19492,6 +20732,27 @@
           }
         }
       },
+      "SessionAttachToken": {
+        "type": "object",
+        "required": [
+          "object",
+          "ws_url",
+          "expires_at"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "ws_url": {
+            "type": "string",
+            "description": "Connect a WebSocket here within 60 s; it works once. Add\n`&cols=..&rows=..` for the terminal size. Binary frames are stdin /\nstdout; a text frame `{\"type\":\"resize\",\"cols\":..,\"rows\":..}` resizes."
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "SessionCreateRequest": {
         "type": "object",
         "required": [
@@ -19556,6 +20817,136 @@
           "created_at": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "SessionExecRequest": {
+        "type": "object",
+        "description": "Unknown fields are refused (422): the runtime's operator-only switches\n(`root`, `harness_env`) are not part of this API, and a body naming them\nmust fail loudly rather than run as the agent user without saying so.",
+        "required": [
+          "argv"
+        ],
+        "properties": {
+          "argv": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The command and its arguments (no shell: use `[\"sh\", \"-c\", \"...\"]`\nfor pipes). 1..=256 entries."
+          },
+          "cwd": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Working directory, `/workspace` (default) or a path under it."
+          },
+          "env": {
+            "type": "object",
+            "description": "Extra environment variables, on top of the session's own (what the\nagent sees, model credentials excluded). `ANTHROPIC_*`, `OPENAI_*`,\n`VERI_*`, `PATH` and `LD_*` are dropped (listed in `env_dropped`).",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "timeout_s": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Seconds before the command is killed, 1..=300 (default 60).",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "SessionExecResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "exit_code",
+          "stdout",
+          "stderr",
+          "truncated",
+          "timed_out",
+          "duration_ms",
+          "env_dropped"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "exit_code": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "stdout": {
+            "type": "string",
+            "description": "At most 64 KiB (`truncated` when cut)."
+          },
+          "stderr": {
+            "type": "string",
+            "description": "At most 16 KiB (`truncated` when cut)."
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "timed_out": {
+            "type": "boolean",
+            "description": "The command ran past `timeout_s` and was killed."
+          },
+          "duration_ms": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "env_dropped": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "`env` keys that were dropped (reserved names)."
+          }
+        }
+      },
+      "SessionFileListing": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/FileListing"
+          },
+          {
+            "type": "object",
+            "required": [
+              "object"
+            ],
+            "properties": {
+              "object": {
+                "type": "string"
+              }
+            }
+          }
+        ]
+      },
+      "SessionFileWritten": {
+        "type": "object",
+        "required": [
+          "object",
+          "path",
+          "bytes"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string",
+            "description": "The resolved path written."
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 0
           }
         }
       },
@@ -19683,6 +21074,63 @@
           },
           "status": {
             "type": "string"
+          }
+        }
+      },
+      "SessionPortRequest": {
+        "type": "object",
+        "required": [
+          "port"
+        ],
+        "properties": {
+          "port": {
+            "type": "integer",
+            "format": "int32",
+            "description": "A port a process in the sandbox listens on, 1024..=65535.",
+            "minimum": 0
+          },
+          "ttl_s": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Seconds the link lives, 60..=86400 (default 3600).",
+            "minimum": 0
+          }
+        }
+      },
+      "SessionPortResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "port"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Anyone with this URL reaches the port until it expires or is closed."
+          },
+          "expires_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "revoked": {
+            "type": "boolean"
           }
         }
       },
@@ -21505,6 +22953,416 @@
           },
           "has_more": {
             "type": "boolean"
+          }
+        }
+      },
+      "TriggerCreateRequest": {
+        "type": "object",
+        "required": [
+          "kind",
+          "prompt"
+        ],
+        "properties": {
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Display name, at most 64 characters."
+          },
+          "kind": {
+            "type": "string",
+            "description": "`cron` or `webhook`."
+          },
+          "cron": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "cron: a five-field POSIX cron expression (minute granularity; weekdays\n0-6 = Sunday-Saturday) or an @nickname (@hourly, @daily, ...)."
+          },
+          "timezone": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "cron: IANA time zone the expression is read in (default UTC)."
+          },
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "webhook: `github`, `gitlab` or `custom` (Standard Webhooks; default)."
+          },
+          "prompt": {
+            "type": "string",
+            "description": "The message each firing sends. `{{payload}}` = the webhook body as JSON\n(at most 16 KiB), `{{.a.b}}` = one field of it; missing fields render\nempty. Cron firings have no payload."
+          },
+          "session_mode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`fresh` (default): a new session per firing, ended when the run\ncompletes. `reuse`: wake `reuse_session_id`, send, pause it again."
+          },
+          "reuse_session_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "budget_usd": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Spend ceiling per fresh session in USD (default 2.00)."
+          },
+          "output": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TriggerOutput",
+                "description": "Where results go besides `trigger.execution.*` webhooks (default none)."
+              }
+            ]
+          }
+        }
+      },
+      "TriggerExecutionResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "id",
+          "trigger_id",
+          "kind",
+          "status",
+          "created_at"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "trigger_id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "description": "What fired it: cron | webhook | manual"
+          },
+          "status": {
+            "type": "string",
+            "description": "pending | running | succeeded | failed | cancelled"
+          },
+          "delivery_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The provider's delivery id (webhook-id, X-GitHub-Delivery,\nX-Gitlab-Event-UUID); a second delivery with the same id is ignored."
+          },
+          "session_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "failure_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "payload_excerpt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The first 4 KiB of the webhook body."
+          },
+          "result_excerpt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The first 2 KiB of the run's last agent message."
+          },
+          "output_error": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Set when the Slack output (or the session teardown) failed."
+          },
+          "started_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "finished_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "TriggerOutput": {
+        "type": "object",
+        "description": "Where a finished firing's result goes besides the outbox (which always\ncarries `trigger.execution.*` to the workspace's subscribed endpoints):\n`none`, `webhook` (outbox only) or `slack` (incoming webhook URL).\n`email` is coming soon: refused with 400 until email delivery launches.",
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "none | webhook | slack"
+          },
+          "target": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "slack: the `https://hooks.slack.com/...` URL (masked on read). Absent\nfor none and webhook."
+          }
+        }
+      },
+      "TriggerResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "id",
+          "environment_id",
+          "kind",
+          "session_mode",
+          "prompt",
+          "budget_usd",
+          "output",
+          "status",
+          "consecutive_failures",
+          "created_by",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "environment_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "description": "cron | webhook"
+          },
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "webhook: github | gitlab | custom"
+          },
+          "cron": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "timezone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "session_mode": {
+            "type": "string",
+            "description": "fresh | reuse"
+          },
+          "reuse_session_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "budget_usd": {
+            "type": "number",
+            "format": "double"
+          },
+          "output": {
+            "$ref": "#/components/schemas/TriggerOutput",
+            "description": "Slack URLs are masked."
+          },
+          "status": {
+            "type": "string",
+            "description": "active | paused"
+          },
+          "paused_reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Why the trigger is paused, when it was not paused by hand (five\nconsecutive failures, a deleted environment, ...)."
+          },
+          "consecutive_failures": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "next_fire_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "cron: when it fires next (absent while paused)."
+          },
+          "webhook_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "webhook: the URL to give the provider."
+          },
+          "secret": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "webhook: the signing secret. Returned ONLY by create and\nrotate-secret; store it then."
+          },
+          "previous_secret_expires_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "webhook: until when the previous secret still verifies (rotation\ngrace)."
+          },
+          "last_execution": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TriggerExecutionResponse"
+              }
+            ]
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "TriggerRunRequest": {
+        "type": "object",
+        "properties": {
+          "payload": {
+            "description": "Rendered into the prompt like a webhook body."
+          }
+        }
+      },
+      "TriggerUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cron": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "timezone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "prompt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "session_mode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reuse_session_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "budget_usd": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "output": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TriggerOutput"
+              }
+            ]
+          },
+          "kind": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Immutable: accepted only when unchanged."
+          },
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Immutable: accepted only when unchanged."
           }
         }
       },

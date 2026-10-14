@@ -8,9 +8,7 @@ keywords: ["agents", "harness", "claude code", "opencode", "codex", "langgraph",
 
 The harness is the agent program inside a session's sandbox: it reads your messages, calls the model, runs tools and writes the transcript. You pick it with `harness` on the [environment](/agents/environments); everything else (model, egress, secrets, MCP servers, skills, permissions) is written once and rendered into that harness's own config.
 
-<Note>
-OpenCode, Codex, LangGraph, CrewAI and `custom` are in preview. Until they are enabled for your account, creating an environment with them returns `400` with "planned, not available yet". `claude-code` is available everywhere and is the default.
-</Note>
+All six harnesses are available on every workspace: `claude-code` (the default), `opencode`, `codex`, `langgraph`, `crewai` and `custom`.
 
 | | `claude-code` | `opencode` | `codex` | `langgraph` | `crewai` | `custom` |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -125,7 +123,7 @@ Without an `[agent]` block the session runs Veri's built-in example agent for th
 
 How it runs:
 
-- The first message starts the mediator. It clones `agent.repo` at `ref` into `/workspace/agent` (the repository's host is allowed automatically, for git's requests on that repository's path only), installs the requirements into a virtualenv at `/workspace/.veri/venv` (PyPI is reachable under the default `coding` egress preset), then loads `entry`. A private GitHub repository needs `github_auth = true` on the environment. If any of this fails, the session fails with an `error` event whose `source` is `harness_setup` and whose message says what went wrong. A resumed, rolled-back or forked session keeps `/workspace`, so it does not fetch or install again.
+- The first message starts the mediator. It clones `agent.repo` at `ref` into `/workspace/agent` (the repository's host is allowed automatically, for git's requests on that repository's path only), installs the requirements into a virtualenv at `/workspace/.veri/venv` (PyPI is reachable under the default `coding` egress preset), then loads `entry`. The repository must be public for now: private repositories need [GitHub access](/agents/session-ops#github-access), which is coming soon. If any of this fails, the session fails with an `error` event whose `source` is `harness_setup` and whose message says what went wrong. A resumed, rolled-back or forked session keeps `/workspace`, so it does not fetch or install again.
 - Each message is one run: a LangGraph `astream` over the graph's node updates, or a CrewAI `Crew.kickoff`. Messages your nodes return become `agent.message`, tool calls `agent.tool_use` + `tool.result` (`kind: "mcp"` for MCP tools), reasoning content `agent.thinking`, and each model call's token usage `usage` with `scope: "message"` (plus a `scope: "run"` total per run). What your code prints goes to the harness log, not the transcript.
 - LangGraph: the graph runs with Veri's checkpointer (SQLite at `/workspace/.veri/langgraph.sqlite`, replacing any checkpointer your graph was compiled with), and the conversation is the thread named after the session id, so it survives pauses and resumes. A fork copies the checkpoint's thread into the child's own. The graph's input state should have a `messages` key (`MessagesState`); each message is added to it as a human message. `interrupt()` (human-in-the-loop inside the graph) is not supported: the run ends with an error.
 - CrewAI: your crew gets `inputs = {"message": <the message>, "history": <the earlier turns, as text>}`, so task descriptions can use `{message}` and `{history}`. A factory entry is called for every message, so each run starts from a fresh crew. A crew has no conversation to fork.

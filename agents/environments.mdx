@@ -77,7 +77,7 @@ env["version"]["spec"]   # the normalized spec that sessions will run
 
 | Field | Meaning |
 | --- | --- |
-| `harness` | `claude-code` (the default). `opencode`, `codex` and `custom` are in preview; see [Harnesses](/agents/harnesses) for what each supports. LangGraph, CrewAI and Hermes are planned and rejected with a clear message until then. |
+| `harness` | `claude-code` (the default), `opencode`, `codex`, `langgraph`, `crewai` or `custom`. See [Harnesses](/agents/harnesses) for what each supports. |
 | `model` | Exactly one of `deployment_id` (a Veri deployment in this workspace; each session gets a short-lived [model access key](/secrets#model-access-keys) automatically) or `base_url` plus an optional `secret` holding its API key. |
 | `size` | Sandbox CPU and memory tier, which also sets the session's [hourly rate](/agents/sessions#pricing-and-limits): `small` (1/2 vCPU, 4 GiB memory, 8 GB disk), `standard` (1 vCPU, 6 GiB, 12 GB; the default), `large` (4 vCPU, 12 GiB, 20 GB). `xlarge` is planned and rejected with a clear message until then. |
 | `egress` | What the sandbox may reach on the network: `restricted` (default), `audited_open` or `unrestricted`. See [Egress](#egress). |
@@ -87,8 +87,8 @@ env["version"]["spec"]   # the normalized spec that sessions will run
 | `env` | Plain environment variables. The names the runtime sets are rejected as `env` keys and in `secrets`: `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_API_KEY`, `VERI_API_KEY`, `VERI_API_URL`, `VERI_SESSION_ID`, `VERI_MODEL_BASE_URL`, `VERI_MODEL_KEY`, `VERI_MODEL_NAME`. Other names with those prefixes are fine. |
 | `secrets` | [Secret](/secrets) names. A secret without `scope_host` becomes an environment variable; one with `scope_host` is attached only to requests for that host and never enters the sandbox. |
 | `mcp_servers` | Streamable-HTTP MCP servers written into the harness's MCP config. The URL must be HTTPS and resolve to a public address when you create the environment. `secret` is sent as a bearer token, or as the raw value in `header` when set (`header = "x-api-key"`). |
-| `tools` | Managed MCP servers: `tools.composio` (third-party apps with your workspace's connected accounts) and `tools.veri` (training jobs and deployments with a session-scoped key). See [Tools](/agents/tools). |
-| `github_auth` | `true` gives each session the GitHub access (`repo` scope) of the person who starts it, as placeholders the egress proxy swaps only on `github.com` and `api.github.com`. Rolling out with [session ops](/agents/session-ops#github-access). |
+| `tools` | Coming soon: managed MCP servers (`tools.composio` and `tools.veri`). Not available yet; an environment with a `tools` block is rejected with `400`. See [Tools](/agents/tools). |
+| `github_auth` | Coming soon: `true` will give each session the GitHub access (`repo` scope) of the person who starts it. Until it launches, an environment with `github_auth = true` is rejected with `400`. See [GitHub access](/agents/session-ops#github-access). |
 | `skills` | [Skills](/agents/skills) by name (latest) or `name@N`. The resolved versions are pinned in the spec. |
 | `permissions` | `default` (`allow`, `ask` or `deny`) plus `rules`: tool names (`bash(rm *)`, `web.fetch`, or Claude Code's `Bash(rm *)`, `WebFetch`) evaluated top to bottom with the last match winning, and `approval_ttl_s`, how long an `ask` waits for a decision (60 to 86400 seconds, default 1800). See [Permissions](#permissions). |
 | `idle_timeout_s` | Seconds without input before the session snapshots its workspace and pauses (60 to 21600). |

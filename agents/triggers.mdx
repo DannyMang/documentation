@@ -8,10 +8,6 @@ keywords: ["agents", "triggers", "cron", "schedule", "webhook", "github", "gitla
 
 A trigger starts agent [sessions](/agents/sessions) without anyone at the keyboard: on a cron schedule, or when GitHub, GitLab or any service that signs its webhooks posts to the trigger's URL. Each firing renders the trigger's prompt, runs it in a session on the [environment](/agents/environments)'s latest version, and records the outcome as an **execution**.
 
-<Note>
-Triggers are rolling out. Until they are enabled for your workspace, every trigger route answers `400` with "Session triggers are not currently enabled."
-</Note>
-
 ```bash
 # Every Monday at 09:00 New York time
 veri triggers create --environment 3f9c2a7b1d40 --cron "0 9 * * 1" --timezone America/New_York \
@@ -148,7 +144,6 @@ Every finished execution fires `trigger.execution.succeeded` or `trigger.executi
 | `none` (default) | | Executions list and webhooks only. |
 | `webhook` | | Same as `none`; marks the trigger as delivering through your webhook endpoints. |
 | `slack` | A Slack incoming webhook URL (`https://hooks.slack.com/...`) | A message with the status, the session link and the result excerpt. The URL is masked when the trigger is read back. |
-| `email` | The email address of a member of the workspace | The same text by email. |
 
 ## Guardrails
 

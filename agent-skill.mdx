@@ -440,14 +440,14 @@ Docs: https://docs.veri.studio/evals · https://docs.veri.studio/evals/evaluator
 
 ## Managed agents (sessions)
 
-Run an agent harness (Claude Code today) in a Veri sandbox, talking to a Veri deployment or
-your own model endpoint (`base_url`). CLI commands need a `veri-sdk` newer than 0.2.42; the
-REST routes work from any client.
+Run an agent harness (`claude-code`, `opencode`, `codex`, `langgraph`, `crewai` or `custom`) in a
+Veri sandbox, talking to a Veri deployment or your own model endpoint (`base_url`). CLI commands
+need a `veri-sdk` newer than 0.2.42; the REST routes work from any client.
 
 - Secrets: `PUT /v1/secrets/{name}` (`veri secrets set NAME --value ...`); values never come back.
 - Skills: `POST /v1/skills` (`veri skills add <name> --file SKILL.md -d "when to use"`), versioned.
 - Environments: `POST /v1/environments` or `veri run environment.toml` (`kind = "environment"`;
-  `harness = "claude-code"`, `[model] deployment_id = "..."` or `base_url` + `secret`, `size`,
+  `harness = "claude-code"` (default) or another harness, `[model] deployment_id = "..."` or `base_url` + `secret`, `size`,
   `egress`, `allowed_hosts`, `secrets`, `skills`, `[[mcp_servers]]`, `[permissions]`,
   `idle_timeout_s`). Every edit is a new immutable version; sessions pin theirs.
 - Sessions: `POST /v1/sessions {"environment_id", "budget_usd"?}`
@@ -455,13 +455,21 @@ REST routes work from any client.
   Transcript: `GET /v1/sessions/{id}/events?after_seq=N` or SSE `GET .../stream`
   (resume with `Last-Event-ID`). `pause` / `resume` / `DELETE` (ends it). Billed per hour
   while the sandbox is awake at the environment size's rate (`rate_usd_per_hour` on the
-  session); paused sessions cost nothing; a message to a paused session is 409.
+  session); paused sessions cost nothing; a message to a paused session is 409. At most ten
+  non-ended sessions per workspace (429 `CONCURRENT_SESSION_LIMIT`).
+- Approvals: an `ask` permission rule (claude-code) parks the turn as `awaiting_approval`;
+  answer with `veri sessions approve <session> <approval> allow|deny`.
+- Session ops: `veri sessions exec <id> -- <cmd>`, `veri sessions ls` / `cp` (files under
+  `/workspace`), `veri sessions attach <id>` (shell; needs `websockets`). Preview ports and
+  `github_auth` are coming soon (501 / 400 today).
+- Triggers: `veri triggers create --environment <env_id> --cron "0 9 * * 1"` or `--webhook github`
+  (signed `POST /v1/hooks/{id}`), results to webhooks or `--slack <url>`.
 
-Docs: https://docs.veri.studio/agents/environments · https://docs.veri.studio/agents/sessions
+Docs: https://docs.veri.studio/agents/environments · https://docs.veri.studio/agents/sessions · https://docs.veri.studio/agents/triggers · https://docs.veri.studio/agents/session-ops
 
 ## REST API essentials
 
-Base `https://api.veri.studio`, header `Authorization: Bearer vk_...`. Public spec: `GET /openapi.json`. Main resources: `/v1/me` (identity), `/v1/training_jobs` (+ `/logs`, `/events`, `/metrics`, `/cancel`, `/model`, `/trajectories`), `/v1/deployments` (+ `/chat/completions`, `/messages`, `/stop`, `/wake`, `/replicas`, `/replicas/{id}/drain`, `/requests`, `/traces`, `/threads/{thread_id}`), `/v1/observability/*`, `/v1/evaluators`, `/v1/experiments`, `/v1/scores`, `/v1/monitors`, `/v1/environments`, `/v1/skills`, `/v1/secrets`, `/v1/sessions`, `/v1/datasets`, `/v1/volumes`, `/v1/models` (+ `/{id}/push-to-hf`, poll `/v1/hf_exports/{id}`), `/v1/webhooks` (+ `/secret`, `/test`, `/deliveries`), `/v1/metrics/export`, `/v1/settings/integrations/{wandb,huggingface}`, `/v1/billing/*`, `/v1/gpu/catalog`, `/v1/gpu/availability`, `/v1/regions`. DELETE exists for training jobs, datasets, deployments, models, volumes (and volume files). Errors are JSON `{"error": {"message", "code"?}}` (body-parsing 400/415/422 rejections are plain text): 400 invalid/not enabled, 401 bad key, 402 insufficient credit, 404 not found/not owned, 409 still referenced/wrong state, 429 always with a `code` (a cap, or `RATE_LIMITED` + `retry_after_seconds`), 501 not available, 503 + `Retry-After` (`deployment_waking`, `upstream_unavailable`). Lists take `limit` (most also an `after` cursor) and return `has_more`.
+Base `https://api.veri.studio`, header `Authorization: Bearer vk_...`. Public spec: `GET /openapi.json`. Main resources: `/v1/me` (identity), `/v1/training_jobs` (+ `/logs`, `/events`, `/metrics`, `/cancel`, `/model`, `/trajectories`), `/v1/deployments` (+ `/chat/completions`, `/messages`, `/stop`, `/wake`, `/replicas`, `/replicas/{id}/drain`, `/requests`, `/traces`, `/threads/{thread_id}`), `/v1/observability/*`, `/v1/evaluators`, `/v1/experiments`, `/v1/scores`, `/v1/monitors`, `/v1/environments` (+ `/triggers`), `/v1/skills`, `/v1/secrets`, `/v1/sessions` (+ `/exec`, `/files`, `/attach-token`), `/v1/triggers`, `/v1/datasets`, `/v1/volumes`, `/v1/models` (+ `/{id}/push-to-hf`, poll `/v1/hf_exports/{id}`), `/v1/webhooks` (+ `/secret`, `/test`, `/deliveries`), `/v1/metrics/export`, `/v1/settings/integrations/{wandb,huggingface}`, `/v1/billing/*`, `/v1/gpu/catalog`, `/v1/gpu/availability`, `/v1/regions`. DELETE exists for training jobs, datasets, deployments, models, volumes (and volume files). Errors are JSON `{"error": {"message", "code"?}}` (body-parsing 400/415/422 rejections are plain text): 400 invalid/not enabled, 401 bad key, 402 insufficient credit, 404 not found/not owned, 409 still referenced/wrong state, 429 always with a `code` (a cap, or `RATE_LIMITED` + `retry_after_seconds`), 501 not available, 503 + `Retry-After` (`deployment_waking`, `upstream_unavailable`). Lists take `limit` (most also an `after` cursor) and return `has_more`.
 
 MCP alternative: hosted server at `https://api.veri.studio/mcp` (read-only: `/readonly/mcp`, which drops the 12 write and delete tools), or local `veri mcp serve` (needs `veri-sdk[mcp]`). On the read-only endpoint the chat tool never wakes a parked deployment: it returns `{status: "scaled_to_zero", choices: [], error: ...}` instead. With writes enabled, chatting to a parked deployment wakes it (GPU boot, billing starts) and the tool returns `{status: "waking", ...}` with a retry hint right away: call it again after the hinted delay rather than waiting on the first call. The stop tool is permanent. Docs: https://docs.veri.studio/api-reference/introduction · https://docs.veri.studio/cli/mcp
 

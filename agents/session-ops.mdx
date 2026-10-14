@@ -1,15 +1,15 @@
 ---
 title: "Session ops"
-description: "Work inside a running agent session: run commands, copy files, open a shell, expose a port, and give the agent your GitHub access"
+description: "Work inside a running agent session: run commands, copy files and open a shell"
 keywords: ["agents", "sessions", "exec", "files", "upload", "download", "attach", "shell", "terminal", "port", "preview", "github"]
 ---
 
 ## Overview
 
-Session ops are your own hands on a running [session](/agents/sessions)'s sandbox, next to the agent: run a command, read or write a file, open an interactive shell, or put a port on a URL. Use them to inspect what the agent built, hand it inputs, fix something it got stuck on, or look at a dev server it started.
+Session ops are your own hands on a running [session](/agents/sessions)'s sandbox, next to the agent: run a command, read or write a file, or open an interactive shell. Use them to inspect what the agent built, hand it inputs, or fix something it got stuck on.
 
 <Note>
-Session ops are rolling out. Until they are enabled for your workspace, every route below answers `400` with "Session ops are not currently enabled." and an environment with `github_auth = true` is rejected.
+Exec, files and attach are available on every workspace. [Preview ports](#preview-ports) and [GitHub access](#github-access) are coming soon.
 </Note>
 
 ```bash
@@ -18,7 +18,6 @@ veri sessions ls 9f8e7d6c5b4a /workspace/src
 veri sessions cp ./fixtures.json 9f8e7d6c5b4a:/workspace/data/fixtures.json
 veri sessions cp 9f8e7d6c5b4a:/workspace/report.md ./report.md
 veri sessions attach 9f8e7d6c5b4a
-veri sessions port 9f8e7d6c5b4a 3000
 ```
 
 ```python
@@ -40,7 +39,7 @@ Every op needs the session `ready`: not while a run is in progress (`409`; wait 
 - **`/workspace` only.** Working directories and file paths must be `/workspace` or under it: absolute, no `..`. File paths are also resolved inside the sandbox, symlinks included, and refused (`400`) when they land outside `/workspace`, so a link the agent made to `/etc` or to the harness's own state does not leak it.
 - **Egress still applies.** Network traffic from your commands and your shell goes through the same egress rules, secret swaps and `agent.egress` audit as the agent's. There is no bypass.
 - **No real secrets in the sandbox.** Commands and shells get the session's environment variables as the agent sees them: plain values and secret placeholders, never the real value of a scoped secret and never the model credentials.
-- **Audited.** Each op lands on the transcript: `session.exec` (argv and exit code; variable names, never their values), `session.file_read` and `session.file_write` (path and size, never content), `session.attach` and `session.detach` (who, how long, bytes moved), `session.port_open` and `session.port_close` (port and expiry, never the URL).
+- **Audited.** Each op lands on the transcript: `session.exec` (argv and exit code; variable names, never their values), `session.file_read` and `session.file_write` (path and size, never content), and `session.attach` and `session.detach` (who, how long, bytes moved).
 
 ## Run a command
 
@@ -80,34 +79,14 @@ Uploads larger than 32 MiB are not supported through this route. Fetch large inp
 
 Under the hood `POST /v1/sessions/{id}/attach-token` returns a `ws_url` that connects once, within 60 seconds. Append `&cols=120&rows=40` for the terminal size. Binary WebSocket frames are the terminal's input and output; a text frame `{"type":"resize","cols":120,"rows":40}` resizes it.
 
-## Expose a port
-
-`veri sessions port SESSION_ID 3000` (or `POST /v1/sessions/{id}/ports` with `{"port": 3000, "ttl_s": 3600}`) returns a URL like `https://3000-9f8e7d6c5b4a-<token>.<preview domain>` that reaches port 3000 inside the sandbox from any browser, WebSockets included.
-
-- The token in the hostname is the permission: anyone with the URL gets through. Share it like a password.
-- Links expire after `ttl_s` (60 to 86400 seconds, default 1 hour). `veri sessions port SESSION_ID 3000 --close` (or `DELETE /v1/sessions/{id}/ports/3000`) revokes one at once; opening the same port again issues a new token and retires the old one. At most 5 links per session.
-- Ports 1024 to 65535. The process must listen on `0.0.0.0` or `localhost` inside the sandbox.
-- The session must be running for the URL to answer (`503` while it is paused). Processes do not survive a pause, so restart the server after a resume.
-- Preview traffic comes in from the internet and is not subject to the egress rules.
+## Preview ports
 
 <Note>
-Preview ports answer `501` with `preview_domain_not_configured` until the preview domain is set up on the platform.
+Coming soon. Putting a port inside the sandbox on a shareable URL (`veri sessions port`, `POST /v1/sessions/{id}/ports`) is not available yet; until it launches the route answers `501` with `preview_domain_not_configured`.
 </Note>
 
 ## GitHub access
 
-Set `github_auth = true` on an [environment](/agents/environments) and every session started from it can use your GitHub account: `git clone`, `git push` and `gh` work against your private repositories.
-
-```toml environment.toml
-kind = "environment"
-name = "repo-fixer"
-github_auth = true
-
-[model]
-deployment_id = "1a2b3c4d5e6f"
-```
-
-- The token is the GitHub access of the person who starts the session (for a [trigger](/agents/triggers), the person who created it; for a fork, the person who forks), from their Veri sign-in with GitHub, which must include the `repo` scope. Starting a session without one fails with `400` `github_not_connected` and nothing is created: sign in to Veri with GitHub (or link GitHub to your account), grant repository access, and start it again.
-- The token never enters the sandbox. The sandbox sees placeholders: `GITHUB_TOKEN` and `GH_TOKEN` for the GitHub API (`api.github.com`) and a git credential helper for `github.com`. The egress proxy replaces each placeholder with the real token only on requests to its own host; anywhere else the request is refused.
-- Under the `coding` preset both hosts are already reachable. Under `locked_down`, add rules for `github.com` and `api.github.com`; a rule of your own (for example `GET` only) still narrows what the agent may do there.
-- The token carries everything your GitHub account can do with the `repo` scope, for every repository. Give an agent your account only when you would give it your laptop.
+<Note>
+Coming soon. Giving every session started from an environment the GitHub access of the person who starts it (`github_auth = true` on the [environment](/agents/environments)) is not available yet; until it launches, an environment with `github_auth = true` is rejected with `400`.
+</Note>
