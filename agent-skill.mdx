@@ -277,7 +277,7 @@ handles ≤4B models). `veri deploy` defaults to `L4-24GB` x1; `veri deployments
 `--gpu-type`. On AWS, `A100-80GB`/`H100-80GB` serve only as whole 8-GPU nodes (`--gpu-count 8`);
 x1 is a 400.
 
-- Engine: `vllm` only (any other value returns 400). Extra vLLM flags: repeat `--vllm-arg=<token>` or `deployment.vllm_extra_args` list in the config.
+- Engine: `vllm` only (any other value returns 400). Extra vLLM flags: repeat `--vllm-arg=<token>` or `deployment.vllm_extra_args` list in the config; only the accepted tuning flags pass (list: /deployments/api#vllm-extra-args), any other flag returns 400 `invalid_vllm_extra_args`.
 - Serving providers live: `aws` (default). Not enabled: `gcp`, `digitalocean`, `huggingface` (create returns 400 "Serving provider '<name>' is not currently enabled."; ignore error hints that suggest them). `vast` is training-only (serving returns 400).
 - Defaults: gpu_count 1, replicas 1, concurrency_target 8, scale_to_zero_window 3600s (min 300).
 - Mutable on a live deployment: replica bounds, concurrency target, idle windows. Model/GPU/provider/engine are immutable.
