@@ -66,6 +66,7 @@ The proxy keeps a few typed fields (`model`, `messages`, `temperature`, `max_tok
 Caveats:
 
 - **Tool calling** (`tools`, `tool_choice`) rides through, but the deployment's vLLM must have tool parsing enabled — pass `vllm_extra_args` at create time (for example `--enable-auto-tool-choice --tool-call-parser hermes`). Without those flags vLLM rejects tool requests.
+- **Reasoning (Qwen3).** Veri starts vLLM with `--reasoning-parser qwen3` for the hybrid-thinking `Qwen/Qwen3-*` checkpoints (`0.6B` to `235B-A22B`, their `-FP8`, `-AWQ` and `-GPTQ` quants, and `-Thinking-2507`). The model's thinking comes back in `message.reasoning` (streaming: `delta.reasoning`), never inside `content`; on the Anthropic `/v1/messages` route it is a `thinking` block. To pick another parser, pass your own `--reasoning-parser` in `vllm_extra_args`. To skip thinking, send `chat_template_kwargs: {"enable_thinking": false}` per request, or set `--default-chat-template-kwargs '{"enable_thinking": false}'` at create. A request with `reasoning_effort` (on `/v1/messages`: `output_config.effort`, which Claude Code sends) turns thinking back on for that request.
 - **Structured outputs** (`response_format`) are handled by vLLM's guided decoding; support depends on the engine version and model.
 - **Vision / audio inputs** depend on the served model being multimodal; text-only models reject them.
 
