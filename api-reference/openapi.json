@@ -2682,6 +2682,62 @@
         ]
       }
     },
+    "/v1/deployments/{deployment_id}/responses": {
+      "post": {
+        "tags": [
+          "Deployments"
+        ],
+        "summary": "OpenAI Responses API (proxy)",
+        "description": "Forwards an OpenAI Responses request to the deployment's serving replica (vLLM's native `/v1/responses`, tool calls through the deployment's `--tool-call-parser`). Point a Responses client (the OpenAI SDK, the Codex CLI with `wire_api = \"responses\"`) at `/v1/deployments/{id}` and use a model access key or workspace key as the bearer; the same route is served at `/v1/deployments/{id}/v1/responses` for clients that append `/v1/responses`. Streaming (`stream: true`) is passed through as SSE. `model` is rewritten to the deployment's served name. Token usage is recorded on the deployment's request log.",
+        "operationId": "responses",
+        "parameters": [
+          {
+            "name": "deployment_id",
+            "in": "path",
+            "description": "Deployment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {}
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The Responses object (or an SSE stream of response events)",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "Not serving, multi-adapter / BYOC deployment, or malformed body"
+          },
+          "404": {
+            "description": "Not found or not owned by the caller"
+          },
+          "413": {
+            "description": "Body larger than 8 MB"
+          },
+          "503": {
+            "description": "Deployment waking or no serving replica; retry after Retry-After"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/deployments/{deployment_id}/stop": {
       "post": {
         "tags": [
@@ -3000,7 +3056,7 @@
             }
           },
           "400": {
-            "description": "Invalid spec, unknown secret or skill, or managed agents disabled"
+            "description": "Invalid spec, unknown secret or skill, egress = unrestricted without the Enterprise override (UNRESTRICTED_EGRESS_NOT_ENABLED), or managed agents disabled"
           },
           "404": {
             "description": "model.deployment_id is not a deployment in this workspace"
@@ -3105,6 +3161,101 @@
         ]
       }
     },
+    "/v1/environments/{env_id}/triggers": {
+      "get": {
+        "tags": [
+          "Triggers"
+        ],
+        "summary": "List an environment's triggers",
+        "operationId": "list",
+        "parameters": [
+          {
+            "name": "env_id",
+            "in": "path",
+            "description": "Environment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The environment's triggers, newest first, each with its last execution",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedList_TriggerResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Environment not in this workspace"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Triggers"
+        ],
+        "summary": "Create a trigger",
+        "description": "Creates a cron or webhook trigger that starts sessions on this environment unattended. A webhook trigger's response carries `webhook_url` and the signing `secret`, shown only here and on rotate-secret. Refused (400 `ask_not_allowed`) when the environment's latest version asks for approval: nobody is there to answer.",
+        "operationId": "create",
+        "parameters": [
+          {
+            "name": "env_id",
+            "in": "path",
+            "description": "Environment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TriggerCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "The new trigger (with its secret, for a webhook trigger)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TriggerResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid definition, an environment that asks for approval, or triggers disabled"
+          },
+          "404": {
+            "description": "Environment (or reuse session) not in this workspace"
+          },
+          "429": {
+            "description": "The workspace already has its maximum of active triggers"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/environments/{env_id}/versions": {
       "post": {
         "tags": [
@@ -3146,7 +3297,7 @@
             }
           },
           "400": {
-            "description": "Invalid spec or managed agents disabled"
+            "description": "Invalid spec, egress = unrestricted without the Enterprise override (UNRESTRICTED_EGRESS_NOT_ENABLED), or managed agents disabled"
           },
           "404": {
             "description": "Not found in this workspace"
@@ -5887,7 +6038,7 @@
             }
           },
           "400": {
-            "description": "Invalid name, empty or oversized value, or malformed scope_host"
+            "description": "Invalid name, empty or oversized value, malformed (or wildcard) scope_host, or malformed scope_path / scope_path without scope_host"
           }
         },
         "security": [
@@ -5979,7 +6130,7 @@
           "Sessions"
         ],
         "summary": "Start a session",
-        "description": "Creates a session pinned to an environment version and starts its sandbox. The session is `provisioning` until the runtime reports `ready`; watch the stream or poll GET.",
+        "description": "Creates a session pinned to an environment version and starts its sandbox. The session is `provisioning` until the runtime reports `ready`; watch the stream or poll GET. The response comes within 90 s: a sandbox still starting then is returned `provisioning` and keeps starting, as it does when the client disconnects. A session still `provisioning` after 10 minutes is `failed` with `failure_code` `provisioning_timeout`.",
         "operationId": "create",
         "requestBody": {
           "content": {
@@ -6098,6 +6249,154 @@
         ]
       }
     },
+    "/v1/sessions/{session_id}/attach-token": {
+      "post": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Open an interactive shell in a session's sandbox",
+        "description": "Returns a single-use WebSocket URL, valid for 60 seconds, that opens a login shell (`bash`, in a pseudo-terminal) as the sandbox's agent user in `/workspace`. `veri sessions attach` uses it. The shell's traffic goes through the session's egress rules. While a shell is attached the session stays awake (and bills); a shell idle for 30 minutes is closed. The runtime records `session.attach` and `session.detach` on the transcript. Allowed while the session is `ready`.",
+        "operationId": "attach_token",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "The URL to connect to",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionAttachToken"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Session ops disabled"
+          },
+          "404": {
+            "description": "Not found in this workspace"
+          },
+          "409": {
+            "description": "The session is not ready"
+          },
+          "501": {
+            "description": "The sandbox runtime does not support attach"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/sessions/{session_id}/checkpoints": {
+      "get": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "List a session's checkpoints",
+        "operationId": "list_checkpoints",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Live (unexpired) checkpoints, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedList_CheckpointResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in this workspace"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Checkpoint a session",
+        "description": "Snapshots the sandbox filesystem and records the conversation position, without ending the session. The session cannot take a message while the snapshot is taken (about 20 s per GB of workspace). Allowed while `ready` or `paused`; 409 while a run is in progress or an approval is pending. Checkpoints expire 30 days after they were taken or last rolled back to.",
+        "operationId": "create_checkpoint",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckpointCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "The new checkpoint",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckpointResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid label or managed agents disabled"
+          },
+          "404": {
+            "description": "Not found in this workspace"
+          },
+          "409": {
+            "description": "Not checkpointable in its current status"
+          },
+          "501": {
+            "description": "The sandbox runtime does not support checkpoints"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/sessions/{session_id}/events": {
       "get": {
         "tags": [
@@ -6162,7 +6461,7 @@
           "Sessions"
         ],
         "summary": "Send input to a session",
-        "description": "`user.message` appends the message to the transcript and starts an agent run (409 while a run is in progress or the session is paused). `user.interrupt` stops the current run.",
+        "description": "`user.message` appends the message to the transcript and starts an agent run (409 while a run is in progress, the session is paused, or it is waiting for an approval). `user.interrupt` stops the current run. `user.approval` answers the pending `agent.approval_request` with `approval_id` and `decision` (`allow` or `deny`, optional `message`) and resumes the parked turn (409 unless the session is `awaiting_approval` on that approval).",
         "operationId": "post_event",
         "parameters": [
           {
@@ -6213,13 +6512,334 @@
         ]
       }
     },
+    "/v1/sessions/{session_id}/exec": {
+      "post": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Run a command in a session's sandbox",
+        "description": "Runs one command as the sandbox's agent user (never root) in `/workspace` or a directory under it, and returns its exit code and output (stdout capped at 64 KiB, stderr at 16 KiB). The command's network traffic goes through the session's egress rules like the agent's. Allowed while the session is `ready` (409 during a run, while an approval is pending, or paused); at most 30 per minute per session (429). Recorded on the transcript as `session.exec` (argv and exit code, never env values).",
+        "operationId": "exec",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionExecRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The command ran (any exit code)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionExecResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid argv, cwd outside /workspace, bad env or timeout, or session ops disabled"
+          },
+          "404": {
+            "description": "Not found in this workspace"
+          },
+          "409": {
+            "description": "The session is not ready"
+          },
+          "422": {
+            "description": "Unknown field in the body (`root` / `harness_env` are refused: exec never runs as root)"
+          },
+          "429": {
+            "description": "More than 30 execs in the last minute on this session"
+          },
+          "501": {
+            "description": "The sandbox runtime does not support exec"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/sessions/{session_id}/files": {
+      "get": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "List a directory in a session's sandbox",
+        "description": "Stats a path under `/workspace` (symlinks resolved; a link that leads outside `/workspace` is a 400) and, for a directory, lists its entries (name and type, at most 1000). Allowed while the session is `ready`.",
+        "operationId": "list_files",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "description": "Absolute path under /workspace (listing default: /workspace). Other\nquery parameters (`list=1`) are accepted and ignored: a directory is\nalways listed.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The path and, for a directory, its entries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionFileListing"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Path outside /workspace, or session ops disabled"
+          },
+          "404": {
+            "description": "Session not found in this workspace, or no such path"
+          },
+          "409": {
+            "description": "The session is not ready"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/sessions/{session_id}/files/content": {
+      "get": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Download a file from a session's sandbox",
+        "description": "Returns one regular file under `/workspace` as `application/octet-stream` (at most 32 MiB; 413 above). Symlinks are resolved and the target must stay under `/workspace`. Allowed while the session is `ready`. Recorded as `session.file_read` (path and size).",
+        "operationId": "read_file",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "description": "Absolute path under /workspace (listing default: /workspace). Other\nquery parameters (`list=1`) are accepted and ignored: a directory is\nalways listed.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The file's bytes",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Path outside /workspace, not a regular file, or session ops disabled"
+          },
+          "404": {
+            "description": "Session not found in this workspace, or no such file"
+          },
+          "409": {
+            "description": "The session is not ready"
+          },
+          "413": {
+            "description": "The file is larger than 32 MiB"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Upload a file into a session's sandbox",
+        "description": "Creates or replaces one file under `/workspace` with the request body (at most 32 MiB; larger files are out of scope: fetch them from inside the sandbox with exec). Missing parent directories are created; symlinks are resolved and the target must stay under `/workspace`. The file is owned by the agent user. Allowed while the session is `ready`. Recorded as `session.file_write` (path and size).",
+        "operationId": "write_file",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "description": "Absolute path under /workspace (listing default: /workspace). Other\nquery parameters (`list=1`) are accepted and ignored: a directory is\nalways listed.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "int32",
+                  "minimum": 0
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Written",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionFileWritten"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Path outside /workspace, a directory, or session ops disabled"
+          },
+          "404": {
+            "description": "Not found in this workspace"
+          },
+          "409": {
+            "description": "The session is not ready"
+          },
+          "413": {
+            "description": "The body is larger than 32 MiB"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/sessions/{session_id}/fork": {
+      "post": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Fork a session",
+        "description": "Starts `count` new sessions from a checkpoint of this one. Each child gets the checkpoint's files and conversation (the agent continues from that point in its own, new conversation), the parent's environment version and rate, its own model access key and its own budget. Children are ordinary sessions: billed, capped and ended individually. Without `checkpoint_id` a fresh checkpoint is taken first.",
+        "operationId": "fork",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionForkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "The checkpoint used and the children",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionForkResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "count outside 1..=4, invalid budget, or managed agents disabled"
+          },
+          "404": {
+            "description": "Session or checkpoint not found in this workspace"
+          },
+          "409": {
+            "description": "A fresh checkpoint was needed but the session is not ready or paused, or the session's harness cannot fork (`harness_does_not_support_fork`)"
+          },
+          "429": {
+            "description": "The children would exceed the workspace's concurrent-session cap"
+          },
+          "501": {
+            "description": "No sandbox backend configured, or it does not support checkpoints"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/sessions/{session_id}/pause": {
       "post": {
         "tags": [
           "Sessions"
         ],
         "summary": "Pause a session",
-        "description": "Snapshots the workspace and stops the sandbox. Billing stops; resume restores the files.",
+        "description": "Snapshots the sandbox filesystem and stops the sandbox. Billing stops. Resume restores the files under /workspace and the conversation; running processes, open ports and background tasks do not survive. Allowed while `ready`, `running` or `awaiting_approval`; pausing a session that waits for an approval denies that approval (recorded as `user.approval` with `reason: paused`), so the tool call it asked for never runs.",
         "operationId": "pause",
         "parameters": [
           {
@@ -6247,7 +6867,125 @@
             "description": "Not found in this workspace"
           },
           "409": {
-            "description": "Not pausable in its current status"
+            "description": "Not pausable in its current status (provisioning, paused or ended)"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/sessions/{session_id}/ports": {
+      "post": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Expose a port of a session's sandbox",
+        "description": "Returns a preview URL (`https://<port>-<session>-<token>.<preview domain>`) that reaches the port from the internet, WebSockets included, for `ttl_s` seconds (default 1 hour) or until closed. The token in the hostname is the permission: anyone with the URL gets through, so share it like a password. Opening the same port again rotates the token. At most 5 links per session. Preview traffic is inbound and is not subject to the egress rules; the session must be running for the URL to answer (503 while paused). 501 `preview_domain_not_configured` until the platform's preview domain is set up. Recorded as `session.port_open` (never the URL).",
+        "operationId": "open_port",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionPortRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "The preview link",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionPortResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Port outside 1024..=65535, ttl_s outside 60..=86400, or session ops disabled"
+          },
+          "404": {
+            "description": "Not found in this workspace"
+          },
+          "409": {
+            "description": "The session is not ready, or it has 5 links already"
+          },
+          "501": {
+            "description": "No preview domain configured (`preview_domain_not_configured`)"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/sessions/{session_id}/ports/{port}": {
+      "delete": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Close a session's preview port",
+        "description": "Revokes the preview link for the port at once. Idempotent. Recorded as `session.port_close`.",
+        "operationId": "close_port",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "port",
+            "in": "path",
+            "description": "Port",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Closed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionPortResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Session ops disabled"
+          },
+          "404": {
+            "description": "Not found in this workspace"
+          },
+          "501": {
+            "description": "No preview domain configured (`preview_domain_not_configured`)"
           }
         },
         "security": [
@@ -6263,6 +7001,7 @@
           "Sessions"
         ],
         "summary": "Resume a paused session",
+        "description": "Restores the sandbox from its pause snapshot; the session is `provisioning` until the runtime reports `ready`. If the pause denied a pending approval, the agent first finishes the interrupted turn: the denied tool call comes back as an error `tool.result`, the run completes (`run.completed`), and then the session is `ready`.",
         "operationId": "resume",
         "parameters": [
           {
@@ -6291,6 +7030,63 @@
           },
           "409": {
             "description": "Not paused"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/sessions/{session_id}/rollback": {
+      "post": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Roll a session back to a checkpoint",
+        "description": "Discards the sandbox's current filesystem and conversation position and restarts it from the checkpoint, in place: same session id, same key, same transcript (the rollback is recorded as an event; earlier events stay readable). Allowed while `ready` or `paused` (409 while a run is in progress or an approval is pending); the session is `provisioning` until the runtime reports `ready`. Running processes do not survive. Rolling back refreshes the checkpoint's 30-day expiry.",
+        "operationId": "rollback",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionRollbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The session, provisioning again until the runtime reports ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session or checkpoint not found in this workspace"
+          },
+          "409": {
+            "description": "Not ready or paused"
+          },
+          "501": {
+            "description": "The sandbox runtime does not support rollback"
           }
         },
         "security": [
@@ -7641,6 +8437,389 @@
           },
           "404": {
             "description": "Not found or not owned by the caller"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/triggers/{trigger_id}": {
+      "get": {
+        "tags": [
+          "Triggers"
+        ],
+        "summary": "Get a trigger",
+        "operationId": "get",
+        "parameters": [
+          {
+            "name": "trigger_id",
+            "in": "path",
+            "description": "Trigger ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The trigger (never its secret)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TriggerResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in this workspace"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Triggers"
+        ],
+        "summary": "Delete a trigger",
+        "description": "Deletes the trigger and its execution history. A fresh session started by an in-flight firing is ended; a reused session is left as it is.",
+        "operationId": "delete",
+        "parameters": [
+          {
+            "name": "trigger_id",
+            "in": "path",
+            "description": "Trigger ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deletion result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in this workspace"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "Triggers"
+        ],
+        "summary": "Update a trigger",
+        "description": "Changes the name, schedule, prompt, session mode, budget or output. `kind` and `provider` cannot change. A schedule change recomputes the next firing from now.",
+        "operationId": "update",
+        "parameters": [
+          {
+            "name": "trigger_id",
+            "in": "path",
+            "description": "Trigger ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TriggerUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The updated trigger",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TriggerResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid definition"
+          },
+          "404": {
+            "description": "Not found in this workspace"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/triggers/{trigger_id}/executions": {
+      "get": {
+        "tags": [
+          "Triggers"
+        ],
+        "summary": "List a trigger's executions",
+        "operationId": "executions",
+        "parameters": [
+          {
+            "name": "trigger_id",
+            "in": "path",
+            "description": "Trigger ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size, 1..200 (default 50).",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Only executions in this status.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Executions, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedList_TriggerExecutionResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in this workspace"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/triggers/{trigger_id}/pause": {
+      "post": {
+        "tags": [
+          "Triggers"
+        ],
+        "summary": "Pause a trigger",
+        "description": "Stops cron firings and refuses webhook deliveries (409 `trigger_paused`) until resumed. A firing already in flight finishes. Missed firings are not replayed.",
+        "operationId": "pause",
+        "parameters": [
+          {
+            "name": "trigger_id",
+            "in": "path",
+            "description": "Trigger ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The paused trigger",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TriggerResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in this workspace"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/triggers/{trigger_id}/resume": {
+      "post": {
+        "tags": [
+          "Triggers"
+        ],
+        "summary": "Resume a trigger",
+        "description": "Reactivates a paused trigger (also one auto-paused after five consecutive failures) and resets its failure count. A cron trigger's next firing is computed from now; nothing missed is replayed.",
+        "operationId": "resume",
+        "parameters": [
+          {
+            "name": "trigger_id",
+            "in": "path",
+            "description": "Trigger ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The active trigger",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TriggerResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in this workspace"
+          },
+          "429": {
+            "description": "The workspace already has its maximum of active triggers"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/triggers/{trigger_id}/rotate-secret": {
+      "post": {
+        "tags": [
+          "Triggers"
+        ],
+        "summary": "Rotate a webhook trigger's secret",
+        "description": "Issues a new signing secret (returned once). The previous one keeps verifying for `grace_s` seconds (default 300, at most 3600) so deliveries already in flight still land; 0 revokes it at once.",
+        "operationId": "rotate_secret",
+        "parameters": [
+          {
+            "name": "trigger_id",
+            "in": "path",
+            "description": "Trigger ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RotateSecretRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The trigger with its new secret",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TriggerResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a webhook trigger, or grace_s out of range"
+          },
+          "404": {
+            "description": "Not found in this workspace"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/triggers/{trigger_id}/run": {
+      "post": {
+        "tags": [
+          "Triggers"
+        ],
+        "summary": "Fire a trigger now",
+        "description": "Queues one firing now (allowed while paused), with an optional `payload` rendered into the prompt like a webhook body. 409 `trigger_busy` while a firing is still pending or running.",
+        "operationId": "run",
+        "parameters": [
+          {
+            "name": "trigger_id",
+            "in": "path",
+            "description": "Trigger ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TriggerRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "The queued execution",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TriggerExecutionResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in this workspace"
+          },
+          "409": {
+            "description": "A firing of this trigger is still pending or running"
           }
         },
         "security": [
@@ -9305,6 +10484,18 @@
             "items": {
               "$ref": "#/components/schemas/ActiveDeploymentEntry"
             }
+          }
+        }
+      },
+      "CheckpointCreateRequest": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Free-text label, at most 128 characters."
           }
         }
       },
@@ -11494,6 +12685,63 @@
           }
         ]
       },
+      "EgressRule": {
+        "type": "object",
+        "description": "A normalized egress rule (O10). Empty `methods` / `paths` = any.",
+        "required": [
+          "host"
+        ],
+        "properties": {
+          "host": {
+            "type": "string"
+          },
+          "methods": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "EgressRuleInput": {
+        "type": "object",
+        "description": "One egress allow rule as submitted (O10).",
+        "required": [
+          "host"
+        ],
+        "properties": {
+          "host": {
+            "type": "string",
+            "description": "An exact hostname (`api.github.com`) or one leading wildcard label\n(`*.example.com`: every subdomain, not `example.com` itself). No\nscheme, port, path or IP address."
+          },
+          "methods": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "HTTP methods this rule allows (`GET`, `HEAD`, `OPTIONS`, `POST`,\n`PUT`, `PATCH`, `DELETE`). Omit for every method."
+          },
+          "paths": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "description": "URL path prefixes this rule allows (`/repos/my-org/`); the query\nstring is ignored. Omit for every path."
+          }
+        }
+      },
       "EnvironmentCreateRequest": {
         "allOf": [
           {
@@ -11596,11 +12844,22 @@
           "egress": {
             "type": "string"
           },
+          "egress_preset": {
+            "type": "string",
+            "description": "`coding` | `web_research` | `locked_down`. Specs stored before\npresets existed read as `coding`, which is what they ran with."
+          },
           "allowed_hosts": {
             "type": "array",
             "items": {
               "type": "string"
             }
+          },
+          "egress_rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EgressRule"
+            },
+            "description": "Allow rules narrower than a host (empty when the spec has none)."
           },
           "env": {
             "type": "object",
@@ -11665,14 +12924,28 @@
               "string",
               "null"
             ],
-            "description": "`restricted` (default) | `unrestricted`."
+            "description": "`restricted` (default) | `audited_open` | `unrestricted` (Enterprise)."
+          },
+          "egress_preset": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The default egress rules: `coding` (default; GitHub, npm, PyPI, the\nVeri API, scoped secret hosts) | `web_research` (coding + GET/HEAD/\nOPTIONS to any host) | `locked_down` (none)."
           },
           "allowed_hosts": {
             "type": "array",
             "items": {
               "type": "string"
             },
-            "description": "Extra hostnames a restricted session may reach."
+            "description": "Extra hosts a restricted session may reach with any method and path\n(shorthand for an `egress_rules` entry with only `host`)."
+          },
+          "egress_rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EgressRuleInput"
+            },
+            "description": "Allow rules narrower than a host: methods and path prefixes. A rule\nnaming a host replaces the preset's access to that host."
           },
           "env": {
             "type": "object",
@@ -12491,6 +13764,58 @@
               "null"
             ],
             "format": "date-time"
+          }
+        }
+      },
+      "FileEntry": {
+        "type": "object",
+        "required": [
+          "name",
+          "type"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        }
+      },
+      "FileListing": {
+        "type": "object",
+        "description": "O11: what a path in /workspace is (`GET /v1/sessions/{id}/files`):\nsymlinks resolved; a directory carries its immediate entries.",
+        "required": [
+          "path",
+          "type"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "The resolved path (symlinks followed; always under /workspace)."
+          },
+          "type": {
+            "type": "string",
+            "description": "`file` | `directory` | `symlink` | ..."
+          },
+          "size": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Bytes, for a file."
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FileEntry"
+            },
+            "description": "A directory's entries, sorted by name (at most 1000)."
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "More than 1000 entries: the rest were left out."
           }
         }
       },
@@ -13677,7 +15002,14 @@
               "string",
               "null"
             ],
-            "description": "Optional secret name sent as `Authorization: Bearer <value>`."
+            "description": "Optional secret name. Sent as `Authorization: Bearer <value>`, or as\nthe raw value in `header` when that is set."
+          },
+          "header": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The request header the secret travels in, for servers that do not\ntake a bearer token (an API-key header such as `x-api-key`). Default\n`authorization` (sent as `Bearer <value>`); any other name gets the\nraw value. Needs `secret`."
           }
         }
       },
@@ -13699,6 +15031,13 @@
               "string",
               "null"
             ]
+          },
+          "header": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Lowercased header name the secret is sent in; absent = `authorization`\nwith `Bearer <value>`."
           }
         }
       },
@@ -16766,6 +18105,12 @@
                     "null"
                   ]
                 },
+                "scope_path": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
                 "created_at": {
                   "type": "string",
                   "format": "date-time"
@@ -16855,9 +18200,15 @@
                 "id",
                 "environment_id",
                 "environment_version",
+                "harness",
                 "status",
                 "awake_seconds",
                 "total_cost_usd",
+                "rate_usd_per_hour",
+                "egress_bytes",
+                "egress_usd_per_gb",
+                "tool_calls",
+                "tool_call_usd_per_1k",
                 "created_by",
                 "created_at",
                 "updated_at"
@@ -16876,9 +18227,13 @@
                   "type": "integer",
                   "format": "int32"
                 },
+                "harness": {
+                  "type": "string",
+                  "description": "The agent harness the session runs (`claude-code`), from its pinned\nenvironment version."
+                },
                 "status": {
                   "type": "string",
-                  "description": "provisioning | ready | running | paused | ended | failed"
+                  "description": "provisioning | ready | running | awaiting_approval | paused | ended | failed"
                 },
                 "title": {
                   "type": [
@@ -16902,6 +18257,31 @@
                   "type": "number",
                   "format": "double",
                   "description": "Charged so far (USD)."
+                },
+                "rate_usd_per_hour": {
+                  "type": "number",
+                  "format": "double",
+                  "description": "Price per awake hour (USD) this session bills at, fixed at create from\nthe environment's `size`."
+                },
+                "egress_bytes": {
+                  "type": "integer",
+                  "format": "int64",
+                  "description": "Request + response bytes through the sandbox's egress interceptor\n(every mode; in `unrestricted` only the intercepted hosts)."
+                },
+                "egress_usd_per_gb": {
+                  "type": "number",
+                  "format": "double",
+                  "description": "Price per GB of `egress_bytes` (USD), fixed at create: non-zero only\nfor an `audited_open` environment."
+                },
+                "tool_calls": {
+                  "type": "integer",
+                  "format": "int64",
+                  "description": "Billable third-party tool executions (Composio): each app tool run\nthrough `COMPOSIO_MULTI_EXECUTE_TOOL` counts one; search, schema and\nconnection tools are free."
+                },
+                "tool_call_usd_per_1k": {
+                  "type": "number",
+                  "format": "double",
+                  "description": "Price per 1,000 `tool_calls` (USD), fixed at create: non-zero only\nwhen the environment has Composio tools. The workspace's monthly free\nallowance is applied when the calls are settled."
                 },
                 "started_at": {
                   "type": [
@@ -16953,6 +18333,42 @@
                 "updated_at": {
                   "type": "string",
                   "format": "date-time"
+                },
+                "parent_session_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Set on a forked child: the session it was forked from."
+                },
+                "forked_from_checkpoint_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Set on a forked child: the parent's checkpoint it started from."
+                },
+                "usage": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SessionUsageSummary",
+                      "description": "Lifecycle timings, runs, model calls, tokens and model cost derived\nfrom the transcript. Only on `GET /v1/sessions/{id}`; absent on the\nlist."
+                    }
+                  ]
+                },
+                "resources": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$ref": "#/components/schemas/SessionResources",
+                      "description": "The newest sandbox resource sample (CPU load, memory, disk) from the\nruntime's heartbeat; absent until the first one."
+                    }
+                  ]
                 }
               }
             }
@@ -17270,6 +18686,277 @@
                     "null"
                   ],
                   "format": "date-time"
+                },
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "updated_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "has_more": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PaginatedList_TriggerExecutionResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "data",
+          "has_more"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "object",
+                "id",
+                "trigger_id",
+                "kind",
+                "status",
+                "created_at"
+              ],
+              "properties": {
+                "object": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "trigger_id": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string",
+                  "description": "What fired it: cron | webhook | manual"
+                },
+                "status": {
+                  "type": "string",
+                  "description": "pending | running | succeeded | failed | cancelled"
+                },
+                "delivery_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "The provider's delivery id (webhook-id, X-GitHub-Delivery,\nX-Gitlab-Event-UUID); a second delivery with the same id is ignored."
+                },
+                "session_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "failure_reason": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "payload_excerpt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "The first 4 KiB of the webhook body."
+                },
+                "result_excerpt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "The first 2 KiB of the run's last agent message."
+                },
+                "output_error": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Set when the Slack output (or the session teardown) failed."
+                },
+                "started_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "finished_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "has_more": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PaginatedList_TriggerResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "data",
+          "has_more"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "object",
+                "id",
+                "environment_id",
+                "kind",
+                "session_mode",
+                "prompt",
+                "budget_usd",
+                "output",
+                "status",
+                "consecutive_failures",
+                "created_by",
+                "created_at",
+                "updated_at"
+              ],
+              "properties": {
+                "object": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "environment_id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "kind": {
+                  "type": "string",
+                  "description": "cron | webhook"
+                },
+                "provider": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "webhook: github | gitlab | custom"
+                },
+                "cron": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "timezone": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "session_mode": {
+                  "type": "string",
+                  "description": "fresh | reuse"
+                },
+                "reuse_session_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "prompt": {
+                  "type": "string"
+                },
+                "budget_usd": {
+                  "type": "number",
+                  "format": "double"
+                },
+                "output": {
+                  "$ref": "#/components/schemas/TriggerOutput",
+                  "description": "Slack URLs are masked."
+                },
+                "status": {
+                  "type": "string",
+                  "description": "active | paused"
+                },
+                "paused_reason": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Why the trigger is paused, when it was not paused by hand (five\nconsecutive failures, a deleted environment, ...)."
+                },
+                "consecutive_failures": {
+                  "type": "integer",
+                  "format": "int32"
+                },
+                "next_fire_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time",
+                  "description": "cron: when it fires next (absent while paused)."
+                },
+                "webhook_url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "webhook: the URL to give the provider."
+                },
+                "secret": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "webhook: the signing secret. Returned ONLY by create and\nrotate-secret; store it then."
+                },
+                "previous_secret_expires_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time",
+                  "description": "webhook: until when the previous secret still verifies (rotation\ngrace)."
+                },
+                "last_execution": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$ref": "#/components/schemas/TriggerExecutionResponse"
+                    }
+                  ]
+                },
+                "created_by": {
+                  "type": "string"
                 },
                 "created_at": {
                   "type": "string",
@@ -17666,11 +19353,11 @@
         "properties": {
           "tool": {
             "type": "string",
-            "description": "Tool pattern as the harness understands it (e.g. `Bash`,\n`Bash(git *)`, `Read`, `WebFetch`, `mcp__composio__*`)."
+            "description": "Tool pattern: a harness-neutral name (`bash`, `bash(git *)`,\n`file.read`, `file.write`, `web.fetch`, `web.search`, `git.*`, `mcp`,\n`mcp.<server>.<tool>`, `*`) or Claude Code's own syntax (`Bash`,\n`Bash(git *)`, `Read`, `WebFetch`, `mcp__composio__*`)."
           },
           "action": {
             "type": "string",
-            "description": "`allow` or `deny`. `ask` (human approval) is not available yet and is\nrejected."
+            "description": "`allow`, `ask` (pause the session for a human decision; see\ndocs/agents/environments.mdx) or `deny`."
           }
         }
       },
@@ -17689,6 +19376,11 @@
             "items": {
               "$ref": "#/components/schemas/PermissionRule"
             }
+          },
+          "approval_ttl_s": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Seconds an `ask` waits for a decision before it is denied (60 ..\n86400). Omitted when it is the default, 1800."
           }
         }
       },
@@ -17700,7 +19392,7 @@
               "string",
               "null"
             ],
-            "description": "`allow` (default) or `deny`: what happens to tools no rule matches."
+            "description": "`allow` (default), `ask` or `deny`: what happens to tools no rule matches."
           },
           "rules": {
             "type": "array",
@@ -17708,6 +19400,14 @@
               "$ref": "#/components/schemas/PermissionRuleInput"
             },
             "description": "Evaluated top to bottom; the last matching rule wins."
+          },
+          "approval_ttl_s": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Seconds an `ask` waits for a decision before it is denied (60 .. 86400,\ndefault 1800)."
           }
         }
       },
@@ -17938,6 +19638,13 @@
               "null"
             ],
             "description": "Optional HTTPS host the value is scoped to (e.g. \"api.openai.com\").\nWhen set, agent sessions only attach the value to requests for that\nhost; when absent, the value is injected as an environment variable.\nHostname only: no scheme, port, path or wildcard."
+          },
+          "scope_path": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Optional URL path prefix (`/repos/my-org/`), only with `scope_host`:\nthe value is attached only to requests whose path starts with it."
           }
         }
       },
@@ -18564,6 +20271,19 @@
           }
         }
       },
+      "RotateSecretRequest": {
+        "type": "object",
+        "properties": {
+          "grace_s": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Seconds the old secret keeps verifying, 0..=3600 (default 300). 0\nrevokes it at once (compromise)."
+          }
+        }
+      },
       "RowFormat": {
         "type": "string",
         "description": "The locked row format of a stream. Detected from the first row and\nenforced on every later append (a mismatched row 400s the whole batch).",
@@ -18574,6 +20294,26 @@
           "chat",
           "eval"
         ]
+      },
+      "RunDurationMs": {
+        "type": "object",
+        "description": "Run wall time over the session's `run.completed` events, ms.",
+        "properties": {
+          "p50": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "max": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          }
+        }
       },
       "RunVisibility": {
         "type": "string",
@@ -18897,6 +20637,12 @@
               "null"
             ]
           },
+          "scope_path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "created_at": {
             "type": "string",
             "format": "date-time"
@@ -18954,6 +20700,56 @@
           "flagged": {
             "type": "integer",
             "format": "int64"
+          }
+        }
+      },
+      "SessionApprovals": {
+        "type": "object",
+        "description": "Human approvals (`agent.approval_request` / `user.approval`, O6). All\nzero while the environment has no `ask` rules.",
+        "required": [
+          "requested",
+          "approved",
+          "denied",
+          "wait_ms_total"
+        ],
+        "properties": {
+          "requested": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "approved": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "denied": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "wait_ms_total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Sum over answered requests of (answer time - request time), ms."
+          }
+        }
+      },
+      "SessionAttachToken": {
+        "type": "object",
+        "required": [
+          "object",
+          "ws_url",
+          "expires_at"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "ws_url": {
+            "type": "string",
+            "description": "Connect a WebSocket here within 60 s; it works once. Add\n`&cols=..&rows=..` for the terminal size. Binary frames are stdin /\nstdout; a text frame `{\"type\":\"resize\",\"cols\":..,\"rows\":..}` resizes."
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
@@ -19024,6 +20820,200 @@
           }
         }
       },
+      "SessionExecRequest": {
+        "type": "object",
+        "description": "Unknown fields are refused (422): the runtime's operator-only switches\n(`root`, `harness_env`) are not part of this API, and a body naming them\nmust fail loudly rather than run as the agent user without saying so.",
+        "required": [
+          "argv"
+        ],
+        "properties": {
+          "argv": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The command and its arguments (no shell: use `[\"sh\", \"-c\", \"...\"]`\nfor pipes). 1..=256 entries."
+          },
+          "cwd": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Working directory, `/workspace` (default) or a path under it."
+          },
+          "env": {
+            "type": "object",
+            "description": "Extra environment variables, on top of the session's own (what the\nagent sees, model credentials excluded). `ANTHROPIC_*`, `OPENAI_*`,\n`VERI_*`, `PATH` and `LD_*` are dropped (listed in `env_dropped`).",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "timeout_s": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Seconds before the command is killed, 1..=300 (default 60).",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      },
+      "SessionExecResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "exit_code",
+          "stdout",
+          "stderr",
+          "truncated",
+          "timed_out",
+          "duration_ms",
+          "env_dropped"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "exit_code": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "stdout": {
+            "type": "string",
+            "description": "At most 64 KiB (`truncated` when cut)."
+          },
+          "stderr": {
+            "type": "string",
+            "description": "At most 16 KiB (`truncated` when cut)."
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "timed_out": {
+            "type": "boolean",
+            "description": "The command ran past `timeout_s` and was killed."
+          },
+          "duration_ms": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "env_dropped": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "`env` keys that were dropped (reserved names)."
+          }
+        }
+      },
+      "SessionFileListing": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/FileListing"
+          },
+          {
+            "type": "object",
+            "required": [
+              "object"
+            ],
+            "properties": {
+              "object": {
+                "type": "string"
+              }
+            }
+          }
+        ]
+      },
+      "SessionFileWritten": {
+        "type": "object",
+        "required": [
+          "object",
+          "path",
+          "bytes"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string",
+            "description": "The resolved path written."
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "SessionForkRequest": {
+        "type": "object",
+        "properties": {
+          "checkpoint_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Checkpoint to fork from (default: take a fresh checkpoint first, which\nneeds the session `ready` or `paused`)."
+          },
+          "count": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Children to start, 1..=4 (default 1). Every child needs a free slot\nunder the workspace's concurrent-session cap; a fork that does not\nfit starts no child.",
+            "minimum": 0
+          },
+          "budget_usd": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Spend ceiling per child in USD (default: the parent's)."
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Title for the children (default: the parent's)."
+          }
+        }
+      },
+      "SessionForkResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "parent_session_id",
+          "checkpoint_id",
+          "sessions"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "parent_session_id": {
+            "type": "string"
+          },
+          "checkpoint_id": {
+            "type": "string",
+            "description": "The checkpoint every child started from."
+          },
+          "sessions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionResponse"
+            },
+            "description": "The children, `provisioning` until each runtime reports `ready`; a\nchild whose sandbox failed to start is listed as `failed`."
+          }
+        }
+      },
       "SessionInputRequest": {
         "type": "object",
         "required": [
@@ -19032,13 +21022,34 @@
         "properties": {
           "type": {
             "type": "string",
-            "description": "`user.message` (requires `text`) or `user.interrupt`."
+            "description": "`user.message` (requires `text`), `user.interrupt`, or `user.approval`\n(requires `approval_id` and `decision`; only while the session is\n`awaiting_approval`)."
           },
           "text": {
             "type": [
               "string",
               "null"
             ]
+          },
+          "approval_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`user.approval`: the `approval_id` of the pending `agent.approval_request`."
+          },
+          "decision": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`user.approval`: `allow` or `deny`."
+          },
+          "message": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`user.approval`: optional note, at most 4 KiB. On `deny` the agent\nreads it as the reason and continues its turn without the tool call."
           }
         }
       },
@@ -19066,6 +21077,108 @@
           }
         }
       },
+      "SessionPortRequest": {
+        "type": "object",
+        "required": [
+          "port"
+        ],
+        "properties": {
+          "port": {
+            "type": "integer",
+            "format": "int32",
+            "description": "A port a process in the sandbox listens on, 1024..=65535.",
+            "minimum": 0
+          },
+          "ttl_s": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Seconds the link lives, 60..=86400 (default 3600).",
+            "minimum": 0
+          }
+        }
+      },
+      "SessionPortResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "port"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Anyone with this URL reaches the port until it expires or is closed."
+          },
+          "expires_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "revoked": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SessionResources": {
+        "type": "object",
+        "description": "The sandbox resource sample a heartbeat carries (every field optional:\nthe runtime omits what it could not read), plus when it was taken.",
+        "required": [
+          "sampled_at"
+        ],
+        "properties": {
+          "load1": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "1-minute load average (`/proc/loadavg`)."
+          },
+          "mem_bytes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "cgroup v2 `memory.current`."
+          },
+          "mem_limit_bytes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "cgroup v2 `memory.max`; absent when unlimited."
+          },
+          "disk_bytes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Bytes used on the filesystem holding /workspace."
+          },
+          "sampled_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "SessionResponse": {
         "type": "object",
         "required": [
@@ -19073,9 +21186,15 @@
           "id",
           "environment_id",
           "environment_version",
+          "harness",
           "status",
           "awake_seconds",
           "total_cost_usd",
+          "rate_usd_per_hour",
+          "egress_bytes",
+          "egress_usd_per_gb",
+          "tool_calls",
+          "tool_call_usd_per_1k",
           "created_by",
           "created_at",
           "updated_at"
@@ -19094,9 +21213,13 @@
             "type": "integer",
             "format": "int32"
           },
+          "harness": {
+            "type": "string",
+            "description": "The agent harness the session runs (`claude-code`), from its pinned\nenvironment version."
+          },
           "status": {
             "type": "string",
-            "description": "provisioning | ready | running | paused | ended | failed"
+            "description": "provisioning | ready | running | awaiting_approval | paused | ended | failed"
           },
           "title": {
             "type": [
@@ -19120,6 +21243,31 @@
             "type": "number",
             "format": "double",
             "description": "Charged so far (USD)."
+          },
+          "rate_usd_per_hour": {
+            "type": "number",
+            "format": "double",
+            "description": "Price per awake hour (USD) this session bills at, fixed at create from\nthe environment's `size`."
+          },
+          "egress_bytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Request + response bytes through the sandbox's egress interceptor\n(every mode; in `unrestricted` only the intercepted hosts)."
+          },
+          "egress_usd_per_gb": {
+            "type": "number",
+            "format": "double",
+            "description": "Price per GB of `egress_bytes` (USD), fixed at create: non-zero only\nfor an `audited_open` environment."
+          },
+          "tool_calls": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Billable third-party tool executions (Composio): each app tool run\nthrough `COMPOSIO_MULTI_EXECUTE_TOOL` counts one; search, schema and\nconnection tools are free."
+          },
+          "tool_call_usd_per_1k": {
+            "type": "number",
+            "format": "double",
+            "description": "Price per 1,000 `tool_calls` (USD), fixed at create: non-zero only\nwhen the environment has Composio tools. The workspace's monthly free\nallowance is applied when the calls are settled."
           },
           "started_at": {
             "type": [
@@ -19171,6 +21319,177 @@
           "updated_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "parent_session_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Set on a forked child: the session it was forked from."
+          },
+          "forked_from_checkpoint_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Set on a forked child: the parent's checkpoint it started from."
+          },
+          "usage": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SessionUsageSummary",
+                "description": "Lifecycle timings, runs, model calls, tokens and model cost derived\nfrom the transcript. Only on `GET /v1/sessions/{id}`; absent on the\nlist."
+              }
+            ]
+          },
+          "resources": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SessionResources",
+                "description": "The newest sandbox resource sample (CPU load, memory, disk) from the\nruntime's heartbeat; absent until the first one."
+              }
+            ]
+          }
+        }
+      },
+      "SessionRollbackRequest": {
+        "type": "object",
+        "required": [
+          "checkpoint_id"
+        ],
+        "properties": {
+          "checkpoint_id": {
+            "type": "string"
+          }
+        }
+      },
+      "SessionTokens": {
+        "type": "object",
+        "description": "Token totals of one session. `input`, `cache_read` and `cache_creation`\ncome from the most specific `usage` scope the session has, and only that\none, so a token reported per call and again in a roll-up counts once:\nthe per-call rows from the egress tee (`usage{scope:\"call\"}`), else the\nharness's per-message rows (`scope:\"message\"`: Claude Code, LangGraph,\nCrewAI), per-step rows (`scope:\"step\"`: OpenCode), per-turn rows\n(`scope:\"turn\"`: Codex), else the per-run roll-up (`scope:\"run\"`).\n`output` comes from the per-run roll-up, because Claude Code's\nper-message output count is its message_start placeholder.",
+        "required": [
+          "input",
+          "output",
+          "cache_read",
+          "cache_creation"
+        ],
+        "properties": {
+          "input": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "output": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "cache_read": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "cache_creation": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "SessionUsageSummary": {
+        "type": "object",
+        "description": "What `GET /v1/sessions/{id}` reports as `usage`: lifecycle timings,\nrun counts, model tokens and cost, all derived from `session_events`\nin one pass. Never stored; the transcript is the source of truth.",
+        "required": [
+          "runs",
+          "run_duration_ms",
+          "interrupts",
+          "pauses",
+          "llm_calls",
+          "tokens",
+          "permission_denials",
+          "approvals",
+          "tool_calls"
+        ],
+        "properties": {
+          "boot_ms": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Create -> first `ready`: the runtime's own `boot_ms` when it stamped\none, else the control plane's created_at -> ready clock."
+          },
+          "restore_ms": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "The latest resume's restore time (snapshot -> ready)."
+          },
+          "snapshot_ms": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "The latest pause's snapshot time."
+          },
+          "runs": {
+            "type": "integer",
+            "format": "int64",
+            "description": "`run.completed` events (turns the agent finished, interrupted or not)."
+          },
+          "run_duration_ms": {
+            "$ref": "#/components/schemas/RunDurationMs"
+          },
+          "interrupts": {
+            "type": "integer",
+            "format": "int64",
+            "description": "`session.interrupted` events plus runs that ended by `user.interrupt`."
+          },
+          "pauses": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Times the session went `paused` (user, idle or budget)."
+          },
+          "llm_calls": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Model calls: per-call `usage` rows from the egress tee when present,\nelse the harness's per-message (OpenCode: per-step) `usage` rows. 0\nwhen the harness reports usage only per turn or per run (Codex): those\nrows do not say how many model calls a turn made."
+          },
+          "tokens": {
+            "$ref": "#/components/schemas/SessionTokens"
+          },
+          "model_cost_usd": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Model spend. `null` when the session's environment version uses a\nVeri deployment: those calls bill through the deployment (GPU time),\nand the harness's figure is an Anthropic list-price guess keyed by its\nown model alias, wrong for that model (VS-498). For an external\nendpoint, the harness estimate (same as `harness_estimated_cost_usd`).\nNever what Veri bills: that is `total_cost_usd` on the session."
+          },
+          "harness_estimated_cost_usd": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Claude Code's own cost estimate (`total_cost_usd`, else the sum of\n`model_usage[*].cost_usd`) for an external endpoint; `null` for a Veri\ndeployment. The harness reports a running total per process, so this\nis the last figure of each harness process, summed."
+          },
+          "permission_denials": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Tool calls the harness refused for lack of permission."
+          },
+          "approvals": {
+            "$ref": "#/components/schemas/SessionApprovals"
+          },
+          "tool_calls": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Billable third-party tool executions (Composio): the session's\n`tool_calls`."
           }
         }
       },
@@ -20634,6 +22953,416 @@
           },
           "has_more": {
             "type": "boolean"
+          }
+        }
+      },
+      "TriggerCreateRequest": {
+        "type": "object",
+        "required": [
+          "kind",
+          "prompt"
+        ],
+        "properties": {
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Display name, at most 64 characters."
+          },
+          "kind": {
+            "type": "string",
+            "description": "`cron` or `webhook`."
+          },
+          "cron": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "cron: a five-field POSIX cron expression (minute granularity; weekdays\n0-6 = Sunday-Saturday) or an @nickname (@hourly, @daily, ...)."
+          },
+          "timezone": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "cron: IANA time zone the expression is read in (default UTC)."
+          },
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "webhook: `github`, `gitlab` or `custom` (Standard Webhooks; default)."
+          },
+          "prompt": {
+            "type": "string",
+            "description": "The message each firing sends. `{{payload}}` = the webhook body as JSON\n(at most 16 KiB), `{{.a.b}}` = one field of it; missing fields render\nempty. Cron firings have no payload."
+          },
+          "session_mode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`fresh` (default): a new session per firing, ended when the run\ncompletes. `reuse`: wake `reuse_session_id`, send, pause it again."
+          },
+          "reuse_session_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "budget_usd": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Spend ceiling per fresh session in USD (default 2.00)."
+          },
+          "output": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TriggerOutput",
+                "description": "Where results go besides `trigger.execution.*` webhooks (default none)."
+              }
+            ]
+          }
+        }
+      },
+      "TriggerExecutionResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "id",
+          "trigger_id",
+          "kind",
+          "status",
+          "created_at"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "trigger_id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "description": "What fired it: cron | webhook | manual"
+          },
+          "status": {
+            "type": "string",
+            "description": "pending | running | succeeded | failed | cancelled"
+          },
+          "delivery_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The provider's delivery id (webhook-id, X-GitHub-Delivery,\nX-Gitlab-Event-UUID); a second delivery with the same id is ignored."
+          },
+          "session_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "failure_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "payload_excerpt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The first 4 KiB of the webhook body."
+          },
+          "result_excerpt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The first 2 KiB of the run's last agent message."
+          },
+          "output_error": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Set when the Slack output (or the session teardown) failed."
+          },
+          "started_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "finished_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "TriggerOutput": {
+        "type": "object",
+        "description": "Where a finished firing's result goes besides the outbox (which always\ncarries `trigger.execution.*` to the workspace's subscribed endpoints):\n`none`, `webhook` (outbox only) or `slack` (incoming webhook URL).\n`email` is coming soon: refused with 400 until email delivery launches.",
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "none | webhook | slack"
+          },
+          "target": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "slack: the `https://hooks.slack.com/...` URL (masked on read). Absent\nfor none and webhook."
+          }
+        }
+      },
+      "TriggerResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "id",
+          "environment_id",
+          "kind",
+          "session_mode",
+          "prompt",
+          "budget_usd",
+          "output",
+          "status",
+          "consecutive_failures",
+          "created_by",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "environment_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "description": "cron | webhook"
+          },
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "webhook: github | gitlab | custom"
+          },
+          "cron": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "timezone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "session_mode": {
+            "type": "string",
+            "description": "fresh | reuse"
+          },
+          "reuse_session_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "budget_usd": {
+            "type": "number",
+            "format": "double"
+          },
+          "output": {
+            "$ref": "#/components/schemas/TriggerOutput",
+            "description": "Slack URLs are masked."
+          },
+          "status": {
+            "type": "string",
+            "description": "active | paused"
+          },
+          "paused_reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Why the trigger is paused, when it was not paused by hand (five\nconsecutive failures, a deleted environment, ...)."
+          },
+          "consecutive_failures": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "next_fire_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "cron: when it fires next (absent while paused)."
+          },
+          "webhook_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "webhook: the URL to give the provider."
+          },
+          "secret": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "webhook: the signing secret. Returned ONLY by create and\nrotate-secret; store it then."
+          },
+          "previous_secret_expires_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "webhook: until when the previous secret still verifies (rotation\ngrace)."
+          },
+          "last_execution": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TriggerExecutionResponse"
+              }
+            ]
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "TriggerRunRequest": {
+        "type": "object",
+        "properties": {
+          "payload": {
+            "description": "Rendered into the prompt like a webhook body."
+          }
+        }
+      },
+      "TriggerUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cron": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "timezone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "prompt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "session_mode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reuse_session_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "budget_usd": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "output": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/TriggerOutput"
+              }
+            ]
+          },
+          "kind": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Immutable: accepted only when unchanged."
+          },
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Immutable: accepted only when unchanged."
           }
         }
       },

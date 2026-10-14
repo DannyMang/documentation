@@ -1,0 +1,143 @@
+---
+title: "Tools"
+description: "Give a managed agent third-party apps through Composio and Veri's own GPU tools, without putting a credential in the sandbox"
+keywords: ["agents", "tools", "composio", "mcp", "github", "slack", "connected accounts", "veri mcp", "session key"]
+---
+
+<Note>
+Coming soon. Agent tools are not available yet. Until they launch, an environment with a `tools` block is rejected with `400` (`Agent tools (tools) are not currently enabled.`) and the Composio routes below answer `400`.
+</Note>
+
+## Overview
+
+An environment's `tools` block adds two MCP servers to the harness, both managed by Veri:
+
+- **`tools.composio`**: third-party apps (GitHub, Slack, Gmail, Notion, Linear, Google Calendar and hundreds more) through [Composio](https://composio.dev), acting as the accounts your workspace connected.
+- **`tools.veri`**: Veri itself, through the hosted Veri MCP, so the agent can launch training jobs and deployments in your workspace.
+
+```toml environment.toml
+kind = "environment"
+name = "triage"
+
+[model]
+deployment_id = "1a2b3c4d5e6f"
+
+[tools]
+veri = true
+
+[tools.composio]
+toolkits = ["github", "slack"]
+```
+
+Neither server's credential ever enters the sandbox. The harness's MCP config holds placeholders; the sandbox's egress proxy replaces each placeholder with the real value only on requests to the one host it belongs to (the same mechanism as [scoped secrets](/secrets)).
+
+## Composio tools
+
+### Connect accounts
+
+Accounts belong to the **workspace**: connect GitHub once and every session whose environment lists `github` can use it. Connect from **Settings, Integrations** in the dashboard, or:
+
+```bash
+veri integrations composio connect github   # prints a Connect Link (expires in about 10 minutes)
+veri integrations composio list             # toolkit, status (ACTIVE = usable), id
+veri integrations composio disconnect ca_1a2b3c
+```
+
+```python
+from veri_sdk import Client
+
+client = Client()
+link = client.integrations.composio.connect("github")
+print(link["redirect_url"])                 # open it and authorize
+client.integrations.composio.list()         # [{"id": "ca_...", "toolkit": "github", "status": "ACTIVE", ...}]
+```
+
+The REST routes are `POST /v1/integrations/composio/{toolkit}/connect` (optional `callback_url`, where Composio sends the browser afterwards), `GET /v1/integrations/composio` and `DELETE /v1/integrations/composio/{account_id}`. Composio stores the OAuth grants; Veri stores nothing. Disconnecting also revokes the grant with the provider.
+
+An agent can also hand the user a Connect Link mid-conversation (the `COMPOSIO_MANAGE_CONNECTIONS` tool); the account it creates belongs to the workspace like any other.
+
+### What the agent sees
+
+Each session gets its own Composio session, scoped to your workspace's accounts and filtered by the environment. The harness sees one MCP server, `composio`, with Composio's meta-tools:
+
+| Tool | What it does |
+| --- | --- |
+| `COMPOSIO_SEARCH_TOOLS` | Find app tools for a task (searches only the toolkits you allowed). |
+| `COMPOSIO_GET_TOOL_SCHEMAS` | Read a tool's input schema. |
+| `COMPOSIO_MULTI_EXECUTE_TOOL` | Run one or more app tools (`GITHUB_CREATE_ISSUE`, `SLACK_SEND_MESSAGE`, ...). |
+| `COMPOSIO_MANAGE_CONNECTIONS` | Check connections and produce a Connect Link for a missing one. |
+
+`toolkits = ["composio_search"]` gives web search and page fetching with no account to connect.
+
+### Filters
+
+Every app tool runs through `COMPOSIO_MULTI_EXECUTE_TOOL`, so a permission rule such as `mcp__composio__*` can only allow or deny Composio as a whole. Per-app policy goes in `tools.composio`, which Composio enforces:
+
+```toml
+[tools.composio]
+toolkits = ["github", "slack"]             # allowlist (required, up to 32)
+
+[tools.composio.tools.github]
+enable = ["GITHUB_GET_A_REPOSITORY", "GITHUB_CREATE_AN_ISSUE"]   # or disable = [...]
+
+[tools.composio.tags]
+disable = ["destructiveHint"]              # readOnlyHint, destructiveHint, idempotentHint, openWorldHint
+```
+
+| Field | Meaning |
+| --- | --- |
+| `toolkits` | Toolkit slugs the agent may use. |
+| `tools.<toolkit>` | Exactly one of `enable` (only these tools) or `disable` (all but these) for a toolkit listed in `toolkits`. |
+| `tags` | `enable` keeps only tools carrying one of the tags; `disable` drops tools carrying any. |
+| `workbench` | `true` adds Composio's remote code execution (`COMPOSIO_REMOTE_WORKBENCH`, `COMPOSIO_REMOTE_BASH_TOOL`). Default `false`: the sandbox is where code runs. |
+
+With `workbench` off, Composio does not offer the two remote-execution tools and the harness also gets deny rules for `mcp__composio__COMPOSIO_REMOTE_BASH_TOOL` and `mcp__composio__COMPOSIO_REMOTE_WORKBENCH`, which an `allow` rule in `permissions` cannot override.
+
+### How the credential stays out
+
+Composio's session endpoint takes Veri's Composio key in an `x-api-key` header. The sandbox's `.mcp.json` carries a placeholder in that header, bound to `backend.composio.dev` and to the session's own MCP path; the egress proxy swaps it only on requests to that endpoint and refuses to send it anywhere else, other Composio paths included. An agent that reads its own config, or is talked into sending the header elsewhere, only ever holds the placeholder.
+
+If Composio is unavailable when a session starts, the start fails with `502` (`composio_unavailable`) rather than run without the tools the environment promised. The Composio session is deleted when the Veri session ends.
+
+### Pricing
+
+Composio tool calls are billed per execution: every app tool the agent runs through `COMPOSIO_MULTI_EXECUTE_TOOL` counts once, so one call that runs three tools counts three. Searching, reading schemas and managing connections (`COMPOSIO_SEARCH_TOOLS`, `COMPOSIO_GET_TOOL_SCHEMAS`, `COMPOSIO_MANAGE_CONNECTIONS`) are free, and a call that Composio answers with an error status is not counted.
+
+| | Default |
+| --- | --- |
+| Price | $1.00 per 1,000 tool calls |
+| Free each month | 5,000 tool calls per workspace (calendar month, UTC), used before any charge |
+| Cap per session | 2,000 tool calls |
+
+These are configurable defaults and the price is not final until Composio tools launch. The price is fixed when a session is created and returned as `tool_call_usd_per_1k`; the session's running count is `tool_calls` (also in its `usage` summary). Tool calls are settled with the session's other charges and draw from the same credit balance. Each metered call also appears in the [transcript](/agents/sessions#transcript) as a `usage` event with `scope: "tool_call"` and its `count`.
+
+A session pauses when its `tool_calls` reach the cap: a run in progress is interrupted, the transcript records `session.tool_call_cap_reached {tool_calls, cap}` and `failure_code` reads `tool_call_cap`. Resuming does not reset the count, so a resumed session pauses again at its next report; start a new session to keep using tools. Contact us to raise the cap.
+
+What the agent launches through `tools.veri` (training jobs, deployments) is billed like any other job or deployment, not as tool calls.
+
+## Veri tools
+
+`tools.veri = true` mints a **session key** for each session: a key that lives as long as the session (valid 24 hours at a time and renewed while the session is awake, at most 7 days) and is revoked when it ends or fails. The harness reaches the hosted Veri MCP (`https://api.veri.studio/mcp`) with it as a bearer placeholder, bound to `api.veri.studio`.
+
+A session key can:
+
+- read who it is (`GET /v1/me`), the GPU catalog, cost estimates and regions;
+- list, create, read, follow the logs of and cancel **training jobs**;
+- list, create, read, stop, wake and delete **deployments**, and call their inference routes;
+- list, create and read **datasets**; list and read **models**.
+
+Everything else (API keys, secrets, environments, sessions, billing, workspace and member settings, integrations, webhooks) answers `403` with code `session_key_scope`. Once the session has reached its `budget_usd`, creating a training job or a deployment (or waking one) answers `402` with code `session_budget_exhausted`; reads keep working. What the agent launches is billed to the workspace like any other job or deployment; the session budget covers the sandbox's own time.
+
+## Your own MCP servers
+
+[`mcp_servers`](/agents/environments#fields) still takes any streamable-HTTP MCP server. Its `secret` is sent as `Authorization: Bearer <value>`; set `header` to send it in another header as the raw value, for servers that authenticate with an API-key header:
+
+```toml
+[[mcp_servers]]
+name = "tools"
+url = "https://mcp.example.com/mcp"
+secret = "TOOLS_KEY"
+header = "x-api-key"
+```
+
+The names `composio` and `veri` are reserved for the servers above while those tools are on.

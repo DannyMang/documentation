@@ -1,0 +1,204 @@
+---
+title: "Triggers"
+description: "Run an agent on a schedule or when a webhook arrives: cron and webhook triggers, signatures, prompt templates, results"
+keywords: ["agents", "triggers", "cron", "schedule", "webhook", "github", "gitlab", "standard webhooks", "automation", "unattended"]
+---
+
+## Overview
+
+A trigger starts agent [sessions](/agents/sessions) without anyone at the keyboard: on a cron schedule, or when GitHub, GitLab or any service that signs its webhooks posts to the trigger's URL. Each firing renders the trigger's prompt, runs it in a session on the [environment](/agents/environments)'s latest version, and records the outcome as an **execution**.
+
+```bash
+# Every Monday at 09:00 New York time
+veri triggers create --environment 3f9c2a7b1d40 --cron "0 9 * * 1" --timezone America/New_York \
+  --prompt "Check the repository for outdated dependencies and summarize what to upgrade." \
+  --slack https://hooks.slack.com/services/T000/B000/XXXX
+
+# On every GitHub pull request event
+veri triggers create --environment 3f9c2a7b1d40 --webhook github \
+  --prompt "Review pull request #{{.number}}: {{.pull_request.title}}. Summarize the risky changes."
+# trigger 8a1b2c3d4e5f created (webhook, active)
+#   hook URL:    https://api.veri.studio/v1/hooks/8a1b2c3d4e5f
+#   secret:      whsec_...   (shown only now)
+
+veri triggers list --environment 3f9c2a7b1d40
+veri triggers executions 8a1b2c3d4e5f
+veri triggers run 8a1b2c3d4e5f --payload '{"number": 7, "pull_request": {"title": "Fix it"}}'
+veri triggers pause 8a1b2c3d4e5f
+veri triggers resume 8a1b2c3d4e5f
+veri triggers rotate-secret 8a1b2c3d4e5f --grace 300
+veri triggers delete 8a1b2c3d4e5f
+```
+
+```python
+from veri_sdk import Client
+
+client = Client()
+t = client.triggers.create(
+    "3f9c2a7b1d40",
+    webhook="github",
+    prompt="Review pull request #{{.number}}: {{.pull_request.title}}",
+    output={"kind": "slack", "target": "https://hooks.slack.com/services/T000/B000/XXXX"},
+)
+print(t["webhook_url"], t["secret"])  # the secret is returned only here and by rotate_secret
+
+for e in client.triggers.executions(t["id"]):
+    print(e["status"], e["session_id"], e.get("failure_reason"), e.get("result_excerpt"))
+```
+
+## How a firing runs
+
+1. The firing is recorded as a `pending` execution. A webhook delivery gets `202 {"execution_id": ...}` right away; the session is never started inside the request.
+2. A session starts on the environment's **latest** version (`fresh` mode) or the bound session wakes up (`reuse` mode).
+3. Once the session is `ready`, the rendered prompt is sent and the execution is `running`.
+4. When the run completes, the execution is `succeeded` (or `failed` when the run errored or was interrupted). A `fresh` session is then **ended**, so it stops billing and frees its slot under your workspace's [concurrent session limit](/agents/sessions); a `reuse` session is paused again.
+5. The result goes to the trigger's output and to your [webhook endpoints](/webhooks) subscribed to `trigger.execution.succeeded` or `trigger.execution.failed`.
+
+| Execution status | Meaning |
+| --- | --- |
+| `pending` | Recorded; the session is starting or waking. |
+| `running` | The prompt was sent; the agent is working. |
+| `succeeded` | The run completed. `result_excerpt` holds the first 2 KiB of the agent's last message. |
+| `failed` | `failure_reason` says why (see [Failures](#failures)). |
+| `cancelled` | A cron firing skipped because the previous firing of the same trigger was still pending or running. |
+
+Every execution keeps its `session_id`, so you can open the session to read the full transcript.
+
+## Session modes
+
+| Mode | Each firing | Use it for |
+| --- | --- | --- |
+| `fresh` (default) | Starts a new session with the trigger's `budget_usd` (default $2.00) and ends it when the run completes. | Independent jobs: reviews, reports, triage. |
+| `reuse` | Resumes `reuse_session_id` if it is paused (or uses it if it is idle), sends the prompt, and pauses it again. The workspace and conversation carry over between firings. | An agent that should remember earlier runs. |
+
+A `reuse` session keeps its own budget. A paused session still counts toward the concurrent session limit, so a `reuse` trigger holds one slot permanently; prefer `fresh` when your limit is small.
+
+## Cron triggers
+
+`cron` is a five-field POSIX expression: minute, hour, day of month, month, day of week (`0`-`6` start on Sunday; `7` is Sunday too; `MON`-`SUN` and `JAN`-`DEC` work). `@hourly`, `@daily`, `@weekly`, `@monthly` and `@yearly` are accepted. `timezone` is an IANA name (default `UTC`); the expression is read on that zone's wall clock, so a daylight-saving jump skips a time that does not exist that day and fires a repeated time once.
+
+- Minute granularity, and at most one firing every **5 minutes**: an expression whose closest two occurrences are less than 300 seconds apart is refused (`cron_too_frequent`).
+- Firings start up to 30 seconds after the scheduled minute (jitter spreads load).
+- Missed firings are not replayed: after a pause, or while a firing is still in flight, the schedule simply continues from now.
+- Cron firings have no payload: `{{payload}}` and `{{.field}}` render empty.
+
+## Webhook triggers
+
+A webhook trigger has a URL, `https://api.veri.studio/v1/hooks/{trigger_id}`, and a signing secret (`whsec_...`) that is returned **once**, by create and by rotate-secret. Store it in your sender's settings. Deliveries without a valid signature are refused with `401`. Bodies are capped at 1 MiB and each trigger accepts 60 deliveries a minute.
+
+| `provider` | Signature | Deduplicated on |
+| --- | --- | --- |
+| `github` | `X-Hub-Signature-256: sha256=<hex HMAC-SHA256 of the raw body>`. In GitHub, set **Payload URL** to the hook URL, **Content type** to `application/json` (form-encoded works too) and **Secret** to the trigger's secret. | `X-GitHub-Delivery` |
+| `gitlab` | Standard Webhooks signing headers when present, otherwise `X-Gitlab-Token` must equal the secret. In GitLab, paste the secret as the webhook's **Secret token**. | `webhook-id`, else `X-Gitlab-Event-UUID` |
+| `custom` (default) | [Standard Webhooks](https://www.standardwebhooks.com): `webhook-id`, `webhook-timestamp` (within 5 minutes) and `webhook-signature: v1,<base64 HMAC-SHA256 of "{id}.{timestamp}.{body}">`, keyed with the base64-decoded part of the secret after `whsec_`. This is the same scheme Veri signs its own [webhooks](/webhooks#verifying-deliveries) with, so any Standard Webhooks library can sign. | `webhook-id` |
+
+Signing a `custom` delivery in Python:
+
+```python
+import base64, hashlib, hmac, json, time, uuid
+import httpx
+
+secret = "whsec_..."            # from create / rotate-secret
+body = json.dumps({"word": "TRIGGERED"})
+msg_id, ts = f"msg_{uuid.uuid4().hex}", str(int(time.time()))
+key = base64.b64decode(secret.removeprefix("whsec_"))
+sig = base64.b64encode(hmac.new(key, f"{msg_id}.{ts}.{body}".encode(), hashlib.sha256).digest()).decode()
+httpx.post(
+    "https://api.veri.studio/v1/hooks/8a1b2c3d4e5f",
+    content=body,
+    headers={"content-type": "application/json", "webhook-id": msg_id,
+             "webhook-timestamp": ts, "webhook-signature": f"v1,{sig}"},
+)
+```
+
+Responses:
+
+| Status | Body | Meaning |
+| --- | --- | --- |
+| `202` | `{"execution_id": "..."}` | Recorded; the firing runs shortly. |
+| `200` | `{"duplicate": true}` | This delivery id was already received (redeliveries are safe to retry). |
+| `401` | | The signature, timestamp or token did not verify. |
+| `409` | `{"error": {"code": "trigger_busy"}}` | The previous firing of this trigger is still pending or running. Nothing was recorded, so redeliver it later. |
+| `409` | `{"error": {"code": "trigger_paused"}}` | The trigger is paused. |
+| `429` | | More than 60 deliveries in a minute. |
+
+### Rotating the secret
+
+`veri triggers rotate-secret <id> [--grace SECONDS]` (or `POST /v1/triggers/{id}/rotate-secret {"grace_s": 300}`) returns a new secret. The previous one keeps verifying for `grace_s` seconds (default 300, at most 3600) so deliveries already in flight still land; `0` revokes it at once if it leaked.
+
+## Prompt templates
+
+| Placeholder | Renders |
+| --- | --- |
+| `{{payload}}` | The whole webhook body as compact JSON (at most 16 KiB). |
+| `{{.a.b}}` | One field by path; array items by index, `{{.commits.0.id}}`. Strings render as-is, objects as JSON. |
+
+A missing field renders as an empty string. Any other `{{...}}` is left as written. `veri triggers run <id> --payload '{...}'` renders a test payload the same way.
+
+## Outputs
+
+Every finished execution fires `trigger.execution.succeeded` or `trigger.execution.failed` to the workspace's [webhook endpoints](/webhooks) that subscribe to it, with `id`, `trigger_id`, `environment_id`, `kind`, `session_id`, `status`, `failure_reason` and `result_excerpt`. The trigger's `output` adds one more destination:
+
+| `output.kind` | `output.target` | Result |
+| --- | --- | --- |
+| `none` (default) | | Executions list and webhooks only. |
+| `webhook` | | Same as `none`; marks the trigger as delivering through your webhook endpoints. |
+| `slack` | A Slack incoming webhook URL (`https://hooks.slack.com/...`) | A message with the status, the session link and the result excerpt. The URL is masked when the trigger is read back. |
+
+## Guardrails
+
+- **No approvals.** A triggered session runs with nobody to answer an `ask` [permission rule](/agents/environments#permissions), so a trigger cannot be created on an environment whose latest version uses `ask` (`400 ask_not_allowed`), and while an environment has triggers a new version that asks is refused the same way. A `reuse` session runs the version it was started on, so that version must not ask either. Use `allow` with targeted `deny` rules, or `default = "deny"` with targeted `allow` rules.
+- **Budget per session.** Each `fresh` session gets the trigger's `budget_usd` (default $2.00) and pauses itself when it reaches it, which fails the execution.
+- **No overlap.** One firing per trigger at a time.
+- **Concurrent session limit.** A `fresh` firing that finds the workspace at its session limit retries for up to 3 minutes, then fails with `concurrent_session_limit`. A `reuse` firing that finds its session busy waits up to 3 minutes, then fails with `session_busy`.
+- **Balance.** A firing in a workspace whose credit balance is exhausted fails at once with `insufficient_balance` instead of starting a sandbox.
+- **Timeout.** A run still going after 1 hour fails with `timeout` and its `fresh` session is ended.
+- **Auto-pause.** Five failed executions in a row pause the trigger (`paused_reason` says so); a success resets the count, and `resume` resets it too.
+- **Limits.** 10 active triggers per workspace. Executions are kept for 30 days (also the window in which a provider redelivery is recognized as a duplicate).
+- **Deleting.** Deleting an environment pauses its triggers. Deleting a trigger deletes its executions and ends a `fresh` session still running for it.
+
+## Failures
+
+| `failure_reason` | Meaning |
+| --- | --- |
+| `concurrent_session_limit` | The workspace stayed at its session limit for 3 minutes. |
+| `insufficient_balance` | The workspace's credit balance is exhausted. |
+| `session_busy` | The `reuse` session was busy with another run for 3 minutes. |
+| `reuse_session_gone` | The `reuse` session ended or failed; the trigger is paused. |
+| `environment_not_found` | The environment was deleted; the trigger is paused. |
+| `environment_uses_ask` | The environment's latest version asks for approval; the trigger is paused. |
+| `run_error: <reason>` | The agent's run ended in an error. |
+| `run_interrupted` | The run was interrupted. |
+| `session_paused: budget_exhausted` | The session reached its budget. |
+| `session_failed: <code>` | The sandbox failed (see the session's `failure_code`). |
+| `session_not_ready` | The sandbox did not start within 15 minutes. |
+| `timeout` | The run took longer than 1 hour. |
+
+## API
+
+| Method | Path | |
+| --- | --- | --- |
+| `POST` | `/v1/environments/{env_id}/triggers` | Create (returns the secret for a webhook trigger) |
+| `GET` | `/v1/environments/{env_id}/triggers` | List, each with its last execution |
+| `GET` / `PATCH` / `DELETE` | `/v1/triggers/{id}` | Read (never the secret), update (`kind` and `provider` are fixed), delete |
+| `POST` | `/v1/triggers/{id}/pause`, `/resume` | Stop or restart firing |
+| `POST` | `/v1/triggers/{id}/rotate-secret` | New secret, `{"grace_s": 0..3600}` |
+| `POST` | `/v1/triggers/{id}/run` | Fire now (also while paused), optional `{"payload": {...}}`; `202` with the execution |
+| `GET` | `/v1/triggers/{id}/executions` | Executions, newest first (`?status=`, `?limit=`) |
+| `POST` | `/v1/hooks/{id}` | The inbound webhook (signature-authenticated, no API key) |
+
+Create body:
+
+```json
+{
+  "name": "pr-review",
+  "kind": "webhook",
+  "provider": "github",
+  "prompt": "Review pull request #{{.number}}: {{.pull_request.title}}",
+  "session_mode": "fresh",
+  "budget_usd": 2.0,
+  "output": {"kind": "slack", "target": "https://hooks.slack.com/services/T000/B000/XXXX"}
+}
+```
+
+A cron trigger sends `"kind": "cron", "cron": "0 9 * * 1", "timezone": "America/New_York"` instead of `provider`; a `reuse` trigger adds `"session_mode": "reuse", "reuse_session_id": "..."`.

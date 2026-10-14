@@ -1,0 +1,123 @@
+---
+title: "Bring your own agent"
+description: "Run your LangGraph graph or CrewAI crew in a Veri session: repository layout, entry, requirements, the model and egress"
+keywords: ["agents", "langgraph", "crewai", "python", "repository", "requirements", "byo agent"]
+---
+
+## Overview
+
+With `harness = "langgraph"` or `harness = "crewai"` a session runs your own Python agent against a Veri model. Point the environment at a git repository and the entry to load; Veri clones it into the sandbox, installs its requirements, and turns each message into one run whose messages, tool calls and token usage land in the session transcript. Everything else (egress rules, secrets, MCP servers, checkpoints, pause and resume) works as for every other [harness](/agents/harnesses).
+
+## LangGraph
+
+A repository in the layout `langgraph dev` uses works as is:
+
+```text
+support/
+  langgraph.json          {"graphs": {"support": "./src/support/graph.py:graph"}, "dependencies": ["."]}
+  requirements.txt        extra packages (LangGraph and langchain-openai are preinstalled)
+  src/support/graph.py    defines `graph`
+```
+
+```python src/support/graph.py
+from langgraph.graph import START, MessagesState, StateGraph
+import veri_pyagent
+
+model = veri_pyagent.chat_model()   # or ChatOpenAI(model=os.environ["VERI_MODEL_NAME"])
+
+def answer(state: MessagesState):
+    return {"messages": [model.invoke(state["messages"])]}
+
+builder = StateGraph(MessagesState)
+builder.add_node("answer", answer)
+builder.add_edge(START, "answer")
+graph = builder.compile()
+```
+
+```toml environment.toml
+kind = "environment"
+name = "support-graph"
+harness = "langgraph"
+
+[model]
+deployment_id = "1a2b3c4d5e6f"
+
+[agent]
+repo = { url = "https://github.com/acme/agents", ref = "v1.2.0", subdir = "support" }
+entry = "support"
+```
+
+`entry` is a graph id from `langgraph.json`, or a path and attribute directly (`src/support/graph.py:graph`, `support.graph:graph`). The attribute can be a compiled graph, a `StateGraph`, or a function (sync or async) that returns one. Veri compiles or recompiles it with its own checkpointer, so the conversation (the thread named after the session id) survives pauses and resumes and is copied into each fork. The graph's input state should have a `messages` key; each message you send is added to it.
+
+## CrewAI
+
+```text
+crews/
+  requirements.txt
+  support_crew/__init__.py
+  support_crew/crew.py    defines `build()` (or a @CrewBase class)
+```
+
+```python support_crew/crew.py
+from crewai import Agent, Crew, Task
+import veri_pyagent
+
+def build() -> Crew:
+    agent = Agent(role="Support engineer", goal="Answer the customer", backstory="...",
+                  llm=veri_pyagent.crewai_llm(), mcps=veri_pyagent.mcp_servers() or None)
+    task = Task(description="Earlier turns:\n{history}\n\nCustomer: {message}",
+                expected_output="The reply to the customer", agent=agent)
+    return Crew(agents=[agent], tasks=[task])
+```
+
+```toml environment.toml
+kind = "environment"
+name = "support-crew"
+harness = "crewai"
+
+[model]
+deployment_id = "1a2b3c4d5e6f"
+
+[agent]
+repo = { url = "https://github.com/acme/agents", ref = "main", subdir = "crews" }
+entry = "support_crew.crew:build"
+```
+
+`entry` is `package.module:attribute`: a `Crew`, a function returning one (called again for every message, so each run starts fresh), or a `@CrewBase` class. Each run's inputs are `{"message": ..., "history": ...}`; the history is the session's earlier turns as text, so a crew can hold a conversation. Task outputs become `agent.message` events, one per task.
+
+## Requirements and the sandbox
+
+- The repository is cloned into `/workspace/agent` at the first message (`ref` is a branch, tag or commit; `subdir` is the agent's directory). The repository must be public for now: private repositories need [GitHub access](/agents/session-ops#github-access), which is coming soon.
+- `agent.requirements` (default: `requirements.txt` in the agent directory, when present) and, for LangGraph, the package names in `langgraph.json` `dependencies` are installed into `/workspace/.veri/venv`, on top of the preinstalled LangGraph, langchain-openai, langchain-mcp-adapters and CrewAI. The agent directory and its `src/` are importable.
+- A fetch, install or import that fails ends the first turn and fails the session with an `error` whose `source` is `harness_setup`; its message has the git, pip or Python error.
+- Everything lives under `/workspace`, so a resumed, rolled-back or forked session neither clones nor installs again.
+- Without `agent.repo`, `entry` names files already under `/workspace`, for example ones you uploaded with the [session files API](/agents/session-ops) before the first message. Without an `[agent]` block at all, Veri's built-in example agent runs.
+- What your code prints goes to the harness log, not the transcript.
+
+## The model
+
+The environment's model is wired in for both frameworks, and for code that reads the usual variables:
+
+| Variable | Value |
+| --- | --- |
+| `OPENAI_BASE_URL`, `VERI_MODEL_BASE_URL` | the model's OpenAI-compatible base URL (for a Veri deployment, `https://api.veri.studio/v1/deployments/<id>`) |
+| `OPENAI_API_KEY`, `VERI_MODEL_KEY` | a placeholder: the real key is added at the egress edge, on requests to the model host only |
+| `VERI_MODEL_NAME` | `model.name`, or the deployment id |
+
+`veri_pyagent.chat_model()` (a LangChain `ChatOpenAI`) and `veri_pyagent.crewai_llm()` (a `crewai.LLM`) return models already set up, with an output budget that fits the deployment's served context. Keyword arguments you pass override the defaults.
+
+## Tools, MCP and permissions
+
+- Your graph's or crew's own tools run as written. Veri sees their calls and results in the transcript but does not govern them.
+- The environment's MCP servers: `await veri_pyagent.mcp_tools()` (LangChain tools) or `veri_pyagent.mcp_servers()` (for `crewai.Agent(mcps=...)`). Their credentials are placeholders too. For `crewai`, address each MCP server by hostname, not IP address.
+- Permission rules apply to those MCP tools only: `mcp`, `mcp.<server>` and `mcp.<server>.<tool>`, last match wins, with `default = "allow"`. A denied tool is never handed to your agent. Shell, file and web rules are refused, and so is `ask`.
+
+## Egress
+
+The session reaches only what its egress rules allow, so plan for every host your agent calls:
+
+- The repository's host is allowed automatically, for git's requests on that repository's path.
+- PyPI (`pypi.org`, `files.pythonhosted.org`) and GitHub are allowed by the default `coding` preset. With `egress_preset = "locked_down"`, add them as `egress_rules` if you have requirements to install.
+- Any other API your tools call needs an `allowed_hosts` entry or an `egress_rules` rule, and a secret scoped to its host for credentials.
+
+Egress rules and secret scoping are the boundary for everything your code does; see [Environments](/agents/environments).

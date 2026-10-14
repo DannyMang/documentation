@@ -1,18 +1,21 @@
 ---
 title: "Sessions"
-description: "Run a managed agent: send messages, stream the transcript, pause, resume, end"
-keywords: ["agents", "sessions", "claude code", "sse", "transcript", "pause", "resume"]
+description: "Run a managed agent: send messages, stream the transcript, pause, resume, checkpoint, fork, roll back, end"
+keywords: ["agents", "sessions", "claude code", "sse", "transcript", "pause", "resume", "checkpoint", "fork", "rollback"]
 ---
 
 ## Overview
 
-A session is one running agent, started from an [environment](/agents/environments). The harness runs unmodified inside an isolated sandbox. You send messages, the agent works, and every step lands in an ordered transcript you can read back or stream live.
+A session is one running agent, started from an [environment](/agents/environments). The harness runs unmodified inside an isolated sandbox. You send messages, the agent works, and every step lands in an ordered transcript you can read back or stream live. To work in the sandbox yourself (run a command, copy files, open a shell, expose a port), see [Session ops](/agents/session-ops).
 
 ```bash
 veri sessions create 3f9c2a7b1d40 --title "fix the flaky test" --budget 5
 veri sessions send 9f8e7d6c5b4a "Find why tests/test_queue.py is flaky and fix it" --follow
 veri sessions pause 9f8e7d6c5b4a
 veri sessions resume 9f8e7d6c5b4a
+veri sessions checkpoint 9f8e7d6c5b4a --label "deps installed"
+veri sessions fork 9f8e7d6c5b4a --count 2
+veri sessions rollback 9f8e7d6c5b4a 4c1d2e3f5a6b
 veri sessions delete 9f8e7d6c5b4a
 ```
 
@@ -29,20 +32,104 @@ for ev in client.sessions.stream(s["id"]):
         break
 ```
 
+## Sandbox
+
+Claude Code and `custom` sessions run in the same sandbox image: Debian 12 with
+
+- Python 3.11 with `pip` (also `pip3`), `venv` and `pipx`; `python` runs `python3`
+- Node.js 22 with `npm` and `npx`
+- git, curl, ripgrep (`rg`), jq, unzip, procps
+- a C/C++ toolchain (gcc, g++, make) and the Python headers, so packages without a prebuilt wheel still install
+
+The agent runs as the unprivileged user `agent` (no `sudo`), with `HOME=/home/agent` and `/workspace` as its working directory. `pip install <package>` installs into the user's site directory (`~/.local`); for an isolated environment use `python3 -m venv .venv`. `npm install -g` needs root, so install into the project (`npm install`, `npx`) instead. OpenCode, Codex, LangGraph and CrewAI sessions run in their own images (see [Harnesses](/agents/harnesses)); the LangGraph and CrewAI one is Python 3.12 with both frameworks preinstalled (see [Bring your own agent](/agents/python-agents)).
+
+Package downloads are ordinary egress: `pip` and `npm` traffic goes through the session's [egress rules](/agents/environments#egress) like every other request. The default `coding` preset allows PyPI (`pypi.org`, `files.pythonhosted.org`) and npm (`registry.npmjs.org`); under `locked_down` add them to `allowed_hosts` or `egress_rules` yourself. `pip`, `npm`, git, curl and Python already trust the egress proxy's certificate.
+
+Sessions created before pip was added keep the image they started on (a snapshot only restores on the image it was taken on), and so do forks of them: `pip` is not available there. Start a new session to get it.
+
 ## Lifecycle
 
 | Status | Meaning |
 | --- | --- |
-| `provisioning` | The sandbox is starting (or restoring from a pause). |
+| `provisioning` | The sandbox is starting (or restoring from a pause or a rollback). |
 | `ready` | Idle, waiting for a message. |
 | `running` | The agent is working on your last message. One run at a time. |
-| `paused` | Workspace snapshotted, sandbox stopped. No compute is billed. |
+| `awaiting_approval` | A tool call matched an `ask` [permission rule](/agents/environments#permissions); the turn is parked until you answer. The sandbox is snapshotted and stopped meanwhile, so nothing is billed. See [Approvals](#approvals). |
+| `paused` | Sandbox filesystem snapshotted, sandbox stopped. No compute is billed. See [Pause and resume](#pause-and-resume). |
 | `ended` | You ended it. The transcript stays readable for 30 days. |
 | `failed` | The sandbox or the agent failed terminally. `failure_code` says why. |
 
 Sessions pause themselves after the environment's `idle_timeout_s` without input. Sending a message to a paused session returns `409`; call `resume` first (it takes a few seconds while the workspace is restored).
 
-If the environment's model is a Veri deployment, each session gets a 24-hour [model access key](/secrets#model-access-keys) that can only call that deployment. It is revoked when the session ends.
+Creating a session answers within 90 seconds. If the sandbox is still starting by then, the response is the session in `provisioning` and it keeps starting on its own. The same happens when your client disconnects mid-request, so do not retry a create that timed out: list your sessions (`GET /v1/sessions`) and follow the one it started. A session still `provisioning` 10 minutes after it was created, resumed or rolled back is `failed` with `failure_code` `provisioning_timeout`, and its keys are revoked.
+
+### Pause and resume
+
+A pause snapshots the sandbox's filesystem and stops the sandbox; a resume starts a fresh sandbox from that snapshot. What survives a pause:
+
+- Files under `/workspace` (and anything else the agent wrote to the sandbox's disk).
+- The conversation: the harness resumes its own transcript, so the agent continues where it left off and the Veri transcript keeps its `seq` numbering.
+
+What does not survive:
+
+- Running processes, open ports and background tasks. A dev server or watcher the agent started is gone after resume; the agent has to start it again.
+- Per-session permission grants the agent collected during the run (anything you approved interactively). The environment's `permissions` rules apply as written.
+- Any in-memory state of the harness or its tools.
+
+A snapshot is tied to the agent image version it was taken from and expires 30 days after it was taken or last restored. A session paused longer than that cannot be resumed; its transcript stays readable for the usual retention and you can start a new session from the same environment.
+
+### Checkpoints, forks and rollbacks
+
+A checkpoint is the same snapshot a pause takes, without the stop: the sandbox's filesystem and the agent's position in the conversation, recorded while the session keeps running. From a checkpoint you can fork new sessions or roll the session itself back.
+
+```bash
+veri sessions checkpoint 9f8e7d6c5b4a --label "deps installed"   # -> checkpoint 4c1d2e3f5a6b
+veri sessions checkpoints 9f8e7d6c5b4a
+veri sessions fork 9f8e7d6c5b4a --checkpoint 4c1d2e3f5a6b --count 2 --budget 2
+veri sessions rollback 9f8e7d6c5b4a 4c1d2e3f5a6b
+```
+
+```python
+ck = client.sessions.checkpoint(s["id"], label="deps installed")
+forked = client.sessions.fork(s["id"], checkpoint_id=ck["id"], count=2, budget_usd=2)
+for child in forked["sessions"]:
+    client.sessions.send(child["id"], "Try approach A")   # each child continues the same conversation
+client.sessions.rollback(s["id"], ck["id"])
+```
+
+- **Checkpoint** (`POST /v1/sessions/{id}/checkpoints`, optional `label`): allowed while the session is `ready` or `paused`; `409` during a run or while an approval is pending. Taking one stops the harness for the snapshot (about 20 s per GB of workspace) and relaunches it, so the session cannot take a message meanwhile. A paused session's pause snapshot is recorded as the checkpoint without restarting anything. The transcript gets a `session.checkpoint` event.
+- **Fork** (`POST /v1/sessions/{id}/fork`, `{checkpoint_id?, count, budget_usd?, title?}`): starts `count` (1 to 4) new sessions from the checkpoint; without `checkpoint_id` a fresh checkpoint is taken first. Each child gets the checkpoint's files and the conversation up to that point, then continues it as its own conversation (the agent remembers everything the parent was told). Children are ordinary sessions: they pin the parent's environment version and hourly rate, get their own model access key and their own `budget_usd` (the parent's unless you pass one), are billed per awake hour individually and each takes a slot under the workspace's concurrent-session cap. A fork that does not fit under the cap starts no child (`429 CONCURRENT_SESSION_LIMIT`). Children carry `parent_session_id` and `forked_from_checkpoint_id`; the parent's transcript records `session.forked` with the children's ids. Forking needs a harness that can continue a conversation as a new one (`claude-code`, `opencode`, `codex`); a `custom` harness session returns `409 harness_does_not_support_fork` (see [Harnesses](/agents/harnesses)).
+- **Rollback** (`POST /v1/sessions/{id}/rollback`, `{checkpoint_id}`): puts the session back to the checkpoint in place: same id, same key, same transcript (earlier events stay readable; a `session.rolled_back` event marks the point). Allowed while `ready` or `paused` (`409` during a run or while an approval is pending); the session is `provisioning` until the sandbox is back, like a resume. Rolling back refreshes the checkpoint's expiry.
+
+What a checkpoint carries is exactly what a pause carries: files on the sandbox's disk and the conversation. Running processes, open ports, background tasks and in-memory state are not part of it, in children or after a rollback. A checkpoint belongs to one session (`404` from any other) and expires 30 days after it was taken or last rolled back to; expired checkpoints disappear from the list and cannot be used. Checkpoints cannot be deleted explicitly today.
+
+If the environment's model is a Veri deployment, each session gets a [model access key](/secrets#model-access-keys) that can only call that deployment. It is valid for 24 hours at a time and renewed while the session is awake and when it resumes, up to 7 days after it was issued. It is revoked when the session ends or fails.
+
+### Approvals
+
+When the agent calls a tool whose last matching [permission rule](/agents/environments#permissions) is `ask` (or any tool under `default = "ask"`), the harness stops before the call runs:
+
+1. The transcript gets `agent.approval_request {approval_id, tool_name, tool_input, tool_use_id, matched_rule, expires_at}`, the session becomes `awaiting_approval`, the turn ends with `run.completed {stop_reason: "awaiting_approval"}` and the `session.approval_requested` [webhook](/webhooks) fires (with `approval_id`, `tool_name` and `expires_at`, never the tool input). The sandbox is snapshotted and stopped, so no compute is billed while you think.
+2. You answer with a `user.approval` event: `{type: "user.approval", approval_id, decision: "allow" | "deny", message?}`. `409` unless the session is `awaiting_approval` on that `approval_id`.
+3. The sandbox is restored and the agent's turn continues. On `allow` the tool call runs; on `deny` the agent reads `message` as the reason and carries on without it. The turn ends with its usual `run.completed`.
+
+```bash
+veri sessions stream 9f8e7d6c5b4a            # prints the request and the command to answer it
+veri sessions approve 9f8e7d6c5b4a ap_3c1f allow
+veri sessions approve 9f8e7d6c5b4a ap_3c1f deny --message "not on the production bucket"
+```
+
+```python
+for ev in client.sessions.stream(s["id"]):
+    if ev["type"] == "agent.approval_request":
+        p = ev["payload"]
+        print(p["tool_name"], p["tool_input"])
+        client.sessions.approve(s["id"], p["approval_id"], "allow")
+```
+
+A request that is not answered in time (the environment's [`permissions.approval_ttl_s`](/agents/environments#permissions), 30 minutes by default) is denied automatically: the transcript shows `user.approval {decision: "deny", reason: "timeout", by: "system"}` and the turn resumes with the denial. Sending `user.message` while an approval is pending returns `409`. One approval is open at a time.
+
+You can pause a session that is waiting for an approval. The pause denies the pending approval (the transcript shows `user.approval {decision: "deny", reason: "paused", by}` with your user id) and the tool call never runs. When you resume, the agent first finishes the interrupted turn: the denied call comes back to it as an error `tool.result`, the run completes (`run.completed`), and then the session is `ready`. Send a new message after that (ask the agent to try again if you still want the call). Checkpoint, rollback and a fork without `checkpoint_id` return `409` until the approval is answered or the session is paused.
 
 ## Transcript
 
@@ -52,25 +139,106 @@ If the environment's model is a Veri deployment, each session gets a 24-hour [mo
 | --- | --- |
 | `user.message` | `{text}`, what you sent |
 | `user.interrupt` | you stopped a run; the run ends with `run.completed{stop_reason: "interrupted"}` |
+| `agent.approval_request` | `{approval_id, tool_name, tool_input, tool_use_id, matched_rule, expires_at}`: an `ask` rule stopped a tool call; the session is `awaiting_approval` (see [Approvals](#approvals)) |
+| `user.approval` | `{approval_id, decision, message, by}` with `by` your user id, or `by: "system"` and `reason: "timeout"` when the request expired; `reason: "paused"` when you paused the session while it waited |
 | `agent.message` | `{text}`, the agent's reply |
 | `agent.thinking` | `{text}` |
-| `agent.tool_use` | `{id, name, input}` |
-| `tool.result` | `{tool_use_id, content, is_error}` |
-| `usage` | `{awake_seconds, input_tokens, output_tokens, cache_read_tokens}` |
-| `run.completed` | `{stop_reason}`, the agent finished a turn |
+| `agent.tool_use` | `{id, name, input, kind}`; `kind` is `command`, `file_change`, `mcp`, `web_search`, `todo` or `other` |
+| `tool.result` | `{tool_use_id, content, is_error}`, plus `exit_code` when the harness reports one (OpenCode, custom) |
+| `usage` | `{scope, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens}` per model call as the harness reports it (`scope: "message"`; OpenCode reports per model step, `scope: "step"`), per run (`scope: "run"`), and, for your own model endpoint, per call as read off the model's reply (`scope: "call"`, with `model`, `duration_ms` and `status`); heartbeats are `{scope: "heartbeat", awake_seconds, egress_bytes, load1, mem_bytes, mem_limit_bytes, disk_bytes}` every 60 seconds (`egress_bytes` is the traffic since the previous heartbeat; resource fields are omitted when the sandbox could not read them); with [Composio tools](/agents/tools#pricing), one `{scope: "tool_call", provider: "composio", tool, count, status}` per billable Composio call (`tool` is the meta-tool, `COMPOSIO_MULTI_EXECUTE_TOOL`; `count` is how many app tools it ran, added to the session's `tool_calls`; never the tool arguments or the accounts used) |
+| `run.started` | `{run_id, harness, resume_ref}`, the agent started a turn |
+| `agent.egress` | `{host, method, path, status, decision, rule, constraint, bytes_out, bytes_in, duration_ms, secrets_swapped}`, one per request that passed the [egress proxy](/agents/environments#egress): `decision` is `allow` or `deny`, `rule` names the rule that decided (`egress_rules[0]`, `allowed_hosts`, `preset:coding`, `model`, `mcp:<name>`, `open` in `audited_open`), `constraint` says what failed on a deny (`host`, `method`, `path`, `scheme`, `host_header`, `secret_scope`), `secrets_swapped` counts the secrets attached. `path` never includes the query string; headers, bodies and secret values are never recorded. Past 120 requests in a minute the rest are summed into one `{rollup: true, dropped, denied, bytes_out, bytes_in, window_start, window_s}` event when the minute ends. |
+| `run.completed` | `{stop_reason, duration_ms, duration_api_ms, num_turns, total_cost_usd, model_usage, permission_denials, harness, harness_session_ref}`, the agent finished a turn. `model_usage` maps each model to `{input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, cost_usd}`; `permission_denials` lists `{tool_name, tool_use_id}` for tool calls the harness refused |
+| `agent.raw` | `{harness, native_type, native}`: a line of harness output that has no Veri event type, kept as it was (truncated) |
 | `session.status` | `{status, from, failure_code, error}` |
 | `session.interrupted` | `{reason, exit_code, run_id, snapshot_id, snapshot_error}`: the sandbox was stopped underneath the session (`reason` is `sigterm` for an inactivity timeout or host eviction, `container_stopped` when the container exited during a run). The session moves to `paused`; after `container_stopped` a `session.status` event then marks it `failed`. |
 | `session.budget_exhausted` | `{budget_usd, accrued_usd, awake_seconds}`, written just before a [budget](#pricing-and-limits) pause |
+| `session.egress_cap_reached` | `{egress_bytes, cap_bytes}`, written just before an [egress cap](#pricing-and-limits) pause |
+| `session.tool_call_cap_reached` | `{tool_calls, cap}`, written just before a [tool-call cap](/agents/tools#pricing) pause |
+| `session.checkpoint` | `{checkpoint_id, label, bytes, expires_at}`, a [checkpoint](#checkpoints-forks-and-rollbacks) was recorded |
+| `session.forked` | on the parent `{checkpoint_id, children}`; on each child `{parent_session_id, checkpoint_id}` |
+| `session.rolled_back` | `{checkpoint_id}`, the session is being restored to that checkpoint |
 | `error` | `{message, fatal}` |
 
 Payloads above 64 KiB (a large file read, for example) are stored in object storage; the event carries a 1 KiB preview and `payload_ref`.
 
-Lifecycle transitions also fire [webhooks](/webhooks): `session.started`, `session.paused`, `session.ended`, `session.failed`.
+Lifecycle transitions also fire [webhooks](/webhooks): `session.started`, `session.approval_requested`, `session.paused`, `session.ended`, `session.failed`.
+
+### Usage and resources
+
+`GET /v1/sessions/{id}` returns a `usage` summary derived from the transcript (the list endpoint leaves it out) and `resources`, the newest sandbox sample from the heartbeat:
+
+```json
+{
+  "id": "9f8e7d6c5b4a",
+  "harness": "claude-code",
+  "status": "ready",
+  "awake_seconds": 1860,
+  "total_cost_usd": 0.05,
+  "rate_usd_per_hour": 0.10,
+  "egress_bytes": 48211904,
+  "egress_usd_per_gb": 0,
+  "tool_calls": 12,
+  "tool_call_usd_per_1k": 1.0,
+  "usage": {
+    "boot_ms": 6120,
+    "restore_ms": null,
+    "snapshot_ms": null,
+    "runs": 1,
+    "run_duration_ms": { "p50": 168000, "max": 168000 },
+    "interrupts": 0,
+    "pauses": 0,
+    "llm_calls": 14,
+    "tokens": { "input": 48210, "output": 2380, "cache_read": 41000, "cache_creation": 1200 },
+    "model_cost_usd": 0.41,
+    "harness_estimated_cost_usd": 0.41,
+    "permission_denials": 1,
+    "approvals": { "requested": 0, "approved": 0, "denied": 0, "wait_ms_total": 0 },
+    "tool_calls": 12
+  },
+  "resources": {
+    "load1": 0.42,
+    "mem_bytes": 1395864371,
+    "mem_limit_bytes": 6442450944,
+    "disk_bytes": 2254857830,
+    "sampled_at": "2026-10-11T16:02:00Z"
+  }
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `boot_ms` | Create to first `ready`: how long the sandbox took to start. |
+| `restore_ms`, `snapshot_ms` | The latest resume's restore time and the latest pause's snapshot time; `null` until the session has paused or resumed. |
+| `runs`, `run_duration_ms` | Finished turns (`run.completed`, interrupted ones included) and the median and longest wall time of one turn. |
+| `interrupts`, `pauses` | Runs you interrupted plus sandboxes stopped underneath the session; times the session went `paused` (yours, idle or budget). |
+| `llm_calls`, `tokens` | Model calls and their tokens. `output` comes from the per-run figure (the per-message count the harness reports mid-turn is a placeholder). For your own endpoint `llm_calls`, `input` and the cache figures come from the per-call `usage` events read off the model's replies; otherwise from the harness's per-message events. |
+| `model_cost_usd`, `harness_estimated_cost_usd` | Model spend. `null` when the environment's model is a Veri deployment: those calls are billed through the deployment (its GPU time), not per session, and the harness has no price for them. For your own endpoint both carry the harness's own estimate at Anthropic list prices for the model name it reports, which may not be what your provider charges. Neither is what Veri bills for the session: that is `total_cost_usd` on the session. |
+| `permission_denials` | Tool calls the harness refused under the environment's `permissions`. |
+| `approvals` | Human approvals asked, allowed and denied, and the total time runs spent waiting for them. All zero unless the environment has `ask` rules. |
+| `resources` | CPU load (1-minute average), memory used and limit, and bytes used under `/workspace`, as sampled by the last heartbeat. Absent until the first heartbeat; a field is left out when the sandbox could not read it. |
+| `egress_bytes`, `egress_usd_per_gb` | Request plus response bytes that passed the egress proxy (in `unrestricted` mode, only the traffic to hosts that carry a secret), and the per-GB price they bill at: non-zero only for an `audited_open` environment. |
+| `tool_calls`, `tool_call_usd_per_1k` | Billable [Composio tool calls](/agents/tools#pricing) (one per app tool run through `COMPOSIO_MULTI_EXECUTE_TOOL`; search and connection tools are free) and the price per 1,000 they bill at, fixed at create: non-zero only when the environment has Composio tools. `usage.tool_calls` is the same count. |
+
+Token counts are recorded in two places. For a Veri-hosted model, every model call the agent makes is recorded on the deployment's request history (`GET /v1/deployments/{id}/requests`) with its input, cached and output tokens, the same as any other request to that deployment, and each call carries the session id as its thread id, so [monitors](/evals#monitors) scoped to threads score the session's conversation like any other thread. For your own endpoint, Veri never stores the model traffic; the per-call `usage` events (`scope: "call"`) record only the token counts, model name, duration and status read off each reply, and the per-run totals the harness reports (`usage` with `scope: "run"` and `run.completed.model_usage`) are recorded on the transcript as well. Session token totals in the observability views follow the same rules as `usage` above.
 
 ## Pricing and limits
 
-A session is billed at a flat rate per hour while its sandbox is awake, settled per minute. Paused and ended sessions cost nothing. Model calls to a Veri deployment are billed through that deployment; calls to your own endpoint are billed by its provider.
+A session is billed per hour while its sandbox is awake, settled per minute, at the rate of the environment's `size`. The rate is fixed when the session is created (the API returns it as `rate_usd_per_hour`), so a later price change never affects a running session. Paused and ended sessions cost nothing. Model calls to a Veri deployment are billed through that deployment; calls to your own endpoint are billed by its provider.
 
-Set `budget_usd` to pause the session automatically when its sandbox spend reaches the ceiling; the transcript records a `session.budget_exhausted` event and the session's `failure_code` reads `budget_exhausted`. Resume it to continue (the budget still applies, so raise it first or start a new session).
+| `size` | Sandbox | Price per awake hour |
+| --- | --- | --- |
+| `small` | 1/2 vCPU, 4 GiB memory, 8 GB disk | $0.03 |
+| `standard` (default) | 1 vCPU, 6 GiB, 12 GB | $0.10 |
+| `large` | 4 vCPU, 12 GiB, 20 GB | $0.30 |
+| `xlarge` | 16 vCPU class | planned, not available yet |
 
-A workspace can have two sessions that are not ended at a time, paused sessions included. Creating a third returns `429 CONCURRENT_SESSION_LIMIT`. Contact us to raise the limit.
+Egress is billed only in `audited_open` mode, at $0.025 per GB of request plus response bytes through the egress proxy (`egress_bytes`), settled with the session and fixed when the session is created (`egress_usd_per_gb`). `restricted` traffic is metered on the session but never billed, and `unrestricted` traffic is neither. Every session pauses when its `egress_bytes` reaches 10 GiB: the transcript records `session.egress_cap_reached` and `failure_code` reads `egress_cap`. Contact us to raise the cap for a workspace.
+
+[Composio tool calls](/agents/tools#pricing) (coming soon) will be billed per call after a monthly free allowance, with their own per-session cap (`failure_code` `tool_call_cap`).
+
+Egress and tool calls count toward the workspace's prepaid credit balance in real time, like awake time, before they are settled (tool calls still inside the monthly free allowance count as free): when the balance runs out, every session in the workspace stops with status `failed` and `failure_code` `insufficient_credits`.
+
+Set `budget_usd` to pause the session automatically when its awake-time spend reaches the ceiling (egress and tool calls have their own caps, above); the transcript records a `session.budget_exhausted` event and the session's `failure_code` reads `budget_exhausted`. Resume it to continue (the budget still applies, so raise it first or start a new session).
+
+A workspace can have ten sessions that are not ended at a time, paused sessions and forked children included. Creating an eleventh (or forking more children than fit) returns `429 CONCURRENT_SESSION_LIMIT`. Contact us to raise the limit.

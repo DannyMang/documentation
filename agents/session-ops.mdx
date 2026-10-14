@@ -1,0 +1,92 @@
+---
+title: "Session ops"
+description: "Work inside a running agent session: run commands, copy files and open a shell"
+keywords: ["agents", "sessions", "exec", "files", "upload", "download", "attach", "shell", "terminal", "port", "preview", "github"]
+---
+
+## Overview
+
+Session ops are your own hands on a running [session](/agents/sessions)'s sandbox, next to the agent: run a command, read or write a file, or open an interactive shell. Use them to inspect what the agent built, hand it inputs, or fix something it got stuck on.
+
+<Note>
+Exec, files and attach are available on every workspace. [Preview ports](#preview-ports) and [GitHub access](#github-access) are coming soon.
+</Note>
+
+```bash
+veri sessions exec 9f8e7d6c5b4a -- pytest -q tests/test_queue.py
+veri sessions ls 9f8e7d6c5b4a /workspace/src
+veri sessions cp ./fixtures.json 9f8e7d6c5b4a:/workspace/data/fixtures.json
+veri sessions cp 9f8e7d6c5b4a:/workspace/report.md ./report.md
+veri sessions attach 9f8e7d6c5b4a
+```
+
+```python
+from veri_sdk import Client
+
+client = Client()
+r = client.sessions.exec("9f8e7d6c5b4a", ["sh", "-c", "git status --short | head"])
+print(r["exit_code"], r["stdout"])
+client.sessions.write_file("9f8e7d6c5b4a", "/workspace/data/fixtures.json", open("fixtures.json", "rb").read())
+report = client.sessions.read_file("9f8e7d6c5b4a", "/workspace/report.md")
+print(client.sessions.list_files("9f8e7d6c5b4a", "/workspace/src")["entries"])
+```
+
+Every op needs the session `ready`: not while a run is in progress (`409`; wait for it or send `user.interrupt`), not while an approval is pending, and not while paused (resume it first). At most 30 ops per minute run on one session (`429` past that).
+
+## Security model
+
+- **The agent's user, never root.** Commands, file access and the shell run as the sandbox's unprivileged `agent` user (uid 1000), the same user the harness runs as. You can do what the agent can do, nothing more.
+- **`/workspace` only.** Working directories and file paths must be `/workspace` or under it: absolute, no `..`. File paths are also resolved inside the sandbox, symlinks included, and refused (`400`) when they land outside `/workspace`, so a link the agent made to `/etc` or to the harness's own state does not leak it.
+- **Egress still applies.** Network traffic from your commands and your shell goes through the same egress rules, secret swaps and `agent.egress` audit as the agent's. There is no bypass.
+- **No real secrets in the sandbox.** Commands and shells get the session's environment variables as the agent sees them: plain values and secret placeholders, never the real value of a scoped secret and never the model credentials.
+- **Audited.** Each op lands on the transcript: `session.exec` (argv and exit code; variable names, never their values), `session.file_read` and `session.file_write` (path and size, never content), and `session.attach` and `session.detach` (who, how long, bytes moved).
+
+## Run a command
+
+`POST /v1/sessions/{id}/exec` runs one command and waits for it.
+
+| Field | |
+| --- | --- |
+| `argv` | The command and its arguments, 1 to 256 strings. No shell: use `["sh", "-c", "..."]` for pipes and redirects. |
+| `cwd` | Working directory, `/workspace` (default) or a path under it. |
+| `env` | Extra variables on top of the session's. `ANTHROPIC_*`, `OPENAI_*`, `VERI_*`, `PATH` and `LD_*` are dropped and listed in `env_dropped`. |
+| `timeout_s` | 1 to 300 seconds (default 60). The command is killed at the deadline and `timed_out` is `true`. |
+
+The response carries `exit_code`, `stdout` (at most 64 KiB), `stderr` (at most 16 KiB), `truncated` (either was cut), `timed_out`, `duration_ms` and `env_dropped`. A non-zero exit code is still a `200`: the command ran.
+
+With the CLI, put `--` before the command so its options are not read as the CLI's: `veri sessions exec SID --cwd /workspace/app -e DEBUG=1 -- npm test -- --watch=false`. The CLI prints the command's output and exits with its exit code.
+
+## Files
+
+| Route | |
+| --- | --- |
+| `GET /v1/sessions/{id}/files?path=` | What the path is (`type`, `size`) and, for a directory, its entries (`name`, `type`; at most 1000, sorted). `path` defaults to `/workspace`. |
+| `GET /v1/sessions/{id}/files/content?path=` | Download one regular file, `application/octet-stream`, at most 32 MiB (`413` above). |
+| `PUT /v1/sessions/{id}/files/content?path=` | Upload the request body as the file, at most 32 MiB. Missing parent directories are created and an existing file is replaced; the file is owned by the agent user. |
+
+Uploads larger than 32 MiB are not supported through this route. Fetch large inputs from inside the sandbox instead (`veri sessions exec SID -- curl -fsSLo /workspace/big.bin https://...`, which needs the host in the environment's [egress rules](/agents/environments#egress)), or attach them through a [volume](/volumes) on a training job.
+
+`veri sessions cp` takes `SESSION_ID:/workspace/path` on exactly one side; a destination ending in `/` keeps the file's name, and `-` as the destination writes a download to stdout.
+
+## Attach a shell
+
+`veri sessions attach SESSION_ID` opens `bash` in a terminal inside the sandbox, as the agent user, in `/workspace`, with the session's environment. Exit the shell or press `Ctrl-]` to detach. The CLI needs the `websockets` package (`pip install websockets`).
+
+- While a shell is attached the session stays awake and is billed like any awake time; it does not idle-pause.
+- A shell with no input and no output for 30 minutes is closed.
+- Each attach is a new shell: disconnecting ends the shell and anything running in its foreground. Start long jobs with `nohup ... &` if they should outlive the shell (they still stop when the session pauses).
+- At most 4 shells per session at once.
+
+Under the hood `POST /v1/sessions/{id}/attach-token` returns a `ws_url` that connects once, within 60 seconds. Append `&cols=120&rows=40` for the terminal size. Binary WebSocket frames are the terminal's input and output; a text frame `{"type":"resize","cols":120,"rows":40}` resizes it.
+
+## Preview ports
+
+<Note>
+Coming soon. Putting a port inside the sandbox on a shareable URL (`veri sessions port`, `POST /v1/sessions/{id}/ports`) is not available yet; until it launches the route answers `501` with `preview_domain_not_configured`.
+</Note>
+
+## GitHub access
+
+<Note>
+Coming soon. Giving every session started from an environment the GitHub access of the person who starts it (`github_auth = true` on the [environment](/agents/environments)) is not available yet; until it launches, an environment with `github_auth = true` is rejected with `400`.
+</Note>

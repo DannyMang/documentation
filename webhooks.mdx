@@ -42,9 +42,12 @@ Omit `event_types` (or pass `[]`) to subscribe to all event types. Endpoint URLs
 | `annotation.completed` | A reviewer completes an item in an [annotation queue](/evals/human-review). |
 | `score.failed` | A monitor's evaluation of live traffic ended in an `error` score (see [Monitors](/evals#monitors)). |
 | `session.started` | An agent [session](/agents/sessions) becomes ready for the first time. |
+| `session.approval_requested` | A tool call matched an `ask` permission rule and the session is waiting for a human ([Approvals](/agents/sessions#approvals)). `data` adds `approval_id`, `tool_name` and `expires_at`; the tool input stays on the transcript. |
 | `session.paused` | A session pauses: you paused it, it went idle, it hit its budget, or its sandbox was interrupted. |
 | `session.ended` | A session ends. |
 | `session.failed` | A session fails terminally; `failure_code` says why. |
+| `trigger.execution.succeeded` | A [trigger](/agents/triggers) firing's run completed. |
+| `trigger.execution.failed` | A trigger firing failed; `failure_reason` says why ([Failures](/agents/triggers#failures)). |
 | `webhook.test` | You called `POST /v1/webhooks/{id}/test`. Delivered only to that endpoint, regardless of its subscription filter. It is not a subscribable type. |
 
 Each event fires exactly once per real state transition. Deliveries, however, are at-least-once (see [Idempotency](#idempotency-and-ordering)).
@@ -80,7 +83,8 @@ The `data` object by event:
 | `experiment.completed` | `experiment` | `id`, `name`, `status`, `passed`, `dataset_snapshot_id`, `target_deployment_id`, `target_model_version_id`, `items_total`, `aggregates` |
 | `annotation.completed` | `annotation_item` | `id`, `queue_id`, `queue_name`, `target_type`, `request_id`, `deployment_id`, `thread_id`, `target_revision`, `experiment_id`, `item_id`, `completed_by`, `score_ids`, `has_correction`, `dataset_row` |
 | `score.failed` | `score` | `id`, `status` (`error`), `error`, `evaluator_id`, `evaluator_version`, `name`, `monitor_id`, `target_type`, `request_id`, `deployment_id`, `thread_id`, `target_revision` |
-| `session.*` | `session` | `id`, `status`, `environment_id`, `environment_version`, `failure_code` |
+| `session.*` | `session` | `id`, `status`, `environment_id`, `environment_version`, `failure_code`; `session.approval_requested` adds `approval_id`, `tool_name`, `expires_at` |
+| `trigger.execution.*` | `trigger_execution` | `id`, `trigger_id`, `environment_id`, `kind` (`cron`, `webhook` or `manual`), `session_id`, `status`, `failure_reason`, `result_excerpt` (the first 2 KiB of the agent's last message) |
 | `webhook.test` | `webhook_endpoint` | `id` (the endpoint), `status` (`test`), `name` (`webhook.test`) |
 
 Fetch the full resource (`GET /v1/deployments/{id}`, `GET /v1/training_jobs/{id}`) when you need more than the transition itself.

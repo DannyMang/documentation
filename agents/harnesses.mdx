@@ -1,0 +1,217 @@
+---
+title: "Harnesses"
+description: "The agent program a session runs: Claude Code, OpenCode, Codex, a LangGraph graph, a CrewAI crew, or your own process, and what each supports"
+keywords: ["agents", "harness", "claude code", "opencode", "codex", "langgraph", "crewai", "custom", "permissions", "mcp", "skills"]
+---
+
+## Overview
+
+The harness is the agent program inside a session's sandbox: it reads your messages, calls the model, runs tools and writes the transcript. You pick it with `harness` on the [environment](/agents/environments); everything else (model, egress, secrets, MCP servers, skills, permissions) is written once and rendered into that harness's own config.
+
+All six harnesses are available on every workspace: `claude-code` (the default), `opencode`, `codex`, `langgraph`, `crewai` and `custom`.
+
+| | `claude-code` | `opencode` | `codex` | `langgraph` | `crewai` | `custom` |
+| --- | --- | --- | --- | --- | --- | --- |
+| Runs | Claude Code (stock binary), one long-lived process | OpenCode 1.19.0, one `opencode run` per turn | Codex CLI 0.162.1, one `codex exec` per turn | your graph (LangGraph 1.2.15) under Veri's Python mediator, one run per message | your crew (CrewAI 1.15.27) under Veri's Python mediator, one `kickoff` per message | your command, one long-lived process, in the Claude Code image |
+| Model API | Anthropic Messages | OpenAI chat completions | OpenAI Responses | OpenAI chat completions (`ChatOpenAI`) | OpenAI chat completions (`crewai.LLM`) | whatever your process calls (`VERI_MODEL_*`) |
+| `ask` approvals | yes | no | no | no | no | no |
+| `allow` / `deny` rules | yes (`.claude/settings.json`) | yes (`opencode.json` `permission`) | `deny` only (`.codex/rules/veri.rules`, `mcp_servers`) | MCP rules only (the mediator hides denied MCP tools) | MCP rules only | no |
+| MCP servers | `.mcp.json` | `opencode.json` `mcp` | `.codex/config.toml` `mcp_servers` | `veri_pyagent.mcp_tools()` (langchain-mcp-adapters) | `veri_pyagent.mcp_servers()` (CrewAI's MCP support) | `.mcp.json`, for your process to read |
+| Skills | `.claude/skills/` | `.opencode/skills/` | `.agents/skills/` | `.veri/skills/`, for your code to read | `.veri/skills/`, for your code to read | `.veri/skills/`, for your process to read |
+| Fork from a checkpoint | yes | yes | yes | yes (the thread is copied) | no (`409 harness_does_not_support_fork`) | no (`409 harness_does_not_support_fork`) |
+| Checkpoint, rollback, pause | yes | yes | yes | yes | yes | yes (files only: your process restarts) |
+
+Every harness gets the same sandbox, egress rules and secret handling: credentials stay outside the sandbox, the model key is a placeholder swapped at the egress edge, and the transcript uses one [event vocabulary](/agents/sessions#transcript).
+
+## Claude Code
+
+The default. Each session runs the unmodified Claude Code CLI in headless stream-json mode. Permissions map onto Claude Code's permission modes and rules (see [Permissions](/agents/environments#permissions)), `ask` rules park the turn for your approval, and a fork resumes the checkpoint's conversation as a new Claude Code session.
+
+The model must speak the Anthropic Messages API: a Veri deployment (served through `/v1/deployments/{id}/v1/messages`), Anthropic itself, or any compatible gateway.
+
+## OpenCode
+
+```toml environment.toml
+kind = "environment"
+name = "opencode-coder"
+harness = "opencode"
+
+[model]
+deployment_id = "1a2b3c4d5e6f"   # any Veri deployment, OR:
+# base_url = "https://api.example.com/v1"   # an OpenAI-compatible endpoint
+# secret = "EXAMPLE_API_KEY"
+# name = "my-model"                          # required with base_url
+
+[permissions]
+default = "allow"
+rules = [
+  { tool = "bash(rm *)", action = "deny" },
+  { tool = "web.fetch", action = "deny" },
+]
+```
+
+How it runs:
+
+- Each message starts one `opencode run --format json` with the message on stdin and `--session <id>` to continue the conversation; the turn ends when OpenCode exits (exit `0` is success). Expect a second or two of start-up per turn. Nothing runs between turns, so pauses and checkpoints are cheap.
+- The model is an OpenAI-compatible provider in `/workspace/opencode.json` at the session's model base URL (OpenCode appends `/chat/completions`, which every Veri deployment serves). `model.name` sets the model it requests; for a Veri deployment it defaults to the deployment id. The key in the config is `{env:VERI_MODEL_KEY}`, a placeholder: the real key is added at the egress edge and never enters the sandbox. `api.anthropic.com` is not supported as an OpenCode model endpoint; use `claude-code` for it.
+- The model's `limit` is in the config too. `context` is the deployment's served context (its `--max-model-len`), or 32768 when Veri cannot know it (a deployment launched without `--max-model-len`, or a `base_url` endpoint). OpenCode asks for at most `min(8192, context / 4)` output tokens per request, so the rest of the window stays for the conversation.
+- MCP servers become `remote` entries in `opencode.json` (bearer tokens are placeholders too). Skills are written to `/workspace/.opencode/skills/<name>/SKILL.md`.
+- Permissions become OpenCode's `permission` map, in the same last-match-wins order (see the [table](#permission-names) below). `ask` is refused when you create the environment: a headless OpenCode run rejects every approval prompt on its own, and there is no way to pause the turn for you.
+- Forking runs `opencode run --session <checkpoint's session> --fork`, so each child continues the conversation as its own session.
+- Model-update checks, model catalog downloads, language-server downloads, default plugins and sharing are disabled. The package OpenCode installs into its config directories on start (`@opencode-ai/plugin`) is preinstalled in the image, in `~/.config/opencode` and `/workspace/.opencode`, so a session start downloads nothing.
+- Tool calls arrive when they finish: each produces an `agent.tool_use` and its `tool.result` together. Token usage is reported per model step (`usage` with `scope: "step"`) and per turn (`scope: "run"`).
+
+## Codex
+
+```toml environment.toml
+kind = "environment"
+name = "codex-coder"
+harness = "codex"
+
+[model]
+deployment_id = "1a2b3c4d5e6f"   # any Veri deployment, OR:
+# base_url = "https://api.example.com/v1"   # an endpoint that serves {base_url}/responses
+# secret = "EXAMPLE_API_KEY"
+# name = "my-model"                          # required with base_url
+
+[permissions]
+default = "allow"
+rules = [
+  { tool = "bash(rm *)", action = "deny" },
+  { tool = "mcp.github.delete_repo", action = "deny" },
+]
+```
+
+How it runs:
+
+- Each message starts one `codex exec --json` (Codex CLI 0.162.1) with the message on stdin and `resume <thread id>` to continue the conversation; the turn ends when Codex exits (exit `0` is success). Nothing runs between turns, so pauses and checkpoints are cheap.
+- Codex speaks only the OpenAI Responses API. For a Veri deployment it calls the deployment's [`/v1/deployments/{id}/responses`](/deployments/openai-compat#responses-api) route, which vLLM serves natively (tool calls go through the deployment's `--tool-call-parser`). A `base_url` endpoint must serve `{base_url}/responses`, and `model.name` sets the model Codex requests. The key is `VERI_MODEL_KEY`, a placeholder: the real key is added at the egress edge and never enters the sandbox. `api.anthropic.com` is not supported as a Codex model endpoint; use `claude-code` for it.
+- The config is `/workspace/.codex/config.toml` (Codex's home directory, `CODEX_HOME`, which also keeps its session history). It runs with `approval_policy = "never"` and `sandbox_mode = "danger-full-access"`: the session container is the sandbox, so Codex's own Linux sandbox is not used. `model_context_window` is the deployment's served context (its `--max-model-len`), or 32768 when Veri cannot know it, and Codex compacts the conversation before less than `min(8192, context / 4)` tokens are left for the reply. Web search is off (it runs on OpenAI's servers), and so are plugin sync, Codex's bundled skills, analytics and update checks, so a session start downloads nothing.
+- MCP servers become `mcp_servers` entries (streamable HTTP). Each server's credential is a placeholder in an environment variable that Codex reads (`bearer_token_env_var`, or `env_http_headers` for a named header such as `x-api-key`). Skills are written to `/workspace/.agents/skills/<name>/SKILL.md`.
+- Permissions: Codex runs every tool it has unless a rule forbids it, so `default` must be `allow` and the rules that take effect are `deny` rules (see the [table](#permission-names) below). Command rules become Codex execpolicy prefix rules in `/workspace/.codex/rules/veri.rules`: Codex matches the leading words of every command it reads out of a shell script, so `bash(git push *)` and `bash(git push)` both forbid `git push --force`. A forbidden command does not run: Codex hands the rejection back to the model, and the command does not appear as a tool call in the transcript. Like every command rule, this guards against mistakes, not against an agent set on getting around it; egress rules and secret scoping are the boundary.
+- `ask` is refused when you create the environment (`harness_does_not_support_ask`): `codex exec` cancels every approval request on its own.
+- Forking runs `codex exec fork <checkpoint's thread>`, so each child continues the conversation as its own thread.
+- Tool calls arrive as `agent.tool_use` when they start and `tool.result` when they finish, with `kind` `command` (and the `exit_code`), `file_change`, `mcp`, `todo` or `web_search`. Reasoning arrives as `agent.thinking`. Token usage is reported once per turn (`usage` with `scope: "turn"`, and `scope: "run"`); retried model calls are `error` events with `subtype: "api_retry"`. Codex's warnings (every model it has no metadata for triggers "Model metadata for `<name>` not found") are kept as `agent.raw` with `native_type: "warning"`.
+
+## LangGraph and CrewAI
+
+Run your own LangGraph graph or CrewAI crew in a session. Veri clones your repository into the sandbox, installs its requirements, and runs the agent under a small Python mediator that turns each message into one run and the run into the session transcript. See [Bring your own agent](/agents/python-agents) for the repository layout.
+
+```toml environment.toml
+kind = "environment"
+name = "support-graph"
+harness = "langgraph"            # or "crewai"
+
+[model]
+deployment_id = "1a2b3c4d5e6f"   # any Veri deployment, OR:
+# base_url = "https://api.example.com/v1"   # an OpenAI-compatible endpoint
+# secret = "EXAMPLE_API_KEY"
+# name = "my-model"                          # required with base_url
+
+[agent]
+repo = { url = "https://github.com/acme/agents", ref = "v1.2.0", subdir = "support" }
+entry = "support"                # LangGraph: a graph id from langgraph.json
+# entry = "support_crew.crew:SupportCrew"   # CrewAI: package.module:factory
+# requirements = "requirements.txt"         # default: requirements.txt when present
+
+[permissions]
+default = "allow"
+rules = [{ tool = "mcp.github.delete_repo", action = "deny" }]
+```
+
+Without an `[agent]` block the session runs Veri's built-in example agent for the framework (a model plus a `checksum` tool and your MCP tools), which is handy for a first try.
+
+How it runs:
+
+- The first message starts the mediator. It clones `agent.repo` at `ref` into `/workspace/agent` (the repository's host is allowed automatically, for git's requests on that repository's path only), installs the requirements into a virtualenv at `/workspace/.veri/venv` (PyPI is reachable under the default `coding` egress preset), then loads `entry`. The repository must be public for now: private repositories need [GitHub access](/agents/session-ops#github-access), which is coming soon. If any of this fails, the session fails with an `error` event whose `source` is `harness_setup` and whose message says what went wrong. A resumed, rolled-back or forked session keeps `/workspace`, so it does not fetch or install again.
+- Each message is one run: a LangGraph `astream` over the graph's node updates, or a CrewAI `Crew.kickoff`. Messages your nodes return become `agent.message`, tool calls `agent.tool_use` + `tool.result` (`kind: "mcp"` for MCP tools), reasoning content `agent.thinking`, and each model call's token usage `usage` with `scope: "message"` (plus a `scope: "run"` total per run). What your code prints goes to the harness log, not the transcript.
+- LangGraph: the graph runs with Veri's checkpointer (SQLite at `/workspace/.veri/langgraph.sqlite`, replacing any checkpointer your graph was compiled with), and the conversation is the thread named after the session id, so it survives pauses and resumes. A fork copies the checkpoint's thread into the child's own. The graph's input state should have a `messages` key (`MessagesState`); each message is added to it as a human message. `interrupt()` (human-in-the-loop inside the graph) is not supported: the run ends with an error.
+- CrewAI: your crew gets `inputs = {"message": <the message>, "history": <the earlier turns, as text>}`, so task descriptions can use `{message}` and `{history}`. A factory entry is called for every message, so each run starts from a fresh crew. A crew has no conversation to fork.
+- The model: `OPENAI_BASE_URL` / `OPENAI_API_KEY` and `VERI_MODEL_BASE_URL` / `VERI_MODEL_KEY` / `VERI_MODEL_NAME` point at the session's model, so stock `ChatOpenAI(model=os.environ["VERI_MODEL_NAME"])` or `crewai.LLM(model="openai/" + os.environ["VERI_MODEL_NAME"])` work unchanged. The key is a placeholder: the real key is added at the egress edge and never enters the sandbox. `veri_pyagent.chat_model()` and `veri_pyagent.crewai_llm()` return models already wired up, with an output budget that fits the deployment's served context.
+- MCP servers: `await veri_pyagent.mcp_tools()` returns them as LangChain tools; `veri_pyagent.mcp_servers()` returns them for `crewai.Agent(mcps=...)`. CrewAI names an MCP tool after its server's URL, so for `crewai` each MCP server must be addressed by hostname, not IP address (`400` otherwise).
+- Permissions: these frameworks have no built-in shell, file or web tools (the ones your code adds are yours to govern), so the rules Veri enforces are MCP rules: `mcp`, `mcp.<server>` and `mcp.<server>.<tool>` (globs allowed in the tool name), last match wins, and a denied tool is left out of the tools the helpers hand your agent. `default` must be `allow`; shell, file, web and git rules are refused when you create the environment. Egress rules and secret scoping are the boundary for everything your code does.
+- `ask` is refused when you create the environment (`harness_does_not_support_ask`): neither framework can pause a run for a human decision.
+
+## Custom
+
+Run your own agent program inside the session sandbox. Veri starts your command in the stock session image (Debian with Node.js 22, Python 3 with pip and venv, git, curl, ripgrep and a C toolchain; see [Sandbox](/agents/sessions#sandbox)), feeds it your messages and turns what it prints into the transcript.
+
+```toml environment.toml
+kind = "environment"
+name = "my-agent"
+harness = "custom"
+
+[custom]
+# Fetch your code and run it (GitHub, npm and PyPI are reachable by default).
+command = ["sh", "-c", "[ -d agent ] || git clone --depth 1 https://github.com/you/agent agent; exec python3 -u agent/agent.py"]
+workdir = "/workspace"            # default; must be /workspace or under it
+
+[model]
+deployment_id = "1a2b3c4d5e6f"
+```
+
+The protocol:
+
+- Your process starts on the first message and keeps running. If it exits, the next message starts it again, so a command that fetches code should tolerate the checkout already being there (as above). A checkpoint, rollback or resume restarts it too: the files survive, the process does not.
+- `command` is up to 64 arguments of up to 4096 bytes each, so a short script can also be passed inline (`["python3", "-c", "..."]`).
+- Each message arrives as one JSON line on stdin: `{"type": "user.message", "text": "..."}`.
+- Every line you print to stdout that is a JSON object with one of these `type`s is recorded as that event, with the other fields as its payload: `agent.message`, `agent.thinking`, `agent.tool_use`, `tool.result`, `usage`, `error`, `agent.raw`. Any other JSON line is recorded as `agent.raw`, and any other text line as `agent.message`.
+- Print `{"type": "run.completed"}` when you have answered (add `"is_error": true` or a `"stop_reason"` if you like). Exiting also ends the turn: exit `0` is success, anything else an error with your stderr attached.
+- The model: `VERI_MODEL_BASE_URL` (OpenAI-compatible for a Veri deployment), `VERI_MODEL_KEY` (a placeholder that is swapped for the real key on requests to that host only; send it as `Authorization: Bearer $VERI_MODEL_KEY`) and `VERI_MODEL_NAME` (`model.name`, or the deployment id).
+- MCP servers are in `/workspace/.mcp.json` and skills in `/workspace/.veri/skills/` for your program to use as it sees fit.
+
+A complete example that answers with the model and runs shell commands itself (pass it inline with `python3 -c` or keep it in your repository):
+
+```python agent.py
+import json, os, subprocess, sys, urllib.request
+
+base = os.environ["VERI_MODEL_BASE_URL"].rstrip("/")
+key = os.environ["VERI_MODEL_KEY"]
+model = os.environ.get("VERI_MODEL_NAME") or "default"
+history = []
+
+def emit(**event):
+    print(json.dumps(event), flush=True)
+
+for line in sys.stdin:
+    text = json.loads(line)["text"]
+    if text.startswith("!sh "):
+        emit(type="agent.tool_use", id="sh-1", name="sh", input={"command": text[4:]}, kind="command")
+        p = subprocess.run(text[4:], shell=True, capture_output=True, text=True)
+        emit(type="tool.result", tool_use_id="sh-1", content=p.stdout + p.stderr,
+             is_error=p.returncode != 0, exit_code=p.returncode)
+        emit(type="run.completed")
+        continue
+    history.append({"role": "user", "content": text})
+    req = urllib.request.Request(base + "/chat/completions",
+        data=json.dumps({"model": model, "messages": history}).encode(),
+        headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"})
+    reply = json.load(urllib.request.urlopen(req))["choices"][0]["message"]["content"]
+    history.append({"role": "assistant", "content": reply})
+    emit(type="agent.message", text=reply)
+    emit(type="run.completed")
+```
+
+What Veri cannot do for a custom harness: it does not see or govern the tool calls your program makes, so `permissions` must be `default = "allow"` with no rules (egress rules and secret scoping still apply to everything the process does), there are no `ask` approvals, and there is no conversation to fork. Status, approval and billing events are the runtime's own: a `session.status` line from your process is recorded as `agent.raw`, `usage` lines never carry billed time, and `error` lines cannot fail the session.
+
+Your own container image is not supported: sandbox images are built when Veri deploys its runtime and cannot be pulled per session. Install what you need from your command (npm and PyPI are reachable by default) or ask us about a custom base image.
+
+## Permission names
+
+Rules can use these harness-neutral names. Each harness renders them into its own config; Claude Code's own names (`Bash(git *)`, `Read`, `mcp__server__tool`) keep working for `claude-code`, and OpenCode, Codex, LangGraph and CrewAI accept the ones they have an equivalent for.
+
+| Name | Claude Code | OpenCode | Codex (`deny` only) | LangGraph / CrewAI (MCP only) |
+| --- | --- | --- | --- | --- |
+| `*` | every tool | `"*"` | must be `allow` (Codex has no default-deny mode) | must be `allow` |
+| `bash` | `Bash` | `bash` | refused (Codex cannot turn its shell off) | refused (no built-in shell) |
+| `bash(git *)` | `Bash(git *)` | `bash` patterns `git` and `git *` | prefix rule `git` | refused |
+| `file.read` | `Read`, `Glob`, `Grep` | `read`, `glob`, `grep`, `list` | refused (Codex reads through its shell) | refused (no built-in file tools) |
+| `file.write` | `Edit`, `Write`, `MultiEdit`, `NotebookEdit` | `edit` (covers writes) | refused (Codex writes through its shell) | refused |
+| `web.fetch` | `WebFetch` | `webfetch` | refused (Codex fetches through its shell) | refused (no built-in web tools) |
+| `web.search` | `WebSearch` | `websearch` | always off | refused |
+| `git.*` | `Bash(git *)` | `bash` patterns `git` and `git *` | prefix rule `git` | refused |
+| `mcp` | `mcp__<server>__*` for every configured server | `<server>_*` for every configured server | every server off | every MCP tool hidden |
+| `mcp.<server>` | `mcp__<server>__*` | `<server>_*` | the server off | the server's tools hidden |
+| `mcp.<server>.<tool>` | `mcp__<server>__<tool>` | `<server>_<tool>` | `disabled_tools` on the server | the tool hidden (`*` globs allowed) |
+
+The last matching rule wins on every harness. Codex applies the strictest matching rule instead, so an `allow` that would re-allow something an earlier `deny` forbids is refused for Codex rather than rendered; any other `allow` is already the default there. Creating an environment fails with `400` when a rule cannot be expressed: `ask` on OpenCode, Codex, LangGraph, CrewAI or custom (`harness_does_not_support_ask`), any rule on custom (`harness_does_not_support_permissions`), a Claude-only rule such as `Read(./src/**)` or `Task` on OpenCode, Codex, LangGraph or CrewAI, a refused name above on Codex, LangGraph or CrewAI, or a lowercase name that is not in the table.

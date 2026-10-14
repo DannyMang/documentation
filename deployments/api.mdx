@@ -20,6 +20,7 @@ Reference for `/v1/deployments/*`. All endpoints require Bearer token auth (`Aut
 | `POST` | `/v1/deployments/{id}/wake` | Pre-warm a `scaled_to_zero` deployment (202, idempotent) |
 | `POST` | `/v1/deployments/{id}/stop` | Transition to `stopped` (permanent, idempotent) |
 | `POST` | `/v1/deployments/{id}/chat/completions` | OpenAI-compatible chat |
+| `POST` | `/v1/deployments/{id}/responses` | OpenAI Responses API (also at `/v1/deployments/{id}/v1/responses`) |
 | `GET` | `/v1/deployments/{id}/requests` | Request log |
 | `GET` | `/v1/deployments/{id}/metrics` | Aggregated metrics |
 
@@ -321,7 +322,18 @@ The same `503` + `Retry-After` shape covers transient upstream failures: the mod
 
 Retry after `Retry-After` seconds, as for `deployment_waking`. Both codes mean "try again shortly", not "the request was invalid". The Python SDK's `chat()` retries `upstream_unavailable` for you too, but with a small fixed budget (`upstream_retries`, default 3, each after `Retry-After`) since a replica blip resolves in seconds while a wake takes minutes; after the budget the `503` surfaces as `VeriServerError` with `code == "upstream_unavailable"`.
 
-## GET /v1/deployments/\{id\}/requests
+## POST /v1/deployments/\{id\}/responses {#post-v1deploymentsidresponses}
+
+The OpenAI Responses API, forwarded to the deployment's vLLM `/v1/responses` (the Codex CLI's only model API). Same authentication, wake (`503 deployment_waking`) and `upstream_unavailable` contract as chat completions; `model` is rewritten to the deployment's served name and `stream: true` returns the Responses event stream. Also served at `/v1/deployments/{id}/v1/responses`. See [Responses API](/deployments/openai-compat#responses-api).
+
+```bash
+curl https://api.veri.studio/v1/deployments/$DEPLOYMENT_ID/responses \
+  -H "Authorization: Bearer vk_..." \
+  -H "Content-Type: application/json" \
+  -d '{"model": "my-deploy", "input": "Hello", "max_output_tokens": 64}'
+```
+
+## GET /v1/deployments/\{id\}/requests {#get-v1deploymentsidrequests}
 
 Per-request log: prompt tokens, completion tokens, latency, status code, error (if any).
 
