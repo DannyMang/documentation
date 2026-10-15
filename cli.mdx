@@ -12,17 +12,20 @@ By the end of this page you'll have the CLI installed, an authenticated session,
 
 <CodeGroup>
 ```bash uv (recommended)
-uv tool install veri-sdk
+uv tool install 'veri-sdk[mcp]'
 ```
 
 ```bash pipx
-pipx install veri-sdk
+pipx install --force 'veri-sdk[mcp]'
 ```
 
 ```bash pip
-pip install veri-sdk
+# Python 3.10+ in a virtualenv; the stock macOS python3 is too old
+pip install 'veri-sdk[mcp]'
 ```
 </CodeGroup>
+
+The `mcp` extra adds [`veri mcp serve`](/cli/mcp) for MCP clients such as Claude Code and Cursor. To upgrade an existing install, or add the extra to one, run `uv tool install --upgrade 'veri-sdk[mcp]'` (pipx: the line above; pip: `pip install -U 'veri-sdk[mcp]'`). `uv tool upgrade` and `pipx upgrade` never add an extra.
 
 Verify:
 
