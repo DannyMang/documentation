@@ -5,6 +5,13 @@ description: "Recent product and platform changes in Veri"
 keywords: ["changelog", "releases", "platform updates"]
 ---
 
+## 2026-10-15: GCP training on Flex-start VMs
+
+- [GCP](/training/providers/gcp) trains on a single A100 80GB ($3.00 per GPU-hour) or H100 80GB ($5.99) on Flex-start VMs, in us-central1, us-east4, us-east5 and us-west4. Spot VMs are no longer used.
+- A GCP job waits in `queued` for up to about 15 minutes while Veri looks for capacity zone by zone; the wait is not billed, and a job that finds none fails with `CAPACITY_UNAVAILABLE`.
+- Veri runs one GCP GPU at a time for now: a GCP job submitted while it is in use waits in `queued` and launches when it is released.
+- Two new failure codes: `provider_reclaimed` (GCP ended the VM early; credited back automatically) and `max_run_duration_reached` (the 24-hour limit, enforced by GCP). Resume either from a checkpoint with `resume_from`.
+
 ## 2026-10-14: managed agents: every harness, triggers and session ops
 
 - All six [harnesses](/agents/harnesses) are available on every workspace: `claude-code` (the default), `opencode`, `codex`, `langgraph`, `crewai` and `custom`.

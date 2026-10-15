@@ -171,7 +171,7 @@ Docs (per-method guides + full hyperparameter tables): https://docs.veri.studio/
 | `aws` (default) | L4-24GB, A10G-24GB (1x or 4x); A100-80GB, H100-80GB (whole 8-GPU nodes only: gpu_count 8, you pay for all 8) | live |
 | `vast` | A100/H100-80GB (1/2/4/8x marketplace) | live |
 | `digitalocean` | H100-80GB (1x/8x droplets; capacity flaps — failed submits are unbilled, retry) | live |
-| `gcp` | A100-80GB (1x) | live |
+| `gcp` | A100-80GB, H100-80GB (1x Flex-start VMs; one GCP GPU at a time, so a job may wait in `queued`; up to ~15 min capacity hunt before `CAPACITY_UNAVAILABLE`) | live |
 
 Check live prices/availability: `veri gpu list` (add `--provider`/`--region`/`--gpu-type` to switch from the static catalog to live availability), `veri gpu describe <gpu-type>` for specs and node size, `veri gpu compare --gpu-type H100-80GB`, `veri regions list`.
 
@@ -193,6 +193,7 @@ Read `error.code` first, then the log (`veri jobs logs <id>` or `GET /v1/trainin
 | `distributed_error`, `hardware_error` | Re-submit once; if it repeats, report the job id to Veri (hardware is the platform's fault, never the user's). |
 | `training_stalled` | The log tail carries every GPU's Python stack; lower `micro_batch_size` or the sequence length, then re-submit. |
 | `CAPACITY_UNAVAILABLE`, `provisioning_*`, `configuring_timeout`, `heartbeat_timeout` | Re-submit; try another `gpu_type` or region if it repeats. Failed submits are unbilled. |
+| `provider_reclaimed` (GCP ended the VM early; credited back), `max_run_duration_reached` (GCP 24 h cap; charged) | Resume from the newest checkpoint as a new job: `veri jobs resume <id>` (or `resume_from="<id>@<step>"`). For the 24 h cap also lower `max_steps`. |
 
 ### Custom scripts
 

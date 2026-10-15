@@ -16,7 +16,7 @@ GCP serving is wired but currently feature-gated: a `provider="gcp"` create retu
 | --- | --- | --- | --- |
 | `A100-80GB` | 80 GB | 1 | Coming soon |
 
-Single H100 VMs on GCP are Spot-only (preemptible), so they are not offered for serving. To serve on H100, use AWS.
+Single H100 VMs on GCP come only as Spot or Flex-start VMs (no on-demand), so they are not offered for serving. To serve on H100, use AWS.
 
 ## Creating a deployment
 
@@ -30,7 +30,7 @@ client.deployments.create(
 )
 ```
 
-Serving runs on on-demand VMs (not the Spot capacity used for GCP training).
+Serving runs on on-demand VMs (not the Flex-start capacity used for [GCP training](/training/providers/gcp)).
 
 ## Where to go next
 

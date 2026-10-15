@@ -1,0 +1,78 @@
+---
+title: "GCP"
+sidebarTitle: "GCP"
+description: "One A100 80GB or H100 80GB on Google Cloud Flex-start VMs: a single big NVIDIA card instead of a whole 8-GPU AWS node."
+keywords: ["GCP", "Google Cloud", "Flex-start", "A100", "H100", "provider"]
+---
+
+GCP rents a genuine single A100 80GB or H100 80GB, the way to train on one big NVIDIA card instead of a whole 8-GPU AWS node. Veri runs GCP training on Flex-start VMs (Google's Dynamic Workload Scheduler): the job waits in a queue for GPU capacity, and once it has its VM, GCP does not preempt it.
+
+## GPU types
+
+| GPU type | VRAM | Architecture | GPUs available | Regions |
+| --- | --- | --- | --- | --- |
+| `A100-80GB` | 80 GB | NVIDIA Ampere | 1 | us-central1, us-east4, us-east5 |
+| `H100-80GB` | 80 GB | NVIDIA Hopper | 1 | us-central1, us-east4, us-west4 |
+
+Any other `gpu_count` is rejected at submit with a `400`. Veri picks the zone: a `region` on a GCP job is rejected at submit (choosing a region is AWS-only).
+
+## Pricing
+
+$3.00 per GPU-hour for A100 80GB and $5.99 per GPU-hour for H100 80GB (October 2026). Bare `veri gpu list` shows the current rates (GCP has no live availability view).
+
+Billing starts when the VM has its GPU. The wait for capacity is not billed, and a job that never gets a GPU (`CAPACITY_UNAVAILABLE`) is not billed at all.
+
+## Submitting a job
+
+```python
+job = client.training_jobs.create(
+    base_model="Qwen/Qwen2.5-0.5B-Instruct",
+    dataset_id=dataset.id,
+    method="sft_text",
+    output_name="qwen-gcp-sft",
+    gpu_type="A100-80GB",
+    gpu_count=1,
+    provider="gcp",
+)
+```
+
+From the CLI, `veri train my_job.py --provider gcp`, or `provider.name = "gcp"` in a [config file](/cli/training).
+
+## Waiting for capacity
+
+A GCP job stays `queued` while Veri looks for capacity. Veri asks the zones one at a time and keeps each request open for its share of about 15 minutes in total (at least 90 seconds per zone). The first zone with a free GPU wins and the job moves to `provisioning`.
+
+If no zone has a GPU in that time, the job fails with `CAPACITY_UNAVAILABLE` and is not billed. Resubmit later, try the other GPU type, or use another provider (a single H100 is also on [Vast.ai](/training/providers/vast) and [DigitalOcean](/training/providers/digitalocean)).
+
+## One GCP GPU at a time
+
+Veri runs one GCP GPU at a time for now. A GCP job submitted while that GPU is in use waits in `queued`, records one `waiting_for_provider_gpu` event, and launches when the GPU is released, a few minutes after the job using it ends. Nothing is billed while it waits. To start sooner, cancel it and submit on another provider.
+
+## When GCP ends the VM
+
+Flex-start VMs are not preempted, but GCP can still end one before the job finishes: after a host error, for host maintenance, or at the 24-hour maximum run duration that Veri sets on every GCP VM (the same 24-hour limit every job has on its running time). The job then fails with one of these codes:
+
+| `error.code` | What happened | Billing |
+| --- | --- | --- |
+| `provider_reclaimed` | GCP deleted the VM, or stopped it after a host error, for host maintenance or for a preemption, before the job finished | A platform failure (`error.attribution` is `platform`): the job's cost is credited back automatically. `custom_script` jobs are reviewed by hand |
+| `max_run_duration_reached` | GCP ended the VM at its 24-hour maximum run duration | Charged, like any job that reaches the running-time limit (`error.attribution` is `customer`). Lower `max_steps` or split the run |
+
+Either way the job keeps the checkpoints it saved, and `error.message` says how to continue. Resume from the newest checkpoint as a new job:
+
+```bash
+veri jobs resume job_abc123                 # newest ready checkpoint
+veri jobs resume job_abc123 --provider vast # continue on another provider
+```
+
+or pass `resume_from="job_abc123@<step>"` on create (`GET /v1/training_jobs/{id}/checkpoints` lists the steps). `resume_from` applies to managed jobs only. See [Checkpoints and resume](/training/checkpoints).
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="All providers" icon="server" href="/training/providers">
+    Compare GPUs, billing, and status across providers.
+  </Card>
+  <Card title="Checkpoints and resume" icon="floppy-disk" href="/training/checkpoints">
+    Save checkpoints while a job runs and continue from one.
+  </Card>
+</CardGroup>

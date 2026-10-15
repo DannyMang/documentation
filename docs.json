@@ -57,7 +57,8 @@
                   "training/providers",
                   "training/providers/aws",
                   "training/providers/vast",
-                  "training/providers/digitalocean"
+                  "training/providers/digitalocean",
+                  "training/providers/gcp"
                 ]
               },
               "training/datasets",

@@ -46,7 +46,7 @@ stateDiagram-v2
 
 What happens at each transition:
 
-- **`queued`**: job row written (HTTP 402 at submit if the workspace has no billing account). No spend yet. Veri tries to acquire a GPU instance from here; if no zone has capacity, the job goes straight to `failed` with `CAPACITY_UNAVAILABLE`.
+- **`queued`**: job row written (HTTP 402 at submit if the workspace has no billing account). No spend yet. Veri tries to acquire a GPU instance from here; if no zone has capacity, the job goes straight to `failed` with `CAPACITY_UNAVAILABLE`. On GCP the job stays `queued` for up to about 15 minutes while Veri waits for Flex-start capacity, and longer when the one GCP GPU is in use (see [GCP](/training/providers/gcp)).
 - **`provisioning`**: Veri has leased a GPU and the instance boots. `started_at` is still `null`. Once the instance is acquired, the GPU is rented and **cost accrues from this point**, even before the first training step. A job that never secures a GPU (for example `CAPACITY_UNAVAILABLE`) rents nothing and is not billed.
 - **`configuring`**: the instance is up and the worker is setting up its environment.
 - **`running`**: the worker has started the training process (dataset and model load, then training steps). `started_at` populates. Metrics start streaming with the first step.
@@ -64,7 +64,7 @@ When a job ends in `failed`, `error.code` carries one of:
 | --- | --- | --- |
 | `oom` | Model too large for the chosen GPU | Drop to a smaller base, raise `gpu_count`, or shrink `max_response_length` |
 | `CAPACITY_UNAVAILABLE` | No GPU capacity for the requested type in any availability zone, after trying every capable zone (`max_launch_attempts`) | Retry later, pick a different `gpu_type`, or launch in another region (`veri regions list`, then `region="..."`). Capacity is provider-side and not pre-checkable |
-| `launch_timeout` | The provider's GPU launch did not finish within its time limit (10 min on AWS, 15 min on DigitalOcean, GCP and Vast) and was stopped. Not billed | Re-submit; if it keeps happening, try another provider or `gpu_type` |
+| `launch_timeout` | The provider's GPU launch did not finish within its time limit (10 min on AWS, 15 min on DigitalOcean and Vast, 18 min on GCP) and was stopped. Not billed | Re-submit; if it keeps happening, try another provider or `gpu_type` |
 | `provisioning_error` | The instance booted but the worker did not come up | Re-submit; if persistent, try a different `gpu_type` |
 | `provisioning_timeout` | The instance never reached a running worker within the provisioning deadline | Re-submit; capacity or boot was too slow |
 | `configuring_timeout` | The worker booted but made no training progress within the configuring deadline | Re-submit; if persistent, check the full log via `GET /v1/training_jobs/{id}/logs/full` |
@@ -73,6 +73,8 @@ When a job ends in `failed`, `error.code` carries one of:
 | `distributed_error` | Multi-GPU job: the GPUs stopped talking to each other (NCCL error, collective timeout, rendezvous failure) | Re-submit once; if it repeats on the same configuration, report the job id. See [Multi-GPU training](/training/multi-gpu) |
 | `training_stalled` | Multi-GPU job: no progress line for the longer of 10 minutes and three times the median step time | Check the log tail (it carries each GPU's stack); lower `micro_batch_size` or the sequence length |
 | `hardware_error` | The box failed a hardware check (missing GPU, memory errors) | Re-submit; this one is on the platform |
+| `provider_reclaimed` | GCP deleted or stopped the VM (host error, host maintenance, preemption) before the job finished. Credited back automatically | Resume from the newest checkpoint with `resume_from` (`veri jobs resume <id>`) |
+| `max_run_duration_reached` | GCP ended the VM at its 24-hour maximum run duration | Lower `max_steps` or split the run; resume from the newest checkpoint with `resume_from` |
 
 The last 200 log lines from the worker are surfaced in `error.log_tail` for fast triage; the full stdout is uploaded to S3 and accessible via `GET /v1/training_jobs/{id}/logs/full`.
 
@@ -82,8 +84,8 @@ A failed job also carries `error.attribution`:
 
 | `error.attribution` | Meaning | Billing |
 | --- | --- | --- |
-| `customer` | The failure came from the job's own configuration, data or code (`oom`, `config_error`, `dependency_error`, `training_stalled`, `heartbeat_timeout` and similar) | Charged as usual |
-| `platform` | Veri's hardware or provisioning failed (`hardware_error`, `provisioning_error`, `provisioning_timeout`, `configuring_timeout`) | The job's cost is credited back to the workspace automatically |
+| `customer` | The failure came from the job's own configuration, data or code (`oom`, `config_error`, `dependency_error`, `training_stalled`, `heartbeat_timeout`, `max_run_duration_reached` and similar) | Charged as usual |
+| `platform` | Veri's hardware or provisioning failed (`hardware_error`, `provisioning_error`, `provisioning_timeout`, `configuring_timeout`), or the provider ended the VM (`provider_reclaimed`) | The job's cost is credited back to the workspace automatically |
 | `pending` | The cause is not clear from the evidence (for example `distributed_error` or `training_error` on a multi-GPU job). An operator reviews it | Charged; credited if the review finds a platform fault |
 
 Credits appear on the job as `refund` with `status` (`approved`, `credited`, `pending` or `denied`) and `amount_usd`, and as a `job_refunded` entry in the job's events. Multi-GPU jobs run a hardware check before any of your code and after a failure; the result is what makes a `hardware_error` verdict, never text in the log.
@@ -149,7 +151,7 @@ Pass `region="us-west-2"` to `client.training_jobs.create` or the `@training_job
 
 ### Choosing a GPU provider
 
-Veri supports multiple GPU providers: AWS (NVIDIA, default), Vast.ai (NVIDIA marketplace), DigitalOcean (H100 droplets), and GCP (single A100 80GB). Pass `provider` at submit time to choose where your job runs:
+Veri supports multiple GPU providers: AWS (NVIDIA, default), Vast.ai (NVIDIA marketplace), DigitalOcean (H100 droplets), and GCP (a single A100 80GB or H100 80GB). Pass `provider` at submit time to choose where your job runs:
 
 ```python
 job = client.training_jobs.create(
