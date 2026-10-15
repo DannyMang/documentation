@@ -1232,7 +1232,7 @@
             "description": "dataset or deployment not found"
           },
           "409": {
-            "description": "export_window_overlap: overlaps a previous import"
+            "description": "export_window_overlap: overlaps a previous import; export_thread_duplicate: the thread was already imported"
           },
           "502": {
             "description": "trace store failed mid-fetch; nothing appended"
@@ -3536,7 +3536,7 @@
             "description": "No such evaluator (or judge deployment) in the caller's workspace"
           },
           "409": {
-            "description": "The evaluator is archived"
+            "description": "The evaluator is archived; or the scope changes while a monitor tracks the latest version (pin or delete the monitor first)"
           }
         },
         "security": [
@@ -5052,7 +5052,7 @@
           "Monitors"
         ],
         "summary": "Create a monitor",
-        "description": "Scores a sampled share of one deployment's live traffic with one evaluator. A single_turn evaluator scores traced requests as they ship; a thread evaluator scores a thread once it has been idle for `idle_minutes` (again after it resumes and goes idle again). Scores carry `source: monitor` and the monitor's id; a failed evaluation emits the `score.failed` webhook. The deployment must store trace bodies (the judge reads them).",
+        "description": "Scores a sampled share of one deployment's live traffic with one evaluator. A single_turn evaluator scores traced requests as they ship; a thread evaluator scores a thread once it has been idle for `idle_minutes` (again after it resumes and goes idle again). Scores carry `source: monitor` and the monitor's id; a failed evaluation emits the `score.failed` webhook. The deployment must store trace bodies (the judge reads them). One evaluator version writes at most one monitor score per target, so two monitors running the same evaluator version on the same deployment compete: the second one's tasks end skipped and its stats stay zero (give it its own evaluator or version). Names are unique among the workspace's monitors.",
         "operationId": "create",
         "requestBody": {
           "content": {
@@ -5082,7 +5082,7 @@
             "description": "No such deployment, evaluator or evaluator version in the caller's workspace"
           },
           "409": {
-            "description": "trace_bodies_required: the deployment does not store trace bodies; or the evaluator is archived"
+            "description": "trace_bodies_required: the deployment does not store trace bodies; the evaluator is archived; or another monitor of the workspace has the name"
           }
         },
         "security": [
@@ -5221,7 +5221,7 @@
             "description": "No such monitor or evaluator version in the caller's workspace"
           },
           "409": {
-            "description": "trace_bodies_required on enabling; or the evaluator is archived"
+            "description": "trace_bodies_required on enabling; the evaluator is archived; or another monitor of the workspace has the name"
           }
         },
         "security": [
@@ -5289,7 +5289,7 @@
           "Observability"
         ],
         "summary": "List conversations",
-        "description": "Threads and sessions with activity in the window, newest activity first, keyset paged with `after` = the previous page's `next_cursor`.",
+        "description": "Threads and sessions with activity in the window, newest activity first, keyset paged with `after` = the previous page's `next_cursor` (which pins the first page's window end).",
         "operationId": "conversations",
         "parameters": [
           {
@@ -5366,6 +5366,24 @@
             }
           },
           {
+            "name": "tool",
+            "in": "query",
+            "description": "Only conversations that used this tool in the window (a thread\nrequest carrying its result, a session's `agent.tool_use`). Exact\nname, as the overview's `top_tools` lists it.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "model",
+            "in": "query",
+            "description": "Only conversations with a model call on this model in the window\n(a thread request's adapter alias or deployment model, a session's\nmodel). Exact name, as the overview's `top_models` lists it.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "description": "Page size, 1..=100 (default 50).",
@@ -5378,7 +5396,7 @@
           {
             "name": "after",
             "in": "query",
-            "description": "`next_cursor` of the previous page.",
+            "description": "`next_cursor` of the previous page. It pins the window end `to` of\nthe page it came from, so omit `to` (or repeat the same value) on\nthe following pages; another `to` is a 400.",
             "required": false,
             "schema": {
               "type": "string"
@@ -15715,7 +15733,7 @@
         "properties": {
           "name": {
             "type": "string",
-            "description": "1-64 lowercase letters, digits, '.', '_' or '-'."
+            "description": "1-64 lowercase letters, digits, '.', '_' or '-'; unique among the\nworkspace's (undeleted) monitors."
           },
           "deployment_id": {
             "type": "string",
@@ -15773,7 +15791,7 @@
       },
       "MonitorResponse": {
         "type": "object",
-        "description": "One monitor.",
+        "description": "One monitor. Its `stats` count the scores it wrote; two monitors on the\nsame evaluator version and deployment compete for one score per target,\nso the later one's stats stay zero.",
         "required": [
           "object",
           "id",
@@ -15877,6 +15895,7 @@
       },
       "MonitorStatsResponse": {
         "type": "object",
+        "description": "Counts of the scores this monitor wrote. A target takes one monitor\nscore per evaluator version, so a monitor sharing its evaluator version\nand deployment with an older monitor writes none: its tasks are skipped\nand these stay zero.",
         "required": [
           "scored_today",
           "flagged_today",
@@ -17790,7 +17809,7 @@
             "type": "array",
             "items": {
               "type": "object",
-              "description": "One monitor.",
+              "description": "One monitor. Its `stats` count the scores it wrote; two monitors on the\nsame evaluator version and deployment compete for one score per target,\nso the later one's stats stay zero.",
               "required": [
                 "object",
                 "id",
@@ -20661,6 +20680,7 @@
           "conversations",
           "llm_calls",
           "tool_calls",
+          "tool_errors",
           "errors",
           "prompt_tokens",
           "completion_tokens",
@@ -20684,6 +20704,11 @@
           "tool_calls": {
             "type": "integer",
             "format": "int64"
+          },
+          "tool_errors": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Failed tool calls (sessions' `tool.result` errors; a thread's rows\ncarry no tool outcomes, so threads contribute 0)."
           },
           "errors": {
             "type": "integer",
@@ -22047,7 +22072,7 @@
           },
           "bodies": {
             "type": "string",
-            "description": "captured (the newest call's body is stored) | partial (an older\ncall's is) | none (no stored bodies: trace bodies off or purged)."
+            "description": "captured (the newest call's body is stored) | partial (an older\ncall's is) | none (no stored bodies: trace bodies off or purged) |\nunavailable (the trace store did not answer; the steps still come\nfrom the request rows, retry for the bodies)."
           },
           "models": {
             "type": "array",
@@ -22424,7 +22449,7 @@
               "string",
               "null"
             ],
-            "description": "Import one thread of `deployment` as one row, built from its newest\nstored trace (whose messages hold the whole conversation).\n`from`/`to`/`limit`/`force`/`model_version_id` do not apply."
+            "description": "Import one thread of `deployment` as one row, built from its newest\nstored trace (whose messages hold the whole conversation).\n`from`/`to`/`limit`/`model_version_id` do not apply. Importing the\nsame thread again while that trace is still its newest is a 409\nunless `force` is set."
           }
         },
         "additionalProperties": false

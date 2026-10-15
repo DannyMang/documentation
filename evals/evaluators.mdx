@@ -85,7 +85,7 @@ Set `"mode": "decision"` in `method_config` and the judge answers with exactly o
 veri evaluators create --file on-topic.json --judge-deployment 4f2a9c1e7b3d
 ```
 
-A numeric scale in decision mode needs integer `min` and `max` at most 10 apart: `1` to `5` works, while `0` to `100` or `0.5` to `5` is refused with `400`. Use the default mode, `reasoned`, for wider or fractional scales. `confidence` is empty when the judge's reply carries no usable log probabilities.
+A numeric scale in decision mode needs integer `min` and `max` at most 10 apart: `1` to `5` works, while `0` to `100` or `0.5` to `5` is refused with `400`. Because the confidence is read off the first token, decision mode also refuses (with `400`) a label longer than 32 characters, a label that is the start of another (`1` and `10`, so `1` to `10` is refused too: use `0` to `9` or `1` to `5`), and two labels that start with the same word (`not helpful` and `not harmful`). Versions stored before these rules keep running. Use the default mode, `reasoned`, for wider or fractional scales. `confidence` is empty when the judge's reply carries no usable log probabilities.
 
 ## Jev judge
 
@@ -197,6 +197,8 @@ veri evaluators archive helpful                                # no new versions
 ```
 
 Pin a version as `helpful@2` in experiments, gates, and queues; a bare name means the latest.
+
+A version that changes `scope` (for example `single_turn` to `thread`) is refused with `409` while any [monitor](/evals#monitors) tracks the evaluator's latest version, because it would change what the monitor scores. The error names those monitors: pin them to a version (`evaluator_version`) or delete them first.
 
 ## Scores
 

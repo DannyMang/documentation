@@ -80,7 +80,7 @@ curl "https://api.veri.studio/v1/monitors" \
 
 | Field | Default | Meaning |
 | --- | --- | --- |
-| `name` | required | 1-64 lowercase letters, digits, `.`, `_` or `-`. |
+| `name` | required | 1-64 lowercase letters, digits, `.`, `_` or `-`, unique among the workspace's monitors. |
 | `deployment_id` | required | The deployment whose traffic is scored. Fixed at create. |
 | `evaluator_id` | required | The evaluator's id or name. Fixed at create. |
 | `evaluator_version` | latest | Pin a version; `null` tracks the latest. |
@@ -89,6 +89,8 @@ curl "https://api.veri.studio/v1/monitors" \
 | `idle_minutes` | `15` | Thread evaluators: minutes without a request before a conversation is scored, 1-1440. |
 | `daily_cap` | `1000` | Most targets queued per UTC day, 1-100000. |
 | `enabled` | `true` | `false` pauses the monitor without deleting it. |
+
+A name another monitor of the workspace already has is refused with `409` on create or rename (the error names that monitor); deleting a monitor frees its name. One evaluator version writes at most one monitor score per target, so two monitors running the same evaluator version on the same deployment compete: the second one's tasks are skipped and its `stats` stay zero. Give it its own evaluator or version.
 
 List monitors with `GET /v1/monitors` (`?deployment_id=` for one deployment), and read, edit, or delete one with `GET`, `PATCH`, or `DELETE /v1/monitors/<id>`. Each monitor reports `stats`: scores and flagged scores (those that failed the pass rule) today and over 7 days, `last_scored_at`, and `human_agreement` once human reviews share targets with it. Its scores carry `source: monitor` and its `monitor_id` (`GET /v1/scores?monitor_id=<id>`) and are kept when the monitor is deleted. An evaluation that errors sends the `score.failed` [webhook](/webhooks). Judge calls are ordinary requests to the judge deployment.
 

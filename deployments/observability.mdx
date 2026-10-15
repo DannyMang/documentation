@@ -294,12 +294,14 @@ Open **Agents** in the dashboard (Overview, Conversations, and Agents tabs) to b
 
 | Endpoint | Returns |
 | --- | --- |
-| `GET /v1/observability/overview` | Totals, a zero-filled time series, live counts, and the top tools, agents, and models. Filter with `agent` (a key) or `deployment_id`. |
+| `GET /v1/observability/overview` | Totals, a zero-filled time series (each bucket also carries `tool_errors`, the failed tool calls of managed agent sessions), live counts, and the top tools, agents, and models. Filter with `agent` (a key) or `deployment_id`. |
 | `GET /v1/observability/agents` | One entry per agent: conversations, turns, model and tool calls, tokens, error rate, and a 14-day daily conversation count. |
-| `GET /v1/observability/conversations` | Threads (and managed agent sessions) with activity in the window, newest first. Filters: `agent`, `deployment_id`, `kind` (`thread` or `session`), `active`, `errors_only`, `q` (text search). Page with `limit` (1-100, default 50) and `after` (the previous page's `next_cursor`). |
-| `GET /v1/deployments/{deployment_id}/threads/{thread_id}` | One thread, turn by turn: every model call and the tool calls between calls. Message text comes from stored [traces](#request-traces); `bodies` is `none` when the deployment does not capture them. |
+| `GET /v1/observability/conversations` | Threads (and managed agent sessions) with activity in the window, newest first. Filters: `agent`, `deployment_id`, `kind` (`thread` or `session`), `active`, `errors_only`, `q` (text search), `tool` and `model` (exact names, as the overview's top tools and top models list them; at most 200 characters). Page with `limit` (1-100, default 50) and `after` (the previous page's `next_cursor`). |
+| `GET /v1/deployments/{deployment_id}/threads/{thread_id}` | One thread, turn by turn: every model call and the tool calls between calls. Message text comes from stored [traces](#request-traces); `bodies` is `none` when the deployment does not capture them, and `unavailable` when the trace store did not answer (the turns still come from the request records; retry for the text). |
 
-The window is `from` and `to` (RFC 3339), by default the past 24 hours, at most 30 days.
+The window is `from` and `to` (RFC 3339), by default the past 24 hours, at most 30 days, starting no earlier than 2000-01-01. A `next_cursor` keeps the first page's window end, so page on without `to` (or repeat the same `to`): a different `to` with a cursor is a `400`.
+
+To turn one conversation into a dataset row (the dashboard's **Add to dataset**), call `POST /v1/datasets/{dataset_id}/import-traces` with `deployment` and `thread_id`. Importing the same conversation into the same dataset again while its newest stored message is unchanged returns `409 export_thread_duplicate`, naming the earlier import; send `"force": true` to append it again.
 
 ```bash
 curl --get "https://api.veri.studio/v1/observability/conversations" \
