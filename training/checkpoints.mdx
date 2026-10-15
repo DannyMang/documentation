@@ -18,7 +18,7 @@ Two hyperparameters on every managed method:
 | Hyperparameter | Default | Meaning |
 | --- | --- | --- |
 | `checkpoint_every` | `0.1` for LoRA and QLoRA jobs, `0.25` for full fine-tunes | How often to save. A value between 0 and 1 is a **fraction of the run** (`0.1` is ten checkpoints, whatever the run length). A value of 1 or more is a **literal step count** and must be a whole number. `0` turns intermediate checkpoints off. |
-| `checkpoint_keep` | `3` | How many checkpoints to keep in storage per job. Older ones are deleted as new ones are written. `0` keeps every checkpoint. |
+| `checkpoint_keep` | every checkpoint | A keep-last limit: keep only the newest N checkpoints of the job and delete older ones as new ones are written. Unset or `0` keeps every checkpoint. |
 
 ```python
 job = client.training_jobs.create(
@@ -81,7 +81,7 @@ GRPO jobs regenerate their rollouts after a resume. A step-count `checkpoint_eve
 
 ## Retention
 
-Rotation keeps the newest `checkpoint_keep` checkpoints of a running job. After a job finishes, its remaining checkpoints are kept for 7 days and then deleted, unless a resumed job that has not finished yet points at one. The final artifact is unaffected and stays with the job. Rolling checkpoints are not billed.
+Checkpoints and the final artifact are kept until you delete them: deleting the job (or the workspace) deletes its checkpoints and its final artifact. Nothing expires on its own. The only automatic deletion is the keep-last limit you set with `checkpoint_keep`: with it, older checkpoints of the job are deleted as new ones are written. Rolling checkpoints are not billed.
 
 ## Custom scripts
 

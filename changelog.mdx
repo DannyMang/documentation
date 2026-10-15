@@ -5,6 +5,12 @@ description: "Recent product and platform changes in Veri"
 keywords: ["changelog", "releases", "platform updates"]
 ---
 
+## 2026-10-15: model weights are kept until you delete them
+
+- Checkpoints of finished training jobs no longer expire after 7 days; they are kept, with the job's final artifact, until you delete the job.
+- Without `checkpoint_keep`, a job keeps every checkpoint it writes (the default used to be the newest 3). Set `checkpoint_keep` to keep only the newest N.
+- Model versions have no default retention window (it was 90 days): versions are only purged under a window you set with `veri settings retention --days N` or `veri models retention <lineage> --days N`. The retention API returns `null` when no window is set.
+
 ## 2026-10-14: managed agents: every harness, triggers and session ops
 
 - All six [harnesses](/agents/harnesses) are available on every workspace: `claude-code` (the default), `opencode`, `codex`, `langgraph`, `crewai` and `custom`.
