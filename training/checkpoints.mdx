@@ -81,7 +81,7 @@ GRPO jobs regenerate their rollouts after a resume. A step-count `checkpoint_eve
 
 ## Retention
 
-Rotation keeps the newest `checkpoint_keep` checkpoints of a running job. After a job finishes, its remaining checkpoints are kept for 7 days and then deleted, unless a resumed job that has not finished yet points at one. The final artifact is unaffected and stays with the job. Rolling checkpoints are not billed.
+Rotation keeps the newest `checkpoint_keep` checkpoints of a running job. After a job finishes, its remaining checkpoints are kept for 7 days and then deleted, unless a resumed job that has not finished yet points at one. The final artifact is unaffected and stays with the job. The checkpoints a job still keeps when it ends are charged once, with the job, for those 7 days (about $0.007 per GiB, see [Training job charges](/billing#training-job-charges)); checkpoints rotation deleted during the run are not charged.
 
 ## Custom scripts
 

@@ -5,6 +5,10 @@ description: "Recent product and platform changes in Veri"
 keywords: ["changelog", "releases", "platform updates"]
 ---
 
+## 2026-10-15: checkpoint storage is charged on what a job keeps
+
+A training job's checkpoint-storage charge is now the GiB of checkpoints it still keeps when it ends, for the 7 days they are kept (about $0.007 per GiB), instead of a flat charge for 8 GiB on every job. A job that keeps no checkpoint, such as one cancelled before its first save, pays nothing for storage. See [Training job charges](/billing#training-job-charges).
+
 ## 2026-10-14: managed agents: every harness, triggers and session ops
 
 - All six [harnesses](/agents/harnesses) are available on every workspace: `claude-code` (the default), `opencode`, `codex`, `langgraph`, `crewai` and `custom`.
