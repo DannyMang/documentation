@@ -33,11 +33,11 @@ my-project/
 └── .gitignore
 ```
 
-The scaffolded `configs/train.toml` trains on a dataset named `gsm8k-train`. Register it once, then validate the config:
+The scaffolded `configs/train.toml` trains on a dataset named `gsm8k-train`. Register it once, then price the job before submitting it:
 
 ```bash
 veri datasets connect-hf openai/gsm8k --config main --split train --map question=prompt --name gsm8k-train
-veri run configs/train.toml --dry-run
+veri jobs estimate configs/train.toml
 ```
 
 By default `init` refuses to write into a non-empty directory. Use `--force` to scaffold alongside existing files (existing files are preserved):
@@ -195,15 +195,12 @@ max_replicas = 1            # 1-8; above min_replicas enables autoscaling
   `[autoscaling]` accepts exactly `min_replicas`, `max_replicas`, `concurrency_target`, `scale_to_zero_window_seconds`, `idle_delete_after_days`, and `self_heal_attempts`; any other key (for example `target_qps`) is rejected. The same six keys are also accepted under `[resources]`, which is where the `veri deployments create` scaling flags (`--min-replicas`, `--max-replicas`, and friends) land. Setting a key in both tables with different values is an error: set it in one place.
 </Note>
 
-## `--dry-run` before submitting
+## Price a job before submitting
 
-On `veri jobs create` (and `veri run` with `kind="train"`), `--dry-run` validates the config without submitting:
-
-It prints the resolved GPU config plus a cost estimate (illustrative values):
+`veri jobs estimate` prices a `kind="train"` config without submitting it. It prints the resolved GPU config plus a cost estimate (illustrative values):
 
 ```bash
-$ veri run configs/train.toml --dry-run
-Dry run — no job submitted.
+$ veri jobs estimate configs/train.toml
 ┏━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┓
 ┃ gpu_type ┃ gpu_count ┃ provider ┃ duration_minutes ┃ rate_usd_per_hour ┃ estimated_cost_usd ┃
 ┡━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━┩
@@ -213,7 +210,7 @@ Dry run — no job submitted.
 
 Add `--format json` for the same fields as a JSON object (`gpu_type`, `gpu_count`, `provider`, `duration_minutes`, `rate_usd_per_hour`, `estimated_cost_usd`).
 
-The estimate does not check the GPU shape or the dataset: submitting is what validates them.
+The estimate does not check the GPU shape or the dataset: submitting is what validates them. A submit that fails validation is rejected before anything is created or billed.
 
 ## What's next
 

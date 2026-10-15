@@ -142,12 +142,14 @@ kind = "train"
 ```
 
 ```bash
-veri jobs create configs/train.toml --dry-run    # local check + rough AWS price; GPU shape/provider are checked only on submit
+veri jobs estimate configs/train.toml            # rough AWS price, nothing submitted; GPU shape/provider are checked only on submit
 veri jobs create configs/train.toml --follow     # submit + stream logs (Ctrl+C detaches)
 veri jobs logs <id> -f                           # tail later
 veri jobs get <id> && veri jobs download <id> --output-dir ./checkpoints
 veri jobs cancel <id>
 ```
+
+A submit that fails validation is rejected before anything is created or billed, so submitting is the real check.
 
 Key hyperparameter defaults: grpo: lr 1e-6, rollouts_per_prompt 8, kl_coef 0.0 (omitted = no KL term), max_steps 100 (one prompt per step; num_epochs is not used), max_response_length 2048; sft_text: lr 2e-5, num_epochs 1; dpo: lr 5e-6, beta 0.1. LoRA via `lora_rank`/`lora_alpha`; QLoRA via `load_in_4bit` (NVIDIA only).
 
@@ -476,7 +478,7 @@ MCP alternative: hosted server at `https://api.veri.studio/mcp` (read-only: `/re
 ## Ground rules for agents
 
 1. Run `veri whoami` before anything; fix auth first if the token is invalid.
-2. Estimate before spending: `veri jobs create --dry-run` / `veri cost estimate`. GPU time bills real money (402 = out of credit).
+2. Estimate before spending: `veri jobs estimate <config>` / `veri cost estimate`. A submit that fails validation creates nothing and costs nothing; GPU time bills real money (402 = out of credit).
 3. Never leave deployments running: stop or scale-to-zero after use.
 4. Prefer `--format json --quiet` when parsing output.
 5. On a 400 that says "not currently enabled" or "coming soon", the provider/feature is off: pick a live alternative, don't retry.
