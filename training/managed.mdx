@@ -31,6 +31,7 @@ stateDiagram-v2
     [*] --> queued
     queued --> provisioning : GPU instance acquired
     queued --> failed : CAPACITY_UNAVAILABLE (no GPU capacity in any zone)
+    queued --> failed : launch_timeout (the GPU launch did not finish in time)
     provisioning --> configuring : instance booted, worker setting up
     provisioning --> failed : provisioning_error / provisioning_timeout
     configuring --> running : worker started training
@@ -63,6 +64,7 @@ When a job ends in `failed`, `error.code` carries one of:
 | --- | --- | --- |
 | `oom` | Model too large for the chosen GPU | Drop to a smaller base, raise `gpu_count`, or shrink `max_response_length` |
 | `CAPACITY_UNAVAILABLE` | No GPU capacity for the requested type in any availability zone, after trying every capable zone (`max_launch_attempts`) | Retry later, pick a different `gpu_type`, or launch in another region (`veri regions list`, then `region="..."`). Capacity is provider-side and not pre-checkable |
+| `launch_timeout` | The provider's GPU launch did not finish within its time limit (10 min on AWS, 15 min on DigitalOcean, GCP and Vast) and was stopped. Not billed | Re-submit; if it keeps happening, try another provider or `gpu_type` |
 | `provisioning_error` | The instance booted but the worker did not come up | Re-submit; if persistent, try a different `gpu_type` |
 | `provisioning_timeout` | The instance never reached a running worker within the provisioning deadline | Re-submit; capacity or boot was too slow |
 | `configuring_timeout` | The worker booted but made no training progress within the configuring deadline | Re-submit; if persistent, check the full log via `GET /v1/training_jobs/{id}/logs/full` |
