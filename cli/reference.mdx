@@ -110,15 +110,16 @@ veri config set profiles.default.api_key=vk_new_key
 veri doctor
 ```
 
-Runs five checks and reports `pass` / `warn` / `fail` per row:
+Runs six checks and reports `pass` / `warn` / `fail` per row:
 
 | Check | What it verifies |
 | --- | --- |
 | `python` | Python interpreter version ≥ 3.10. |
 | `sdk` | `veri-sdk` is installed and importable. |
 | `config` | Config file exists and parses. |
-| `credentials` | An API key is set (file or env var). |
+| `credentials` | An API key is set (file or env var) and the API accepts it on `/v1/me`; a rejected key is `fail` with the HTTP status, an unreachable API is `warn`. |
 | `network` | The API URL responds to `/health` with HTTP `< 500`. |
+| `mcp extra` | `veri mcp serve` can start (the `mcp` extra is installed and imports); on `fail` the row carries the install line for uv tool, pipx and pip. |
 
 `doctor` always exits `0` — it reports, doesn't gate. Read the table, act on warnings. Use `--format json` to consume from CI:
 
