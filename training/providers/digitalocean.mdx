@@ -1,19 +1,20 @@
 ---
 title: "DigitalOcean"
 sidebarTitle: "DigitalOcean"
-description: "On-demand H100 GPU Droplets in fixed 1x and 8x shapes, with per-second billing and about one minute provisioning."
-keywords: ["DigitalOcean", "H100", "GPU Droplets", "NVIDIA", "provider"]
+description: "On-demand H100 and H200 GPU Droplets: single-GPU H100/H200 or an 8x H100 node, per-second billing, about one minute provisioning."
+keywords: ["DigitalOcean", "H100", "H200", "GPU Droplets", "NVIDIA", "provider"]
 ---
 
 DigitalOcean GPU Droplets are on-demand single- and 8-GPU VMs with per-second billing and fast (about one minute) provisioning.
 
 ## GPU types
 
-| GPU type | VRAM | Architecture | GPUs available |
-| --- | --- | --- | --- |
-| `H100-80GB` | 80 GB | NVIDIA Hopper | 1 or 8 |
+| GPU type | VRAM | Architecture | GPUs available | Regions |
+| --- | --- | --- | --- | --- |
+| `H100-80GB` | 80 GB | NVIDIA Hopper | 1 or 8 | tor1, nyc2 |
+| `H200-141GB` | 141 GB | NVIDIA Hopper | 1 | atl1, nyc2 |
 
-DigitalOcean sells fixed 1x and 8x droplet shapes only — a `gpu_count` of 2 or 4 is rejected at submit.
+DigitalOcean sells fixed droplet shapes only: a `gpu_count` of 2 or 4 is rejected at submit, and the H200 is single-GPU. The H200's 141 GB fits a full-parameter fine-tune of a 7B to 8B model, or LoRA on 30B-class models, on one GPU.
 
 ## Submitting a job
 
@@ -23,10 +24,14 @@ job = client.training_jobs.create(
     dataset_id=dataset.id,
     method="sft_text",
     output_name="qwen-do-sft",
-    gpu_type="H100-80GB",
+    gpu_type="H200-141GB",
     gpu_count=1,
     provider="digitalocean",
 )
+```
+
+```bash
+veri jobs create train.toml --gpu-type H200-141GB --gpu-count 1 --set provider=digitalocean
 ```
 
 ## Notes
