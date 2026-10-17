@@ -289,7 +289,7 @@ veri version --format json
 Prints SDK version, Python version, and platform string. The `--version` and `-v` root flags are aliases — they emit the same output and exit. From CI:
 
 ```bash
-test "$(veri version --format json | jq -r .sdk_version)" = "0.2.42" || exit 1
+test "$(veri version --format json | jq -r .sdk_version)" = "0.2.44" || exit 1
 ```
 
 ## Phase-2 deferrals
