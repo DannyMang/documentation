@@ -5,7 +5,7 @@ description: "Where deployments run today (AWS) and how to check the live GPU ca
 keywords: ["providers", "serving", "deployments", "AWS", "GPU catalog"]
 ---
 
-Deployments run on AWS. The `provider` field defaults to `aws`, so you can leave it out. Capacity errors don't spill to another cloud: retry later or pick another GPU shape.
+Deployments run on AWS by default, or on DigitalOcean for single-GPU H100 and H200. The `provider` field defaults to `aws`, so you can leave it out. Capacity errors don't spill to another cloud: retry later or pick another GPU shape.
 
 ## Providers at a glance
 
@@ -15,6 +15,8 @@ Deployments run on AWS. The `provider` field defaults to `aws`, so you can leave
 | [`aws`](/deployments/providers/aws) (default) | `A10G-24GB` | 24 GB | 1 or 4 | Available |
 | [`aws`](/deployments/providers/aws) (default) | `A100-80GB` | 80 GB | 8 (whole node) | Available |
 | [`aws`](/deployments/providers/aws) (default) | `H100-80GB` | 80 GB | 8 (whole node) | Available |
+| [`digitalocean`](/deployments/providers/digitalocean) | `H100-80GB` | 80 GB | 1 | Available (capacity varies) |
+| [`digitalocean`](/deployments/providers/digitalocean) | `H200-141GB` | 141 GB | 1 | Available |
 
 Each provider sells fixed node shapes. The `gpu_count` you request must match one of the counts above — asking for a shape a provider doesn't sell returns a 400 at create, before anything boots.
 

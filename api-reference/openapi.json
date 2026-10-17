@@ -4757,7 +4757,7 @@
           "Models"
         ],
         "summary": "Get a lineage's retention window",
-        "description": "How long unprotected versions of this lineage are kept before the nightly sweep purges their weights. Protected versions (targeted by an alias, the previous production version, pinned or tagged, or in use by a deployment) are never purged.",
+        "description": "How long unprotected versions of this lineage are kept before the nightly sweep purges their weights. With no window set (the default) versions are kept until you delete them. Protected versions (targeted by an alias, the previous production version, pinned or tagged, or in use by a deployment) are never purged.",
         "operationId": "get_model_retention",
         "parameters": [
           {
@@ -7340,7 +7340,7 @@
           "Settings"
         ],
         "summary": "Get the workspace retention default",
-        "description": "Days unprotected model versions and unreferenced dataset snapshots are kept when a lineage sets no override. Default 90.",
+        "description": "Days unprotected model versions and unreferenced dataset snapshots are kept when a lineage sets no override. null (the default) = no window: they are kept until you delete them.",
         "operationId": "get_workspace_retention",
         "responses": {
           "200": {
@@ -10641,7 +10641,8 @@
               "string",
               "null"
             ],
-            "format": "date-time"
+            "format": "date-time",
+            "description": "Always null: checkpoints never expire, they are kept until you delete\nthe job (VS-548). Kept for compatibility."
           }
         }
       },
@@ -15546,9 +15547,7 @@
         "description": "A lineage's retention window.",
         "required": [
           "object",
-          "model",
-          "workspace_default_days",
-          "effective_days"
+          "model"
         ],
         "properties": {
           "object": {
@@ -15568,14 +15567,20 @@
             "description": "The lineage override in days; null = the workspace default applies."
           },
           "workspace_default_days": {
-            "type": "integer",
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int32",
-            "description": "The workspace default (workspace_settings.model_retention_days)."
+            "description": "The workspace default (workspace_settings.model_retention_days); null\n= the workspace set none."
           },
           "effective_days": {
-            "type": "integer",
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int32",
-            "description": "What the sweeper actually applies to this lineage: the override if\nset, else the workspace default. 0 = eligible versions are purged by\nthe next nightly sweep."
+            "description": "What the sweeper actually applies to this lineage: the override if\nset, else the workspace default. null = no window: versions are kept\nuntil you delete them. 0 = eligible versions are purged by the next\nnightly sweep."
           }
         }
       },
@@ -16549,7 +16554,8 @@
                     "string",
                     "null"
                   ],
-                  "format": "date-time"
+                  "format": "date-time",
+                  "description": "Always null: checkpoints never expire, they are kept until you delete\nthe job (VS-548). Kept for compatibility."
                 }
               }
             }
@@ -23978,8 +23984,7 @@
         "type": "object",
         "description": "The workspace default retention window.",
         "required": [
-          "object",
-          "model_retention_days"
+          "object"
         ],
         "properties": {
           "object": {
@@ -23987,9 +23992,12 @@
             "description": "Always \"workspace_retention\"."
           },
           "model_retention_days": {
-            "type": "integer",
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int32",
-            "description": "Days unprotected model versions and unreferenced dataset snapshots are\nkept (default 90; 0 = zero-data-retention opt-in)."
+            "description": "Days unprotected model versions and unreferenced dataset snapshots are\nkept. null (the default) = no window: they are kept until you delete\nthem. 0 = zero-data-retention opt-in."
           }
         }
       },

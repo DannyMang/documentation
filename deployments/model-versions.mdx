@@ -114,14 +114,14 @@ A pinned version is never purged by retention and its library model cannot be de
 
 ## Retention
 
-Old, unprotected versions are purged by a nightly sweep so storage does not grow forever. Two knobs control the window:
+By default versions are kept until you delete them: there is no retention window, and nothing is purged. You can set one, on the workspace or per lineage, and a nightly sweep then purges old, unprotected versions:
 
 ```bash
-veri settings retention                    # show the workspace default (90 days)
+veri settings retention                    # show the workspace default (none unless you set one)
 veri settings retention --days 30          # set it
 veri models retention acme-bot             # show this lineage's effective window
 veri models retention acme-bot --days 7    # per-lineage override
-veri models retention acme-bot --clear     # back to the workspace default
+veri models retention acme-bot --clear     # back to the workspace default (none: keep everything)
 ```
 
 ```text
@@ -138,7 +138,7 @@ acme-bot: keep 7 days (lineage override)
 - Versions a live deployment or fleet adapter is serving.
 - Dataset snapshots pinned by any of the above (and a stream's newest snapshot, the `@latest` anchor).
 
-Everything else becomes eligible once it ages out of the window. Age counts from the last time the version was live (the later of its creation and the last time an alias left it), so "30 days" means 30 days since it last mattered, not since training.
+Everything else becomes eligible once it ages out of a window you set. Age counts from the last time the version was live (the later of its creation and the last time an alias left it), so "30 days" means 30 days since it last mattered, not since training.
 
 **What "purged" looks like.** A purged version keeps its row: the version number, tags, and alias audit remain, but its weights are deleted and its library model can no longer be deployed or attached. A purged dataset snapshot stops resolving (training against it fails); its underlying rows remain in the stream.
 

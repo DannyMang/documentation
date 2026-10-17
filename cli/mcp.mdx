@@ -16,21 +16,24 @@ There are two ways to connect, with the same tools either way:
 
 Connect with your Veri API key as a bearer header (create one from the dashboard's API keys page). Every call acts as that key's owner — the same permissions you have from the CLI, nothing more.
 
-**Claude Code:**
+**Claude Code:** put the key in your shell's environment first, then register the endpoint:
 
 ```bash
+export VERI_API_KEY=vk_...
 claude mcp add --transport http veri https://api.veri.studio/mcp \
   --header "Authorization: Bearer $VERI_API_KEY"
 ```
 
-**Cursor** takes a URL entry under `mcpServers` in `~/.cursor/mcp.json` (or `.cursor/mcp.json` in a project):
+Your shell substitutes the key when you run `claude mcp add`, and Claude Code stores it in its own config. Do not add `-s project` to this command: that writes the key into a `.mcp.json` that is usually committed.
+
+**Cursor** takes a URL entry under `mcpServers` in `~/.cursor/mcp.json` (or `.cursor/mcp.json` in a project). Reference the key as `${env:VERI_API_KEY}` rather than pasting it: `.cursor/mcp.json` is often committed, and Cursor fills the value in from its environment.
 
 ```json
 {
   "mcpServers": {
     "veri": {
       "url": "https://api.veri.studio/mcp",
-      "headers": { "Authorization": "Bearer vk_..." }
+      "headers": { "Authorization": "Bearer ${env:VERI_API_KEY}" }
     }
   }
 }
@@ -49,27 +52,24 @@ The local server runs on your own machine: your MCP client starts it as a subpro
 <Steps>
 
 <Step title="Install the SDK with the mcp extra">
-The MCP server ships with the SDK behind an optional `mcp` extra:
+The MCP server ships with the SDK behind an optional `mcp` extra. Run this even if `veri` is already installed: these flags upgrade an existing install and add the extra, which `uv tool upgrade` and `pipx upgrade` never do.
 
 <CodeGroup>
 ```bash uv (recommended)
-uv tool install 'veri-sdk[mcp]'
+uv tool install --upgrade 'veri-sdk[mcp]'
 ```
 
 ```bash pipx
-pipx install 'veri-sdk[mcp]'
+pipx install --force 'veri-sdk[mcp]'
 ```
 
 ```bash pip
+# Python 3.10+ in a virtualenv; the stock macOS python3 is too old
 pip install 'veri-sdk[mcp]'
 ```
 </CodeGroup>
 
-Confirm the command is available:
-
-```bash
-veri mcp serve --help
-```
+A uv tool or pipx install keeps only the extras named on the latest install: installing `'veri-sdk[attach]'` alone removes `mcp`. Name every extra you use in one install, for example `'veri-sdk[mcp,attach]'`.
 </Step>
 
 <Step title="Log in">
@@ -80,6 +80,16 @@ veri login
 ```
 
 You never paste an API key into the MCP client. The server uses the credentials from `veri login` (or the `VERI_API_KEY` environment variable if you set one).
+</Step>
+
+<Step title="Check that the server starts">
+MCP clients do not show the server's error output: when `veri mcp serve` cannot start, Claude Code reports only `Failed to connect` and `Connection closed`. Start it once yourself so you can see the reason:
+
+```bash
+veri mcp serve --readonly </dev/null
+```
+
+It exits with no output when it can start. If it prints an error instead, fix that first: a missing `mcp` extra means re-running the install line from the first step, and `Not logged in` means running `veri login`.
 </Step>
 
 <Step title="Register Veri in your client">
@@ -121,7 +131,7 @@ If the client reports that it cannot find `veri` (desktop apps often start witho
 <Step title="Restart and verify">
 Restart the client so it picks up the new server.
 
-In Claude Code, run `claude mcp list` (or `/mcp` inside a session) and confirm `veri` shows as connected. In Claude Desktop and Cursor, the Veri tools appear once the server connects. Ask the agent something like "what is my Veri credit balance?" to confirm it can reach your account.
+In Claude Code, run `claude mcp list` (or `/mcp` inside a session) and confirm the `veri` line ends in `✔ Connected`. In Claude Desktop and Cursor, the Veri tools appear once the server connects. Ask the agent something like "what is my Veri credit balance?" to confirm it can reach your account.
 </Step>
 
 </Steps>
