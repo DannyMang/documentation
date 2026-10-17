@@ -15,7 +15,7 @@ The end-to-end [harness-in-the-loop](/training/harness) flow on one concrete tas
 
 ## Prerequisites
 
-- Install the SDK: `pip install veri-sdk` (and `pip install datasets` for the dataset prep script)
+- Install the SDK: `pip install 'veri-sdk[mcp]'` in a Python 3.10+ virtualenv (the stock macOS `python3` is too old), and `pip install datasets` for the dataset prep script
 - Authenticate: `veri login` (or set `VERI_API_KEY`)
 - Read the concept page once: [Harness-in-the-loop RL](/training/harness) (the env contract below is what makes the "unmodified harness" part work)
 
