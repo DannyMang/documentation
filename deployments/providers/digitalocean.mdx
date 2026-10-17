@@ -32,9 +32,8 @@ client.deployments.create(
 ```
 
 ```bash
-veri deployments create --model Qwen/Qwen3-8B --source huggingface \
-  --name qwen3-8b-do --provider digitalocean --gpu-type H200-141GB --gpu-count 1 \
-  --min-replicas 1
+veri deploy Qwen/Qwen3-8B --name qwen3-8b-do \
+  --provider digitalocean --gpu-type H200-141GB --gpu-count 1
 ```
 
 The region is chosen for you from the regions that sell the shape, so there is no `region` field to set.
@@ -44,8 +43,8 @@ The region is chosen for you from the regions that sell the shape, so there is n
 GPU Droplets come from a shared pool with no reservations, and 1x H100 capacity in particular comes and goes by the minute. When no region has the shape, the create fails before anything is billed with `CAPACITY_UNAVAILABLE`, and the error names the shapes and providers that do have capacity right now. A `QUOTA_EXCEEDED` error means the account's GPU Droplet limit is reached; stop an idle deployment or pick another provider.
 
 ```bash
-veri gpu list --provider digitalocean    # per-region capacity for both shapes
-veri gpu rates --provider digitalocean   # current $/GPU-hour
+veri gpu list                 # the catalog: shapes, node counts, $/GPU-hour
+veri gpu describe H200-141GB  # one shape's specs and current price
 ```
 
 <Warning>
@@ -54,7 +53,7 @@ veri gpu rates --provider digitalocean   # current $/GPU-hour
 
 ## Billing
 
-Billing starts when the droplet is created and stops when the replica is destroyed, per second, at the rate `veri gpu rates` shows. A deployment at `min_replicas=0` with no traffic costs nothing while scaled to zero. See [Cost](/deployments/cost) for the full model.
+Billing starts when the droplet is created and stops when the replica is destroyed, per second, at the rate `veri gpu list` shows. A deployment at `min_replicas=0` with no traffic costs nothing while scaled to zero. See [Cost](/deployments/cost) for the full model.
 
 ## Where to go next
 
