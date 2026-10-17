@@ -87,7 +87,8 @@
                 "group": "Providers",
                 "pages": [
                   "deployments/providers",
-                  "deployments/providers/aws"
+                  "deployments/providers/aws",
+                  "deployments/providers/digitalocean"
                 ]
               },
               "deployments/cost",
