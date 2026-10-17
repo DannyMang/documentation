@@ -12,7 +12,7 @@ DigitalOcean serves single-GPU NVIDIA shapes. Pass `provider="digitalocean"` on 
 | `gpu_type` | Memory | GPUs per node | Regions | Good for |
 | --- | --- | --- | --- | --- |
 | `H100-80GB` | 80 GB | 1 | tor1, nyc2 | 7B to 32B models in bf16 on one GPU |
-| `H200-141GB` | 141 GB | 1 | atl1 | 70B models in fp8, or long contexts, on one GPU |
+| `H200-141GB` | 141 GB | 1 | atl1, nyc2 | 70B models in fp8, or long contexts, on one GPU |
 
 <Note>
   These are the only single-GPU H100-class shapes on Veri: AWS sells A100/H100 as whole 8-GPU nodes. Neither DigitalOcean shape supports `gpu_count` above 1, and neither is a training shape (`veri train` on DigitalOcean uses `H100-80GB` x1 or x8).
@@ -37,6 +37,10 @@ veri deploy Qwen/Qwen3-8B --name qwen3-8b-do \
 ```
 
 The region is chosen for you from the regions that sell the shape, so there is no `region` field to set.
+
+<Note>
+  Qwen3 models think before they answer. With a small `max_tokens` the visible `content` can come back empty because the reply is still inside `reasoning_content`; allow a few hundred tokens, or pass `"chat_template_kwargs": {"enable_thinking": false}` to skip the thinking step.
+</Note>
 
 ## Capacity and quota
 
