@@ -178,7 +178,7 @@ Arguments without a default are required. `limit` values are capped at the maxim
 | --- | --- | --- |
 | `veri_whoami` | none | Account identity (`user_id`, `email`, `workspace`), `authenticated: true` and `balance_usd`. With a missing or expired key it returns `authenticated: false` and a `next_step` instead of failing. Call this first. |
 | `veri_list_training_jobs` | `limit` (20, max 100), `status`, `method` | Jobs, newest first. |
-| `veri_get_training_job` | `job_id` | One job: `status`, `method`, `cost_usd`, step and loss progress, `dashboard_url`, `wandb_run_url`, `hf_repo_url` and `error_message`. |
+| `veri_get_training_job` | `job_id` | One job: `status`, `method`, `cost_usd`, step and loss progress, `dashboard_url`, `wandb_run_url`, `hf_repo_url`, `error_message` and `error_code` (`CAPACITY_UNAVAILABLE`, `QUOTA_EXCEEDED`, `config_error`, ...). |
 | `veri_get_training_metrics` | `job_id`, `keys`, `from_step`, `to_step`, `max_points` (200, max 500) | `{metrics, available_keys, latest_step}`: sampled native training curves. |
 | `veri_list_deployments` | `limit` (20, max 100), `status` | Deployments, newest first. |
 | `veri_get_deployment` | `deployment_id` | One deployment: `status`, `endpoint_url`, `gpu`, `cost_per_hour_usd`, `error` and `failure_code`. |
@@ -192,6 +192,7 @@ Arguments without a default are required. `limit` values are capped at the maxim
 | `veri_list_datasets` | `limit` (20, max 100) | Datasets: `id`, `name`, `source_type`, `huggingface_dataset`. |
 | `veri_list_volumes` | `limit` (20, max 100) | Volumes: `id`, `name`, `total_bytes`, `file_count`. |
 | `veri_list_gpus` | none | The GPU catalog: per provider and workload (`training` or `serving`), each GPU type's allowed counts (`node_counts`), `status` and `usd_per_gpu_hr`. |
+| `veri_gpu_availability` | `provider`, `gpu_type`, `region` | Live availability per provider, shape and region: `status` (`AVAILABLE`, `OFFERED`, `UNAVAILABLE`) and `price_per_hr`. Check it before a launch, and again after a `CAPACITY_UNAVAILABLE` or `QUOTA_EXCEEDED` failure to pick another shape. Hosted server now; local `veri mcp serve` from the next SDK release. |
 | `veri_list_regions` | none | The launch regions you can target and the default. |
 | `veri_estimate_cost` | `gpu_type`, `gpu_count` (1), `duration_minutes` (60), `provider` | `rate_usd_per_hour` and `estimated_cost_usd`. |
 | `veri_billing_balance` | none | `balance_usd`. |
