@@ -289,6 +289,8 @@ https://docs.veri.studio/training/harness · https://docs.veri.studio/demos/harn
 
 ## Deployments (inference)
 
+Known issue (VS-559): a job trained with `lora_rank` cannot be deployed yet (`veri deploy <job_id>` returns 400). To serve a LoRA run, set `[hf_push]` with `artifact = "merged"` and a `repo` at submit time, then `veri deploy <your-hf-repo>`. Full fine-tunes (no `lora_rank`) deploy directly.
+
 ```bash
 veri deploy Qwen/Qwen3-4B --gpu-type L4-24GB --no-cache   # one-step HF deploy
 veri deployments create --from-hf Qwen/Qwen3-4B --name qwen-dev \
