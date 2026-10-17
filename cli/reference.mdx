@@ -110,14 +110,15 @@ veri config set profiles.default.api_key=vk_new_key
 veri doctor
 ```
 
-Runs five checks and reports `pass` / `warn` / `fail` per row:
+Runs six checks and reports `pass` / `warn` / `fail` per row:
 
 | Check | What it verifies |
 | --- | --- |
 | `python` | Python interpreter version ≥ 3.10. |
 | `sdk` | `veri-sdk` is installed and importable. |
 | `config` | Config file exists and parses. |
-| `credentials` | An API key is set (file or env var). |
+| `credentials` | An API key is set (file or env var) and the API accepts it (`GET /v1/me`): a rejected key (HTTP 401/403) fails. |
+| `mcp extra` | The `mcp` extra imports, so `veri mcp serve` can start. On `fail` the row prints the install line for uv tool, pipx and pip. |
 | `network` | The API URL responds to `/health` with HTTP `< 500`. |
 
 `doctor` always exits `0` — it reports, doesn't gate. Read the table, act on warnings. Use `--format json` to consume from CI:
@@ -288,7 +289,7 @@ veri version --format json
 Prints SDK version, Python version, and platform string. The `--version` and `-v` root flags are aliases — they emit the same output and exit. From CI:
 
 ```bash
-test "$(veri version --format json | jq -r .sdk_version)" = "0.2.42" || exit 1
+test "$(veri version --format json | jq -r .sdk_version)" = "0.2.44" || exit 1
 ```
 
 ## Phase-2 deferrals
