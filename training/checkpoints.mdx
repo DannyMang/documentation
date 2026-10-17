@@ -29,6 +29,7 @@ job = client.training_jobs.create(
     output_name="qwen3-4b-sft",
     gpu_type="H100-80GB",
     gpu_count=1,
+    provider="digitalocean",
 )
 ```
 
@@ -69,6 +70,7 @@ job2 = client.training_jobs.create(
     output_name="qwen3-4b-sft-continued",
     gpu_type="H100-80GB",
     gpu_count=1,
+    provider="digitalocean",
     resume_from="job_abc123@400",
 )
 ```

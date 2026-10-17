@@ -7731,10 +7731,13 @@
             }
           },
           "400": {
-            "description": "Job is not in a terminal state, or a deployment still references it"
+            "description": "Job is not in a terminal state"
           },
           "404": {
             "description": "Not found"
+          },
+          "409": {
+            "description": "A library model or deployment still uses the job's weights"
           }
         },
         "security": [
@@ -12968,7 +12971,7 @@
           },
           "env": {
             "type": "object",
-            "description": "Plain environment variables for the harness.",
+            "description": "Plain environment variables for the harness. `PATH`, `LD_*`,\n`GCONV_PATH`, `GLIBC_TUNABLES` and the model wiring are reserved.",
             "additionalProperties": {
               "type": "string"
             },
@@ -20874,7 +20877,7 @@
           },
           "env": {
             "type": "object",
-            "description": "Extra environment variables, on top of the session's own (what the\nagent sees, model credentials excluded). `ANTHROPIC_*`, `OPENAI_*`,\n`VERI_*`, `PATH` and `LD_*` are dropped (listed in `env_dropped`).",
+            "description": "Extra environment variables, on top of the session's own (what the\nagent sees, model credentials excluded). `ANTHROPIC_*`, `OPENAI_*`,\n`VERI_*`, `PATH`, `LD_*`, `GCONV_PATH` and `GLIBC_TUNABLES` are\ndropped (listed in `env_dropped`).",
             "additionalProperties": {
               "type": "string"
             },
