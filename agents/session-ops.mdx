@@ -70,7 +70,7 @@ Uploads larger than 32 MiB are not supported through this route. Fetch large inp
 
 ## Attach a shell
 
-`veri sessions attach SESSION_ID` opens `bash` in a terminal inside the sandbox, as the agent user, in `/workspace`, with the session's environment. Exit the shell or press `Ctrl-]` to detach. The CLI needs the `attach` extra: `uv tool install --upgrade 'veri-sdk[mcp,attach]'` (pipx: `pipx install --force 'veri-sdk[mcp,attach]'`). Name every extra you use in one install: installing `'veri-sdk[attach]'` alone removes `mcp`.
+`veri sessions attach SESSION_ID` opens `bash` in a terminal inside the sandbox, as the agent user, in `/workspace`, with the session's environment. Exit the shell or press `Ctrl-]` to detach. The CLI needs the `attach` extra: `uv tool install --upgrade 'veri-sdk[all]'` (pipx: `pipx install --force 'veri-sdk[all]'`). Name every extra you use in one install: installing `'veri-sdk[attach]'` alone removes `mcp`.
 
 - While a shell is attached the session stays awake and is billed like any awake time; it does not idle-pause.
 - A shell with no input and no output for 30 minutes is closed.
