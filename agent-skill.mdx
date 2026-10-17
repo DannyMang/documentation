@@ -37,7 +37,7 @@ If `sdk_version` is older than 0.2.43, upgrade before continuing (older CLIs lac
 this skill uses, and before 0.2.34 `--reward` took a stored reward id instead of a `.py`
 path): re-run the install line above. `uv tool upgrade` and `pipx upgrade` never add the
 `mcp` extra, and installing one extra alone removes the others, so name every extra you use
-in one install (`'veri-sdk[mcp,attach]'`). Pip needs Python 3.10+ in a virtualenv; the stock
+in one install: `'veri-sdk[all]'` is every extra. Pip needs Python 3.10+ in a virtualenv; the stock
 macOS `python3` is too old.
 
 Veri rents GPUs for model post-training and serving. One CLI (`veri`), one REST API
@@ -467,7 +467,7 @@ routes work from any client.
   answer with `veri sessions approve <session> <approval> allow|deny`.
 - Session ops: `veri sessions exec <id> -- <cmd>`, `veri sessions ls` / `cp` (files under
   `/workspace`), `veri sessions attach <id>` (shell; needs the `attach` extra:
-  `uv tool install --upgrade 'veri-sdk[mcp,attach]'`). Preview ports and
+  `uv tool install --upgrade 'veri-sdk[all]'`). Preview ports and
   `github_auth` are coming soon (501 / 400 today).
 - Triggers: `veri triggers create --environment <env_id> --cron "0 9 * * 1"` or `--webhook github`
   (signed `POST /v1/hooks/{id}`), results to webhooks or `--slack <url>`.
