@@ -1,27 +1,63 @@
 ---
-noindex: true
 title: "DigitalOcean"
-sidebarTitle: "DigitalOcean (coming soon)"
-description: "H100, L40S, and AMD MI300X GPU Droplets for serving — wired but feature-gated; creates return a 400 until the gate lifts."
-keywords: ["DigitalOcean", "serving", "deployments", "H100", "L40S", "MI300X", "coming soon"]
+sidebarTitle: "DigitalOcean"
+description: "Single-GPU H100 and H200 GPU Droplets for serving: 1x shapes with no whole-node minimum, billed per second."
+keywords: ["DigitalOcean", "serving", "deployments", "H100", "H200", "GPU Droplets"]
 ---
 
-DigitalOcean serving is wired but currently feature-gated: a `provider="digitalocean"` create returns `400` with `Serving provider 'digitalocean' is not currently enabled.` until the gate lifts.
+DigitalOcean serves single-GPU NVIDIA shapes. Pass `provider="digitalocean"` on create; the AWS default stays unchanged when you omit it.
 
-## Planned serving shapes
+## Serving shapes
 
-| `gpu_type` | Memory | GPUs per node | Status |
-| --- | --- | --- | --- |
-| `H100-80GB` | 80 GB | 1 | Coming soon |
-| `L40S-48GB` | 48 GB | 1 | Coming soon |
-| `MI300X-192GB` | 192 GB | 1 | Coming soon |
+| `gpu_type` | Memory | GPUs per node | Regions | Good for |
+| --- | --- | --- | --- | --- |
+| `H100-80GB` | 80 GB | 1 | tor1, nyc2 | 7B to 32B models in bf16 on one GPU |
+| `H200-141GB` | 141 GB | 1 | atl1, nyc2 | 70B models in fp8, or long contexts, on one GPU |
 
-Two shapes worth noting:
+<Note>
+  These are the only single-GPU H100-class shapes on Veri: AWS sells A100/H100 as whole 8-GPU nodes. Neither DigitalOcean shape supports `gpu_count` above 1, and neither is a training shape (`veri train` on DigitalOcean uses `H100-80GB` x1 or x8).
+</Note>
 
-- **L40S-48GB** — the genuine cheap single-GPU shape that still fits a 7B-13B bf16 model, which the 24 GB L4/A10G cannot.
-- **MI300X-192GB**: a 192 GB AMD card, enough to serve a 70B model in bf16 on one GPU; on DigitalOcean it arrives with per-second billing.
+## Creating a deployment
 
-Watch `veri gpu list` — the `(soon)` marker on the serving column disappears when the gate lifts.
+```python
+client.deployments.create(
+    model="Qwen/Qwen3-8B",
+    source="huggingface",
+    name="qwen3-8b-do",
+    provider="digitalocean",
+    gpu={"gpu_type": "H200-141GB", "gpu_count": 1},
+    min_replicas=1,
+)
+```
+
+```bash
+veri deploy Qwen/Qwen3-8B --name qwen3-8b-do \
+  --provider digitalocean --gpu-type H200-141GB --gpu-count 1
+```
+
+The region is chosen for you from the regions that sell the shape, so there is no `region` field to set.
+
+<Note>
+  Qwen3 models think before they answer. With a small `max_tokens` the visible `content` can come back empty because the reply is still inside `reasoning_content`; allow a few hundred tokens, or pass `"chat_template_kwargs": {"enable_thinking": false}` to skip the thinking step.
+</Note>
+
+## Capacity and quota
+
+GPU Droplets come from a shared pool with no reservations, and 1x H100 capacity in particular comes and goes by the minute. When no region has the shape, the create fails before anything is billed with `CAPACITY_UNAVAILABLE`, and the error names the shapes and providers that do have capacity right now. A `QUOTA_EXCEEDED` error means the account's GPU Droplet limit is reached; stop an idle deployment or pick another provider.
+
+```bash
+veri gpu list                 # the catalog: shapes, node counts, $/GPU-hour
+veri gpu describe H200-141GB  # one shape's specs and current price
+```
+
+<Warning>
+  Deployments that back an agent or a monitor should set `min_replicas` to at least 1. A DigitalOcean replica that scales to zero wakes from a cold droplet create, and requests during the wake return `503` until the new droplet serves.
+</Warning>
+
+## Billing
+
+Billing starts when the droplet is created and stops when the replica is destroyed, per second, at the rate `veri gpu list` shows. A deployment at `min_replicas=0` with no traffic costs nothing while scaled to zero. See [Cost](/deployments/cost) for the full model.
 
 ## Where to go next
 
