@@ -7365,7 +7365,7 @@
           "Settings"
         ],
         "summary": "Set the workspace retention default",
-        "description": "0 = zero-data-retention opt-in: every eligible (unprotected, unreferenced) version and snapshot in the workspace is purged by the next nightly sweep. Lineages with their own retention_days are unaffected.",
+        "description": "null clears the window (the default: kept until you delete them). 0 = zero-data-retention opt-in: every eligible (unprotected, unreferenced) version and snapshot in the workspace is purged by the next nightly sweep. Lineages with their own retention_days are unaffected.",
         "operationId": "set_workspace_retention",
         "requestBody": {
           "content": {
@@ -23972,14 +23972,14 @@
       },
       "WorkspaceRetentionRequest": {
         "type": "object",
-        "required": [
-          "model_retention_days"
-        ],
         "properties": {
           "model_retention_days": {
-            "type": "integer",
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int32",
-            "description": "0..=3650. 0 = purge eligible items on the next nightly sweep."
+            "description": "0..=3650, or null to clear the window (versions and snapshots are\nkept until you delete them). 0 = purge eligible items on the next\nnightly sweep."
           }
         }
       },
