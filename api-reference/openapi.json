@@ -8092,7 +8092,7 @@
             }
           },
           "404": {
-            "description": "Job not found or not owned by the caller, or no logs yet (plain-text body `[no logs available yet]`)"
+            "description": "Job not found or not owned by the caller; a finished job whose log was never uploaded (JSON error, code `log_never_uploaded`); or a job with no logs yet (plain-text body `[no logs available yet]`)"
           }
         },
         "security": [
