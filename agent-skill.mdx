@@ -380,6 +380,9 @@ runs these:
    still references will not delete; a model with an active deployment returns 409; a
    deployment only deletes once it is stopped AND its final billing settlement has landed
    (a few seconds after stopping). Stop first, then delete.
+   A volume that a queued or running job mounts (or reads a dataset from) returns 409 naming the jobs.
+   A dataset with an experiment pinned to one of its snapshots returns 409 naming the experiments.
+   A model with a running Hugging Face export, and the job it was saved from, return 409 until the export ends.
 
 ## Webhooks (API only, no CLI)
 

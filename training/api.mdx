@@ -209,8 +209,9 @@ Hard-delete the job row + cascading metrics + events + S3 artifacts (logs, statu
 **Constraints:**
 - Job must be in a terminal state (`completed`, `failed`, `cancelled`)
 - No deployment may reference this job (`source="training_job"`, `source_job_id=this_id`), whatever the deployment's status, including stopped ones
+- No Hugging Face export of a model saved from this job may still be running (`launching` or `uploading`)
 
-If a deployment still references the checkpoint, you get `400 Bad Request`: delete the deployment first.
+If a deployment or a running export still references the checkpoint, you get `409 Conflict` naming it: delete the deployment, or wait for the export to end, first.
 
 ## GET /v1/training_jobs/\{id\}/model
 

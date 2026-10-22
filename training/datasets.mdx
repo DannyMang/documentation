@@ -126,6 +126,7 @@ The same paging is available programmatically via `GET /v1/datasets/{dataset_id}
 ## Lifecycle
 
 Datasets persist until you delete them, either from the dashboard or via `DELETE /v1/datasets/{dataset_id}`. Deletion is blocked while an active training job still references the dataset.
+Deletion is also refused (`409`, naming the experiments) while an [experiment](/evals/experiments) is pinned to one of the dataset's snapshots.
 
 ## Name conflicts
 
