@@ -51,6 +51,10 @@ Pick the base that matches your stack. Each prebakes the slow, compiled pieces s
   Custom scripts run on NVIDIA GPUs only for now: the base-image catalog is CUDA-tier. A submit with an AMD `gpu_type` (e.g. `MI300X-192GB`) returns a 400. AMD support is planned.
 </Note>
 
+<Note>
+  Custom scripts run on AWS and DigitalOcean, not on Vast: Vast runs managed methods (GRPO, SFT, DPO) only, so `veri run-script --provider vast` returns a 400 at submit, before any GPU is rented.
+</Note>
+
 ## Example: a minimal training run
 
 A small project directory:
