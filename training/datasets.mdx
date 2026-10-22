@@ -25,7 +25,7 @@ Each line is one training example, and the fields depend on the training method.
 - **`prompt`**: a string or a list of OpenAI-format message dicts
 - **`answer`**: ground truth used by your reward function (optional but typically present). The column name is passed to your reward as a keyword argument of the same name, so it must match what the function reads. Every example here uses `answer`; if you map it to another name, read that name instead.
 
-[SFT](/training/sft) rows carry `messages` (chat), `text`, or `prompt` + `completion`. [DPO](/training/dpo) rows carry `chosen` + `rejected`, with an optional `prompt`. The ShareGPT and Alpaca shapes in [Supported formats](#supported-formats) upload too.
+[SFT](/training/sft) rows carry `messages` (chat), `text`, or `prompt` + `completion`. [DPO](/training/dpo) rows carry `chosen` + `rejected`, with an optional `prompt`, as all strings or all message lists ([one shape per row and dataset](/training/dpo#dataset-format)). The ShareGPT and Alpaca shapes in [Supported formats](#supported-formats) upload too.
 
 Upload rejects a row that has none of `prompt`, `messages`, `text`, `chosen` + `rejected`, `conversations`, or `instruction` + `output`. The dataset's `format` records the shape of its first row: `prompt`, `completion`, `preference`, `chat` (chat rows that also carry a `prompt`), `chat_no_prompt` (chat rows without one), `text`, `alpaca`, `sharegpt`, or `eval`.
 
