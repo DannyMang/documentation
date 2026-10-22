@@ -289,7 +289,7 @@ https://docs.veri.studio/training/harness · https://docs.veri.studio/demos/harn
 
 ## Deployments (inference)
 
-Known issue (VS-559): a job trained with `lora_rank` cannot be deployed yet (`veri deploy <job_id>` returns 400). To serve a LoRA run, run `veri hf set` once, then set `[hf_push]` with `repo`, `artifact = "merged"` and `private = false` (serving boxes have no HF token) at submit time; when the job completes, `veri deploy <your-hf-repo>` serves it, and the same repo runs anywhere else (vLLM, Ollama, transformers). Full fine-tunes (no `lora_rank`) deploy directly.
+A completed job deploys with `veri deploy <job_id>` whether it was a full fine-tune or trained with `lora_rank` (LoRA jobs are served from the merged weights Veri keeps next to the adapter). A LoRA job trained before merged weights were kept returns a 400 that says so; serve that one from Hugging Face instead (`[hf_push]` with `artifact = "merged"` and `private = false` at submit, then `veri deploy <your-hf-repo>`), or retrain.
 
 ```bash
 veri deploy Qwen/Qwen3-4B --gpu-type L4-24GB --no-cache   # one-step HF deploy

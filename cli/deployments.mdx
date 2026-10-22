@@ -9,15 +9,19 @@ The `veri deployments` group creates and manages inference endpoints. Each deplo
 
 ## Deploy a Hugging Face model in one step
 
-`veri deploy` is the shortest path from a Hugging Face repo to a live endpoint. It accepts a bare repo id or a pasted `huggingface.co` link:
+`veri deploy` is the shortest path from a Hugging Face repo, or a finished training job, to a live endpoint. It accepts a bare repo id, a pasted `huggingface.co` link, or a completed job id:
 
 ```bash
 veri deploy Qwen/Qwen3-4B
 # or
 veri deploy https://huggingface.co/Qwen/Qwen3-4B
+# or a completed training job (full fine-tune or LoRA)
+veri deploy a1b2c3d4e5f6 --gpu-type L4-24GB
 ```
 
-In a terminal, it asks whether to cache the model in Veri storage for faster starts next time. Caching saves the downloaded weights to your [model library](/deployments/custom-models) in the background while the deployment serves; once the cached copy is ready, every later deploy of the same repo starts from Veri storage automatically instead of pulling from the Hugging Face hub.
+A job trained with `lora_rank` deploys the same way: Veri serves the merged weights it keeps next to the adapter. A job id skips the cache prompt below (the weights already live in Veri storage).
+
+In a terminal, a Hugging Face deploy asks whether to cache the model in Veri storage for faster starts next time. Caching saves the downloaded weights to your [model library](/deployments/custom-models) in the background while the deployment serves; once the cached copy is ready, every later deploy of the same repo starts from Veri storage automatically instead of pulling from the Hugging Face hub.
 
 | Flag | Purpose |
 | --- | --- |
@@ -36,7 +40,7 @@ In a terminal, it asks whether to cache the model in Veri storage for faster sta
 
 Outside a terminal (scripts, CI) the prompt is skipped and caching stays off unless `--cache` is explicit.
 
-`veri deploy` is sugar for `veri deployments create --from-hf`; every other lifecycle command below applies to the resulting deployment.
+`veri deploy` is sugar for `veri deployments create --from-hf` (a repo) or `--model` (a job id); every other lifecycle command below applies to the resulting deployment.
 
 ## Commands
 
