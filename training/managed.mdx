@@ -133,6 +133,8 @@ veri jobs logs $JOB_ID       # print everything so far
 veri jobs logs $JOB_ID -f    # follow until the job finishes (Ctrl+C detaches)
 ```
 
+A job that has not written any log yet prints `[no logs available yet]` and exits `0`. A finished job whose log was never uploaded fails instead, with `log was never uploaded for this job` and a non-zero exit, since no log will ever arrive for it.
+
 `download()` fetches the complete Hugging Face checkpoint — weights plus
 adapter config and tokenizer files — into `./checkpoints/<job_id>/`, a
 directory you can load directly with `from_pretrained(...)` or push to the
