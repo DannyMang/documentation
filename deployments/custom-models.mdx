@@ -72,6 +72,7 @@ veri models delete <model-id>
 ```
 
 Renaming changes only the library label. Removing a model from the library deletes only the registry entry: it never deletes the training checkpoint, and it does not interrupt a deployment that is already serving that checkpoint. A model with an active deployment cannot be removed until you stop the deployment.
+A model with a running [Hugging Face export](/training/huggingface) cannot be removed either (`409`, naming the export) until the export finishes or is cancelled.
 
 ## Model states
 
