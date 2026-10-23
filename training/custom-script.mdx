@@ -36,6 +36,19 @@ Veri runs your entrypoint inside the base image on the GPU, with a set of `VERI_
 
 Exit code `0` marks the job completed; a non-zero exit marks it failed.
 
+### When your script fails
+
+A failed job's error is your script's own output: the exit status, then the last 20 lines your script wrote to stderr (up to 4 KiB). For example:
+
+```text
+Your script exited with status 1. Last lines:
+Traceback (most recent call last):
+  File "/workspace/code/train.py", line 12, in <module>
+KeyError: 'prompt'
+```
+
+Python tracebacks already go to stderr; print your own errors there too so they land in the job's error. Status `137` means the container was killed for running out of memory, and the error says so: try a smaller batch or a bigger GPU shape. The error shows on the job page and in `veri jobs get <id>`; the full output (stdout and stderr) is in `veri jobs logs <id>`.
+
 ## Base images
 
 Pick the base that matches your stack. Each prebakes the slow, compiled pieces so cold start stays fast; you layer light dependencies on top.
