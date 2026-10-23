@@ -69,6 +69,8 @@ hyperparameters={
   `load_in_4bit` requires `lora_rank`: the 4-bit base is frozen, so training happens in the adapters. QLoRA runs on a single GPU today; for multi-GPU, use 16-bit LoRA (`lora_rank` without `load_in_4bit`). Adapters target the attention and MLP projections (q/k/v/o, gate/up/down).
 </Note>
 
+**What a LoRA job produces.** The final checkpoint is the adapter plus tokenizer (`artifact_type: "adapter"` on `GET /v1/training_jobs/{id}/model`), and Veri also keeps the merged weights (adapter merged into the base model, `merged_files` on the same call). A LoRA job deploys like a full fine-tune (`veri deploy <job_id>`, or `source="training_job"` in the API) and is served from the merged weights; saving it to your model library saves the merged weights too, and `artifact="adapter"` saves the adapter alone for [multi-adapter fleets](/deployments/api#multi-adapter-fleets). To publish either artifact to Hugging Face, see [Hugging Face](/training/huggingface).
+
 ## Picking values
 
 **For first runs, change two things:**

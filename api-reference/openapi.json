@@ -15283,7 +15283,8 @@
         "type": "object",
         "required": [
           "download_url",
-          "files"
+          "files",
+          "artifact_type"
         ],
         "properties": {
           "download_url": {
@@ -15296,6 +15297,20 @@
               "$ref": "#/components/schemas/CheckpointFile"
             },
             "description": "Every file of the final HF checkpoint. Download all of them, preserving\npaths, to get a directory loadable with `from_pretrained`."
+          },
+          "artifact_type": {
+            "type": "string",
+            "description": "What `files` holds: \"adapter\" for a job trained with `lora_rank` (a\nPEFT adapter plus tokenizer, loaded on top of the base model), \"full\"\nfor a full fine-tune (standalone weights)."
+          },
+          "merged_files": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/CheckpointFile"
+            },
+            "description": "For a LoRA job whose merged weights are kept in Veri: every file of\nthe standalone (adapter merged into base) checkpoint, loadable with\n`from_pretrained` alone and what a deployment of the job serves.\nAbsent for full fine-tunes and for LoRA jobs trained before merged\nweights were kept."
           }
         }
       },

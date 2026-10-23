@@ -172,8 +172,8 @@ Requests that can't succeed are rejected at submit, not after a paid run: an unc
 
 ## What happens at the end of the run
 
-1. The trained checkpoint is saved and uploaded to Veri storage as usual. The push is additive, and your checkpoint stays downloadable from Veri either way.
-2. For `merged` on a LoRA run, the adapter is merged into the base model on the training machine.
+1. The trained checkpoint is saved and uploaded to Veri storage as usual (for a LoRA run, the adapter and the merged weights). The push is additive, and your checkpoint stays downloadable and deployable from Veri either way.
+2. For `merged` on a LoRA run, the adapter is merged into the base model on the training machine (the same merged weights Veri keeps and serves).
 3. Veri creates the repo if it doesn't exist (honoring `private`) and uploads the artifact.
 4. The job records `hf_repo_url` on success.
 

@@ -94,7 +94,7 @@ hyperparameters={
 }
 ```
 
-See [LoRA and QLoRA](/training/grpo#lora-and-qlora) for the full rules (4-bit requires `lora_rank`; QLoRA is single-GPU; 16-bit LoRA is multi-GPU capable).
+See [LoRA and QLoRA](/training/grpo#lora-and-qlora) for the full rules (4-bit requires `lora_rank`; QLoRA is single-GPU; 16-bit LoRA is multi-GPU capable). A LoRA job deploys like a full fine-tune: Veri keeps the merged weights next to the adapter and serves those (`veri deploy <job_id>`).
 
 ## Where to go next
 
