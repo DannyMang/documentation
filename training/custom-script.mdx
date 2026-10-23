@@ -104,6 +104,8 @@ veri run-script ./my-run \
 
 The CLI uploads your code, submits the job, and prints the job id and dashboard link. Keep the entrypoint in single quotes so `$VERI_NUM_GPUS` reaches the GPU machine instead of being expanded (to nothing) by your local shell.
 
+For more than one GPU, start with `--gpu-type L4-24GB --gpu-count 4` or `--gpu-type A10G-24GB --gpu-count 4` on AWS (the default provider, 96 GB across four GPUs, usually on a box within two minutes). Use `--provider digitalocean --gpu-type H100-80GB --gpu-count 1` only when a single GPU must hold 80 GB: its capacity comes and goes.
+
 ## Multi-node
 
 <Note>

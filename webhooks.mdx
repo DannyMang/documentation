@@ -95,6 +95,7 @@ For `deployment.failed`, the deployment's `failure_code` says why, as a stable v
 | --- | --- |
 | `watchdog_timeout` | The first boot never became healthy, or a backstop watchdog reaped a box that stopped reporting. |
 | `CAPACITY_UNAVAILABLE` | No GPU capacity for the shape at launch. |
+| `QUOTA_EXCEEDED` | Veri's account limit on the provider was full at launch (a platform limit, not your account). |
 | `all_replicas_failed` | Every replica of a deployment that never served failed. |
 | `replica_lost` | The deployment lost its last GPU box after serving and [self-healing](/deployments#self-healing) was used up (`self_heal_attempts` replacements failed) or off (`0`). |
 | `insufficient_credits` | The workspace ran out of credits. |

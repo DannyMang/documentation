@@ -27,9 +27,9 @@ job = client.training_jobs.create(
     method="sft_text",
     hyperparameters={"max_steps": 1000, "checkpoint_every": 0.1, "checkpoint_keep": 3},
     output_name="qwen3-4b-sft",
-    gpu_type="H100-80GB",
-    gpu_count=1,
-    provider="digitalocean",
+    gpu_type="L4-24GB",
+    gpu_count=4,
+    provider="aws",
 )
 ```
 
@@ -68,9 +68,9 @@ job2 = client.training_jobs.create(
     method="sft_text",
     hyperparameters={"max_steps": 2000},
     output_name="qwen3-4b-sft-continued",
-    gpu_type="H100-80GB",
-    gpu_count=1,
-    provider="digitalocean",
+    gpu_type="L4-24GB",
+    gpu_count=4,
+    provider="aws",
     resume_from="job_abc123@400",
 )
 ```
