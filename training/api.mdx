@@ -89,6 +89,8 @@ Create a job. Returns immediately with status `queued`.
 - A job-level `volume` (a whole-volume read-only mount at `/mnt/<name>`) is coming soon: until it is enabled, it is a 400 whose message points at `from_volume`. A `dataset_id` whose dataset was connected with `datasets.from_volume` trains: the file is downloaded to the training machine at job start. See [Volumes](/volumes).
 - `checkpoint_destination` other than `{"type": "veri"}` (another `type`, a `uri`, or `credentials`) is a 400; see [Checkpoint destination schema](#checkpoint-destination-schema).
 - `hyperparameters.load_in_4bit: true` without `lora_rank` is a 400 (QLoRA trains adapters on a frozen 4-bit base).
+- `hyperparameters.lora_rank` of `0` or below is a 400: set a positive rank (e.g. `16`) for LoRA, or omit it (or send `null`) for a full fine-tune.
+- `job_type=custom_script` with `provider: "vast"` is a 400: custom scripts run on `aws` and `digitalocean`; Vast runs managed methods only.
 - A hyperparameter value of the wrong type (for example `"lora_rank": "8"` or `"packing": "yes"`) is a 400 that names the key.
 - `gpu.gpu_type` must be one the provider offers for training: `L4-24GB`, `A10G-24GB`, `A100-80GB`, `H100-80GB` on `aws`; see [GPU config schema](#gpu-config-schema)
 - `gpu.gpu_count` must be a node shape the provider sells for that `gpu_type` (on `aws`: `1` or `4` for `L4-24GB`/`A10G-24GB`, `8` for `A100-80GB`/`H100-80GB`)
