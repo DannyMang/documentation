@@ -883,7 +883,7 @@
             "description": "Code not found"
           },
           "409": {
-            "description": "Code already redeemed"
+            "description": "Code already redeemed, or a code from the same batch was already redeemed by you or into this workspace"
           }
         },
         "security": [
@@ -20042,7 +20042,7 @@
               "string",
               "null"
             ],
-            "description": "The workspace to credit: its id (`ws_...`), its Clerk\norganization id (`org_...`), or your user id for your personal\nworkspace. You must be a member. Omitted = the request's active\nworkspace. The code is still redeemable once per person, whichever\nworkspace is named."
+            "description": "The workspace to credit: its id (`ws_...`), its Clerk\norganization id (`org_...`), or your user id for your personal\nworkspace. You must be a member. Omitted = the request's active\nworkspace. The code is still redeemable once per person, whichever\nworkspace is named, and a batch of codes allows one code per person\nand one per workspace."
           }
         }
       },
