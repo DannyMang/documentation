@@ -11,22 +11,29 @@ Veri runs DPO on TRL's `DPOTrainer`. You provide a preference dataset; Veri prov
 
 ## Dataset format
 
-Each row is a preference pair. The explicit-prompt form is recommended; the trainer applies the model's chat template automatically for conversational rows.
+Each row is a preference pair: a `prompt`, a `chosen` completion and a `rejected` completion. A row uses one of two shapes for all three fields, and every row of the dataset uses the same one.
 
-```python
-# Standard, explicit prompt (recommended)
+**Standard: all three are strings.** The trainer joins `prompt + chosen` and `prompt + rejected` as text.
+
+```json
 {"prompt": "The sky is", "chosen": " blue.", "rejected": " green."}
-
-# Implicit prompt (prompt baked into both completions)
-{"chosen": "The sky is blue.", "rejected": "The sky is green."}
-
-# Conversational — chat template applied automatically
-{"prompt": [{"role": "user", "content": "What color is the sky?"}],
- "chosen": [{"role": "assistant", "content": "It is blue."}],
- "rejected": [{"role": "assistant", "content": "It is green."}]}
 ```
 
-Every row needs a `chosen` and a `rejected` completion. A dataset missing the `rejected` column is rejected before the GPU starts.
+**Conversational: all three are message lists.** Each field is a non-empty list of `{"role", "content"}` messages, and the trainer applies the model's chat template.
+
+```json
+{"prompt": [{"role": "user", "content": "What color is the sky?"}], "chosen": [{"role": "assistant", "content": "It is blue."}], "rejected": [{"role": "assistant", "content": "It is green."}]}
+```
+
+A row that mixes the shapes (a string `prompt` with message-list completions, or the reverse) is rejected at upload with a 400 that names the row and the field:
+
+```text
+row 17: prompt is a string but chosen is a message list; a preference row must use one shape for all three fields
+```
+
+The same check runs when you submit a `dpo` job, before a GPU starts, so a dataset uploaded before the check, or a [stream](/training/dataset-streams) whose appends mixed shapes, is rejected at submit with the same message. Tombstone or correct the row and submit again.
+
+You can also leave `prompt` out of every row (the implicit-prompt form, such as `{"chosen": "The sky is blue.", "rejected": "The sky is green."}`): the trainer takes the shared start of `chosen` and `rejected` as the prompt. The one-shape rule still applies to `chosen` and `rejected`. Every row needs a `chosen` and a `rejected` completion.
 
 ## Submitting a job
 

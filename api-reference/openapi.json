@@ -982,7 +982,7 @@
             }
           },
           "400": {
-            "description": "Empty file, invalid JSONL, a row with no training fields (none of prompt, messages, text, chosen + rejected, conversations, instruction + output), or an unknown format"
+            "description": "Empty file, invalid JSONL, a row with no training fields (none of prompt, messages, text, chosen + rejected, conversations, instruction + output), a preference row that mixes strings and message lists or differs from row 1's shape, or an unknown format"
           },
           "409": {
             "description": "JSON create: a dataset with that name already exists"
@@ -7644,7 +7644,7 @@
             }
           },
           "400": {
-            "description": "The job was rejected: an unknown or unpriced gpu_type/provider/region, an unknown job_type, a method that is unknown or not available (sft_video_gen, grpo_agentic) or without the reward it needs, environments, a job-level volume, a checkpoint_destination other than Veri storage, load_in_4bit without lora_rank, invalid or wrongly typed hyperparameters, or an unsupported dataset format"
+            "description": "The job was rejected: an unknown or unpriced gpu_type/provider/region, an unknown job_type, a method that is unknown or not available (sft_video_gen, grpo_agentic) or without the reward it needs, environments, a job-level volume, a checkpoint_destination other than Veri storage, load_in_4bit without lora_rank, invalid or wrongly typed hyperparameters, an unsupported dataset format, or (dpo) preference rows that mix strings and message lists"
           },
           "402": {
             "description": "No billing account is linked to the workspace"
