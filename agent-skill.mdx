@@ -146,6 +146,7 @@ kind = "train"
 
 ```bash
 veri jobs estimate configs/train.toml            # rough AWS price, nothing submitted; GPU shape/provider are checked only on submit
+veri jobs estimate configs/train.toml --minutes 90   # price a duration you know (0.2.45+; 0.2.44 prices max_steps as minutes)
 veri jobs create configs/train.toml --follow     # submit + stream logs (Ctrl+C detaches)
 veri jobs logs <id> -f                           # tail later
 veri jobs get <id> && veri jobs download <id> --output-dir ./checkpoints
@@ -263,10 +264,12 @@ veri run-harness ./harness \
 
 Constraints that WILL bite:
 
-1. `--gpu-count` must be >= 2 on one node (the CLI default of 1 is rejected: trainer
-   and policy server need disjoint GPUs). GPU 0 trains; the policy server gets the
-   largest power of two <= gpu_count-1 as tensor parallelism, so any count 2-8 boots
-   (odd counts leave GPUs idle; `vllm_data_parallel_size` reclaims them).
+1. `--gpu-count` must be 2-8 on one node (trainer and policy server need disjoint
+   GPUs). 0.2.44's CLI default of 1 is rejected after the code upload, so pass it
+   explicitly; from 0.2.45 the default is 4 and other counts fail before the upload.
+   GPU 0 trains; the policy server gets the largest power of two <= gpu_count-1 as
+   tensor parallelism, so any count 2-8 boots (odd counts leave GPUs idle;
+   `vllm_data_parallel_size` reclaims them).
    `H100-80GB x2 --provider vast` is the proven shape.
 2. Protocols: OpenAI (default) and Anthropic (`--harness-protocol anthropic`, e.g. the
    Claude Agent SDK) both train with exact token fidelity. Anthropic native `tool_use` /
