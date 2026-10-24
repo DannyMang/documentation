@@ -982,7 +982,7 @@
             }
           },
           "400": {
-            "description": "Empty file, invalid JSONL, a row with no training fields (none of prompt, messages, text, chosen + rejected, conversations, instruction + output), or an unknown format"
+            "description": "Empty file, invalid JSONL, a row with no training fields (none of prompt, messages, text, chosen + rejected, conversations, instruction + output), a preference row that mixes strings and message lists or differs from row 1's shape, or an unknown format"
           },
           "409": {
             "description": "JSON create: a dataset with that name already exists"
@@ -1125,6 +1125,9 @@
           },
           "404": {
             "description": "Not found or not owned by the caller"
+          },
+          "409": {
+            "description": "An experiment is pinned to one of the dataset's snapshots"
           }
         },
         "security": [
@@ -4378,7 +4381,7 @@
             "description": "Not found or not owned by the caller"
           },
           "409": {
-            "description": "Active deployments still reference this model"
+            "description": "Active deployments or a running Hugging Face export still reference this model"
           }
         },
         "security": [
@@ -7641,7 +7644,7 @@
             }
           },
           "400": {
-            "description": "The job was rejected: an unknown or unpriced gpu_type/provider/region, an unknown job_type, a custom_script on a provider that runs managed methods only (vast), a method that is unknown or not available (sft_video_gen, grpo_agentic) or without the reward it needs, environments, a job-level volume, a checkpoint_destination other than Veri storage, load_in_4bit without lora_rank, a lora_rank that is not positive, invalid or wrongly typed hyperparameters, or an unsupported dataset format"
+            "description": "The job was rejected: an unknown or unpriced gpu_type/provider/region, an unknown job_type, a custom_script on a provider that runs managed methods only (vast), a method that is unknown or not available (sft_video_gen, grpo_agentic) or without the reward it needs, environments, a job-level volume, a checkpoint_destination other than Veri storage, load_in_4bit without lora_rank, a lora_rank that is not positive, invalid or wrongly typed hyperparameters, an unsupported dataset format, or (dpo) preference rows that mix strings and message lists"
           },
           "402": {
             "description": "No billing account is linked to the workspace"
@@ -7737,7 +7740,7 @@
             "description": "Not found"
           },
           "409": {
-            "description": "A library model or deployment still uses the job's weights"
+            "description": "A library model, deployment or running Hugging Face export still uses the job's weights"
           }
         },
         "security": [
@@ -9007,6 +9010,9 @@
           },
           "404": {
             "description": "Not found or not owned by the caller"
+          },
+          "409": {
+            "description": "An active training job mounts the volume or reads a dataset from it"
           }
         },
         "security": [
