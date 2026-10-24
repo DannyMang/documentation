@@ -110,21 +110,24 @@ model = AutoPeftModelForCausalLM.from_pretrained(path)
 tokenizer = AutoTokenizer.from_pretrained(path)
 ```
 
-For standalone merged weights, push the finished model to your Hugging Face account with the `merged` artifact (see [Hugging Face](/training/huggingface)).
+Veri also keeps the **merged weights** (the adapter merged into the base model, a standalone checkpoint `from_pretrained` loads on its own) next to the adapter. `GET /v1/training_jobs/{id}/model` lists them under `merged_files`, and `artifact_type` says what `files` holds (`adapter` here). To publish either artifact to your Hugging Face account, see [Hugging Face](/training/huggingface).
 
-**Serve it.** Because the checkpoint is an adapter, not a standalone model, it can't be deployed on its own: creating a deployment from this job (or from a library model saved from it) returns a `400`. Serve it one of two ways:
+**Serve it.** Deploy the job like any other: Veri serves the merged weights, so a LoRA job needs no extra step.
 
-- **Merged weights.** Add `hf_push={"repo": "your-namespace/qwen-1.5b-gsm8k", "artifact": "merged", "private": False}` to the job above. When the job finishes, Veri merges the adapter into the base model and pushes standalone weights. Deploy that repo from Hugging Face. Deployments download the repo without your Hugging Face token, so it must be public.
+```python
+dep = client.deployments.create(
+    job.id,
+    "qwen-1.5b-gsm8k",
+    gpu={"gpu_type": "L4-24GB", "gpu_count": 1},
+)
+dep.wait()
+```
 
-  ```python
-  dep = client.deployments.create(
-      "your-namespace/qwen-1.5b-gsm8k",
-      "qwen-1.5b-gsm8k",
-      source="huggingface",
-      gpu={"gpu_type": "L4-24GB", "gpu_count": 1},
-  )
-  dep.wait()
-  ```
+Or from the CLI: `veri deploy <job_id> --gpu-type L4-24GB`. Saving the job to your [model library](/deployments/custom-models) (`veri models save <job_id> --name qwen-1.5b-gsm8k`) saves the merged weights, so that model deploys too.
+
+Two other ways to serve the same adapter:
+
+- **From Hugging Face.** Add `hf_push={"repo": "your-namespace/qwen-1.5b-gsm8k", "artifact": "merged", "private": False}` to the job and deploy that repo with `source="huggingface"` once the job finishes. Deployments download the repo without your Hugging Face token, so it must be public. Jobs trained with `lora_rank` before merged weights were kept in Veri (the deploy returns a `400` that says so) can only be served this way, or as an adapter on a fleet.
 
 - **Adapter on its base model (beta).** Save the job as an adapter (`model = client.models.create_from_training_job(job.id, name="qwen-1.5b-gsm8k", artifact="adapter")`). Create a deployment of `Qwen/Qwen2.5-1.5B-Instruct` with `"serving_mode": "multi_adapter"` in the `POST /v1/deployments` body (the SDK's `client.deployments.create` has no `serving_mode` argument), then attach the adapter under an alias with `POST /v1/deployments/{id}/adapters` (SDK: `client.deployments.attach_adapter(deployment_id, serve_name="qwen-1.5b-gsm8k", model_id=model.id)`). Requests whose `model` is that alias are answered by the adapter, and one deployment can serve many adapters of the same base. Multi-adapter fleets are in beta: see [Multi-adapter fleets](/deployments/api#multi-adapter-fleets) for the known limitations.
 

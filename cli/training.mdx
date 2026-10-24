@@ -52,7 +52,7 @@ Limits: up to 8 files, 256 KiB each. The server re-validates at submit and rejec
 | `get <id>` | Show one job. |
 | `cancel <id>` | Cancel a running job. |
 | `logs <id> [-f]` | Print the job's logs; `-f` follows the live stream. |
-| `estimate <config>` | Estimate the cost of a config without submitting. |
+| `estimate <config> [--minutes N]` | Estimate the cost of a config without submitting. The duration is 6 min startup + `max_steps` x 18 s unless `--minutes` sets it; see [Price a job before submitting](/cli/run#price-a-job-before-submitting). |
 | `download <id>` | Download the completed checkpoint. |
 | `delete <id>` | Permanently delete a finished job and its stored checkpoint files. |
 

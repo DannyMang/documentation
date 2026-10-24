@@ -69,7 +69,7 @@ The full end-to-end walkthrough lives in the demos section: [Train a URL-extract
 
 ## GPU layout
 
-One node, split devices: the trainer takes GPU 0 and the vLLM policy server takes the next GPUs with tensor parallel set to the **largest power of two that fits** in the remainder (vLLM requires TP to divide the model's attention-head count, so odd remainders are clamped down and any leftover GPUs idle). TRL's weight-sync communicator requires the trainer and the server to sit on **different** CUDA devices, so **at least 2 GPUs** are required — 1-GPU submits are rejected with a 400.
+One node, split devices: the trainer takes GPU 0 and the vLLM policy server takes the next GPUs with tensor parallel set to the **largest power of two that fits** in the remainder (vLLM requires TP to divide the model's attention-head count, so odd remainders are clamped down and any leftover GPUs idle). TRL's weight-sync communicator requires the trainer and the server to sit on **different** CUDA devices, so **at least 2 GPUs** are required: 1-GPU submits are rejected with a 400. `veri run-harness` defaults to `--gpu-count 4` (the `L4-24GB` x4 shape below) and refuses a count outside 2 to 8 before it uploads your code (`veri-sdk` 0.2.45 or later; older CLIs default to 1, so pass `--gpu-count` explicitly).
 
 Recommended shapes:
 

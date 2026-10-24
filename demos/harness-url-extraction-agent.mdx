@@ -349,7 +349,7 @@ veri run-harness ./harness \
 ```
 
 <Note>
-  `--gpu-count 4` is not optional: the trainer and the vLLM policy server must sit on different CUDA devices (see [GPU layout](/training/harness#gpu-layout)), so harness jobs need at least 2 GPUs on one node. On AWS the smallest multi-L4 node is the 4-GPU g6.12xlarge; 2x/4x H100 chunks are available with `--provider vast`.
+  Harness jobs need 2 to 8 GPUs on one node: the trainer and the vLLM policy server must sit on different CUDA devices (see [GPU layout](/training/harness#gpu-layout)). `--gpu-count 4` is the `veri run-harness` default (`veri-sdk` 0.2.45 or later; older CLIs default to 1, which the API rejects), and the CLI refuses a count outside 2 to 8 before it uploads `./harness`. On AWS the smallest multi-L4 node is the 4-GPU g6.12xlarge; 2x/4x H100 chunks are available with `--provider vast`.
 </Note>
 
 For the OpenAI route, swap the entrypoint: `--entrypoint "python agent_openai.py"` and drop `--harness-protocol` (openai is the default). LangChain: `--entrypoint "python agent_langchain.py"`. The Anthropic text route shown above trains with the same token fidelity.

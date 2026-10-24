@@ -197,18 +197,30 @@ max_replicas = 1            # 1-8; above min_replicas enables autoscaling
 
 ## Price a job before submitting
 
-`veri jobs estimate` prices a `kind="train"` config without submitting it. It prints the resolved GPU config plus a cost estimate (illustrative values):
+`veri jobs estimate` prices a `kind="train"` config without submitting it. It prints the resolved GPU config, a cost estimate, and, on the line under it, the duration it assumed (illustrative values):
 
 ```bash
 $ veri jobs estimate configs/train.toml
 ┏━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┓
 ┃ gpu_type ┃ gpu_count ┃ provider ┃ duration_minutes ┃ rate_usd_per_hour ┃ estimated_cost_usd ┃
 ┡━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━┩
-│ L4-24GB  │ 1         │ aws      │ 100.0            │ 1.05              │ 1.75               │
+│ L4-24GB  │ 1         │ aws      │ 36.0             │ 1.05              │ 0.63               │
 └──────────┴───────────┴──────────┴──────────────────┴───────────────────┴────────────────────┘
+Assumes 36 min: 6 min startup + 100 steps x 18 s/step. The step time was measured on one GRPO run
+(Qwen2.5-1.5B LoRA, L4-24GB x1), not on this job; pass --minutes N to price your own duration.
 ```
 
-Add `--format json` for the same fields as a JSON object (`gpu_type`, `gpu_count`, `provider`, `duration_minutes`, `rate_usd_per_hour`, `estimated_cost_usd`).
+The duration is an assumption, not a measurement of your job: about 6 minutes of startup (instance boot, environment setup, model and dataset download) plus `max_steps` at 18 seconds per step. Both numbers come from the measured GRPO run in [Training examples](/training/examples). Step time grows with model size, `rollouts_per_prompt`, response length and, for harness jobs, how long your agent takes per rollout, so treat the estimate as a floor for bigger runs. Without `max_steps` it assumes 100 steps (the GRPO default); an `sft_text` or `dpo` run without `max_steps` runs `num_epochs` over the dataset, which the estimate does not count.
+
+Once you know your job's real duration (from a short run, or the wall time of a previous one), price that instead with `--minutes`:
+
+```bash
+veri jobs estimate configs/train.toml --minutes 90
+```
+
+Add `--format json` for the same fields as a JSON object (`gpu_type`, `gpu_count`, `provider`, `duration_minutes`, `rate_usd_per_hour`, `estimated_cost_usd`), plus `duration_assumption` with the sentence printed under the table. `--minutes` and the step-based duration need `veri-sdk` 0.2.45 or later; older CLIs priced `max_steps` as minutes.
+
+The estimate covers GPU time only, not the flat checkpoint-storage charge on each billed job (see [Training job charges](/billing#training-job-charges)).
 
 The estimate does not check the GPU shape or the dataset: submitting is what validates them. A submit that fails validation is rejected before anything is created or billed.
 

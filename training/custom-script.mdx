@@ -36,6 +36,19 @@ Veri runs your entrypoint inside the base image on the GPU, with a set of `VERI_
 
 Exit code `0` marks the job completed; a non-zero exit marks it failed.
 
+### When your script fails
+
+A failed job's error is your script's own output: the exit status, then the last 20 lines your script wrote to stderr (up to 4 KiB). For example:
+
+```text
+Your script exited with status 1. Last lines:
+Traceback (most recent call last):
+  File "/workspace/code/train.py", line 12, in <module>
+KeyError: 'prompt'
+```
+
+Python tracebacks already go to stderr; print your own errors there too so they land in the job's error. Status `137` means the container was killed for running out of memory, and the error says so: try a smaller batch or a bigger GPU shape. The error shows on the job page and in `veri jobs get <id>`; the full output (stdout and stderr) is in `veri jobs logs <id>`.
+
 ## Base images
 
 Pick the base that matches your stack. Each prebakes the slow, compiled pieces so cold start stays fast; you layer light dependencies on top.
@@ -49,6 +62,10 @@ Pick the base that matches your stack. Each prebakes the slow, compiled pieces s
 
 <Note>
   Custom scripts run on NVIDIA GPUs only for now: the base-image catalog is CUDA-tier. A submit with an AMD `gpu_type` (e.g. `MI300X-192GB`) returns a 400. AMD support is planned.
+</Note>
+
+<Note>
+  Custom scripts run on AWS and DigitalOcean, not on Vast: Vast runs managed methods (GRPO, SFT, DPO) only, so `veri run-script --provider vast` returns a 400 at submit, before any GPU is rented.
 </Note>
 
 ## Example: a minimal training run
@@ -103,6 +120,8 @@ veri run-script ./my-run \
 ```
 
 The CLI uploads your code, submits the job, and prints the job id and dashboard link. Keep the entrypoint in single quotes so `$VERI_NUM_GPUS` reaches the GPU machine instead of being expanded (to nothing) by your local shell.
+
+For more than one GPU, start with `--gpu-type L4-24GB --gpu-count 4` or `--gpu-type A10G-24GB --gpu-count 4` on AWS (the default provider, 96 GB across four GPUs, usually on a box within two minutes). Use `--provider digitalocean --gpu-type H100-80GB --gpu-count 1` only when a single GPU must hold 80 GB: its capacity comes and goes.
 
 ## Multi-node
 

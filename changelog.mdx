@@ -5,6 +5,20 @@ description: "Recent product and platform changes in Veri"
 keywords: ["changelog", "releases", "platform updates"]
 ---
 
+## 2026-10-22: LoRA-trained jobs deploy directly
+
+- A job trained with `lora_rank` deploys like a full fine-tune: `veri deploy <job_id>`, `veri deployments create --model <job_id>`, or `source: "training_job"` in the API. Veri keeps the merged weights (adapter merged into the base model) next to the adapter and serves those. Pushing merged weights to Hugging Face is no longer required to serve a LoRA run.
+- `veri deploy` accepts a completed training job id as well as a Hugging Face repo.
+- Saving a LoRA job to your model library (`veri models save <job_id>`) saves the merged weights, so the saved model deploys too; `--artifact adapter` still saves the adapter alone for multi-adapter fleets.
+- `GET /v1/training_jobs/{id}/model` gains `artifact_type` (`adapter` or `full`: what `files` holds) and, for LoRA jobs, `merged_files` (presigned URLs of the merged weights).
+- LoRA jobs that finished before this change have no merged weights and keep the `400` at deploy; the message now names the Hugging Face route (`hf_push` with `artifact: "merged"`).
+
+## 2026-10-22: a full provider quota is its own failure
+
+- When Veri's own account limit on AWS is full (the vCPU limit that L4 and A10G boxes share), a training job or deployment fails with `QUOTA_EXCEEDED` instead of the raw AWS `VcpuLimitExceeded` text under `submission_error`. Nothing booted, nothing is billed, and `error.attribution` is `platform`.
+- The message says so: "Veri's AWS capacity quota for L4-24GB x4 is full right now (a platform limit, not your account). Retry in a few minutes or use: ...", followed by shapes on other providers. DigitalOcean's GPU Droplet limit fails the same way.
+- Capacity and quota messages name every cheapest shape that fits on a provider: a DigitalOcean H100 x1 failure now suggests both `aws` L4-24GB x4 and A10G-24GB x4, before DigitalOcean's own H200.
+
 ## 2026-10-15: GCP training on Flex-start VMs
 
 - [GCP](/training/providers/gcp) trains on a single A100 80GB ($3.00 per GPU-hour) or H100 80GB ($5.99) on Flex-start VMs, in us-central1, us-east4, us-east5 and us-west4. Spot VMs are no longer used.

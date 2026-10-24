@@ -47,7 +47,7 @@ stateDiagram-v2
 What happens at each transition:
 
 - **`queued`**: job row written (HTTP 402 at submit if the workspace has no billing account). No spend yet. Veri tries to acquire a GPU instance from here; if no zone has capacity, the job goes straight to `failed` with `CAPACITY_UNAVAILABLE`. On GCP the job stays `queued` for up to about 15 minutes while Veri waits for Flex-start capacity, and longer when the one GCP GPU is in use (see [GCP](/training/providers/gcp)).
-- **`provisioning`**: Veri has leased a GPU and the instance boots. `started_at` is still `null`. Once the instance is acquired, the GPU is rented and **cost accrues from this point**, even before the first training step. A job that never secures a GPU (for example `CAPACITY_UNAVAILABLE`) rents nothing and is not billed.
+- **`provisioning`**: Veri has leased a GPU and the instance boots. `started_at` is still `null`. Once the instance is acquired, the GPU is rented and **cost accrues from this point**, even before the first training step. If you cancel the job before it reaches `running`, that cost is waived and the job is not charged (see [Training job charges](/billing#training-job-charges)). A job that never secures a GPU (for example `CAPACITY_UNAVAILABLE`) rents nothing and is not billed.
 - **`configuring`**: the instance is up and the worker is setting up its environment.
 - **`running`**: the worker has started the training process (dataset and model load, then training steps). `started_at` populates. Metrics start streaming with the first step.
 - **`completed | failed | cancelled`**: pod auto-terminates. Cost is attributed (`cost_attributed_at`). Stripe credit is deducted (`billing_deducted_at`). The full stdout is uploaded to S3 and available via `GET /v1/training_jobs/{id}/logs/full`.
@@ -64,6 +64,7 @@ When a job ends in `failed`, `error.code` carries one of:
 | --- | --- | --- |
 | `oom` | Model too large for the chosen GPU | Drop to a smaller base, raise `gpu_count`, or shrink `max_response_length` |
 | `CAPACITY_UNAVAILABLE` | No GPU capacity for the requested type in any availability zone, after trying every capable zone (`max_launch_attempts`) | Retry later, pick a different `gpu_type`, or launch in another region (`veri regions list`, then `region="..."`). Capacity is provider-side and not pre-checkable |
+| `QUOTA_EXCEEDED` | Veri's own account limit on the provider is full: on AWS the vCPU limit that 4-GPU L4 and A10G boxes share, on DigitalOcean the GPU Droplet limit. A platform limit, not your account (`error.attribution` is `platform`). Nothing booted and nothing is billed | Retry in a few minutes, or resubmit with a shape the message names after `or use:` (always another provider, since the limit covers the whole provider) |
 | `launch_timeout` | The provider's GPU launch did not finish within its time limit (10 min on AWS, 15 min on DigitalOcean and Vast, 18 min on GCP) and was stopped. Not billed | Re-submit; if it keeps happening, try another provider or `gpu_type` |
 | `provisioning_error` | The instance booted but the worker did not come up | Re-submit; if persistent, try a different `gpu_type` |
 | `provisioning_timeout` | The instance never reached a running worker within the provisioning deadline | Re-submit; capacity or boot was too slow |
@@ -85,7 +86,7 @@ A failed job also carries `error.attribution`:
 | `error.attribution` | Meaning | Billing |
 | --- | --- | --- |
 | `customer` | The failure came from the job's own configuration, data or code (`oom`, `config_error`, `dependency_error`, `training_stalled`, `heartbeat_timeout`, `max_run_duration_reached` and similar) | Charged as usual |
-| `platform` | Veri's hardware or provisioning failed (`hardware_error`, `provisioning_error`, `provisioning_timeout`, `configuring_timeout`), or the provider ended the VM (`provider_reclaimed`) | The job's cost is credited back to the workspace automatically |
+| `platform` | Veri's hardware or provisioning failed (`hardware_error`, `provisioning_error`, `provisioning_timeout`, `configuring_timeout`), the provider ended the VM (`provider_reclaimed`), or Veri's account limit on the provider was full (`QUOTA_EXCEEDED`) | The job's cost is credited back to the workspace automatically. A `QUOTA_EXCEEDED` job never booted, so it cost nothing |
 | `pending` | The cause is not clear from the evidence (for example `distributed_error` or `training_error` on a multi-GPU job). An operator reviews it | Charged; credited if the review finds a platform fault |
 
 Credits appear on the job as `refund` with `status` (`approved`, `credited`, `pending` or `denied`) and `amount_usd`, and as a `job_refunded` entry in the job's events. Multi-GPU jobs run a hardware check before any of your code and after a failure; the result is what makes a `hardware_error` verdict, never text in the log.
@@ -132,6 +133,8 @@ also tail any job from another terminal:
 veri jobs logs $JOB_ID       # print everything so far
 veri jobs logs $JOB_ID -f    # follow until the job finishes (Ctrl+C detaches)
 ```
+
+A job that has not written any log yet prints `[no logs available yet]` and exits `0`. A finished job whose log was never uploaded fails instead, with `log was never uploaded for this job` and a non-zero exit, since no log will ever arrive for it.
 
 `download()` fetches the complete Hugging Face checkpoint — weights plus
 adapter config and tokenizer files — into `./checkpoints/<job_id>/`, a

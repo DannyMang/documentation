@@ -146,6 +146,7 @@ kind = "train"
 
 ```bash
 veri jobs estimate configs/train.toml            # rough AWS price, nothing submitted; GPU shape/provider are checked only on submit
+veri jobs estimate configs/train.toml --minutes 90   # price a duration you know (0.2.45+; 0.2.44 prices max_steps as minutes)
 veri jobs create configs/train.toml --follow     # submit + stream logs (Ctrl+C detaches)
 veri jobs logs <id> -f                           # tail later
 veri jobs get <id> && veri jobs download <id> --output-dir ./checkpoints
@@ -189,17 +190,17 @@ Every shape comes from a shared pool. Rough availability (it changes by the minu
 | Shape | Availability |
 | --- | --- |
 | `aws` L4-24GB / A10G-24GB x1 ($1.05 / $1.31 per GPU-hour) | Plenty (dozens at once): the default for SFT, DPO, GRPO and serving up to about 4B. |
-| `aws` L4-24GB / A10G-24GB x4 | Scarce: a few at a time, shared by every account. |
+| `aws` L4-24GB / A10G-24GB x4 (96 GB in total) | Usually free (median 1.6 minutes to a box, no capacity misses in October 2026): the first choice for 4 GPUs, and before `digitalocean` H100 x1 for anything that fits in 4 x 24 GB. Many at once can fill Veri's AWS quota (`QUOTA_EXCEEDED`): retry in a few minutes. |
 | `aws` A100-80GB / H100-80GB x8 (whole node, $4.46 / $8.94 per GPU-hour) | Rare: expect `CAPACITY_UNAVAILABLE`. |
 | `vast` A100-80GB / H100-80GB x1 to x8 (training only, marketplace price) | Usually free; boots slower (5 to 15 min). H100 x2 is the proven harness-RL shape. |
 | `digitalocean` H100-80GB x1 ($5.73) | Flaps: often none free for long stretches. |
 | `digitalocean` H200-141GB x1 ($5.81, atl1 / nyc2) | Usually free: one GPU with 141 GB (32B in bf16, 70B in fp8). |
 
-DigitalOcean is a few droplets shared by every account: when they are all in use, launches fail with `QUOTA_EXCEEDED`. Nothing moves between providers or GPU types automatically. Work down this list:
+`QUOTA_EXCEEDED` means Veri's own account limit on that provider is full (the AWS vCPU limit shared by every L4 and A10G box, or DigitalOcean's few shared droplets): a platform limit, not the user's account. Nothing moves between providers or GPU types automatically. Work down this list:
 
 1. Read the code, not just the status: `veri jobs get <id> --format json` gives `error.code` and `error.message`; for a deployment `veri deployments get <id> --format json` gives `failure_code` and `error` (match the code in any case).
-2. `CAPACITY_UNAVAILABLE` (no free box for that shape anywhere it can launch) or `QUOTA_EXCEEDED` (the platform's GPUs on that provider are all in use): nothing booted and nothing was billed. The message ends with `Alternatives: --provider P --gpu-type G --gpu-count N; ...`, the cheapest live shapes with at least as much GPU memory. Resubmit with one: `veri deploy <model> --provider P --gpu-type G --gpu-count N --no-cache`, or `veri jobs create <config> --set provider.name=P --gpu-type G --gpu-count N`.
-3. Retry the same shape only a few times: wait about 2, then 5, then 10 minutes, at most 3 tries. After `QUOTA_EXCEEDED` go straight to another provider.
+2. `CAPACITY_UNAVAILABLE` (no free box for that shape anywhere it can launch) or `QUOTA_EXCEEDED` (Veri's account limit on that provider is full): nothing booted and nothing was billed. The message ends with the shapes to launch instead, `--provider P --gpu-type G --gpu-count N; ...` (after `Alternatives:` for capacity, after `or use:` for a quota), the cheapest live shapes with at least as much GPU memory. Resubmit with one: `veri deploy <model> --provider P --gpu-type G --gpu-count N --no-cache`, or `veri jobs create <config> --set provider.name=P --gpu-type G --gpu-count N`.
+3. Retry the same shape only a few times: wait about 2, then 5, then 10 minutes, at most 3 tries. After `QUOTA_EXCEEDED`, wait a few minutes or use a shape the message names (it only names other providers).
 4. Shrink or move: 4x to 1x (`lora_rank` or `load_in_4bit` to fit), AWS 4x L4 to `vast` H100 x2 for harness RL, a big model to `digitalocean` H200 x1, or for AWS shapes the other region (`--region us-west-2` / `us-east-1`, `veri regions list`).
 5. Waiting is normal for a while: `queued` → `provisioning` → `configuring` → `running` takes about 5 minutes on AWS and DigitalOcean and 5 to 15 on Vast. Stuck past about 20 minutes: `veri jobs logs <id>`, then `veri jobs cancel <id>` and resubmit on another shape.
 6. Never retry unchanged after `config_error` / `dependency_error`, a 400 "not currently enabled" / "coming soon", a 429 limit code, or a 402. `RATE_LIMITED`: wait `retry_after_seconds`. A chat 503 `deployment_waking`: wait `Retry-After`, resend.
@@ -219,7 +220,7 @@ Read `error.code` first, then the log (`veri jobs logs <id>` or `GET /v1/trainin
 | `dependency_error` | Fix the harness requirements / optimizer opt-in; never retry unchanged. |
 | `distributed_error`, `hardware_error` | Re-submit once; if it repeats, report the job id to Veri (hardware is the platform's fault, never the user's). |
 | `training_stalled` | The log tail carries every GPU's Python stack; lower `micro_batch_size` or the sequence length, then re-submit. |
-| `CAPACITY_UNAVAILABLE`, `QUOTA_EXCEEDED` | Never booted, unbilled. Resubmit with a shape from the message's `Alternatives:`, or retry the same shape at most 3 times (see Capacity above). |
+| `CAPACITY_UNAVAILABLE`, `QUOTA_EXCEEDED` | Never booted, unbilled. Resubmit with a shape the message names (`Alternatives:` / `or use:`), or retry the same shape at most 3 times (see Capacity above). |
 | `provisioning_*`, `configuring_timeout`, `heartbeat_timeout` | Re-submit; try another `gpu_type` or region if it repeats. |
 | `provider_reclaimed` (GCP ended the VM early; credited back), `max_run_duration_reached` (GCP 24 h cap; charged) | Resume from the newest checkpoint as a new job: `veri jobs resume <id>` (or `resume_from="<id>@<step>"`). For the 24 h cap also lower `max_steps`. |
 
@@ -263,10 +264,12 @@ veri run-harness ./harness \
 
 Constraints that WILL bite:
 
-1. `--gpu-count` must be >= 2 on one node (the CLI default of 1 is rejected: trainer
-   and policy server need disjoint GPUs). GPU 0 trains; the policy server gets the
-   largest power of two <= gpu_count-1 as tensor parallelism, so any count 2-8 boots
-   (odd counts leave GPUs idle; `vllm_data_parallel_size` reclaims them).
+1. `--gpu-count` must be 2-8 on one node (trainer and policy server need disjoint
+   GPUs). 0.2.44's CLI default of 1 is rejected after the code upload, so pass it
+   explicitly; from 0.2.45 the default is 4 and other counts fail before the upload.
+   GPU 0 trains; the policy server gets the largest power of two <= gpu_count-1 as
+   tensor parallelism, so any count 2-8 boots (odd counts leave GPUs idle;
+   `vllm_data_parallel_size` reclaims them).
    `H100-80GB x2 --provider vast` is the proven shape.
 2. Protocols: OpenAI (default) and Anthropic (`--harness-protocol anthropic`, e.g. the
    Claude Agent SDK) both train with exact token fidelity. Anthropic native `tool_use` /
@@ -289,7 +292,7 @@ https://docs.veri.studio/training/harness · https://docs.veri.studio/demos/harn
 
 ## Deployments (inference)
 
-Known issue (VS-559): a job trained with `lora_rank` cannot be deployed yet (`veri deploy <job_id>` returns 400). To serve a LoRA run, run `veri hf set` once, then set `[hf_push]` with `repo`, `artifact = "merged"` and `private = false` (serving boxes have no HF token) at submit time; when the job completes, `veri deploy <your-hf-repo>` serves it, and the same repo runs anywhere else (vLLM, Ollama, transformers). Full fine-tunes (no `lora_rank`) deploy directly.
+A completed job deploys with `veri deploy <job_id>` whether it was a full fine-tune or trained with `lora_rank` (LoRA jobs are served from the merged weights Veri keeps next to the adapter). A LoRA job trained before merged weights were kept returns a 400 that says so; serve that one from Hugging Face instead (`[hf_push]` with `artifact = "merged"` and `private = false` at submit, then `veri deploy <your-hf-repo>`), or retrain.
 
 ```bash
 veri deploy Qwen/Qwen3-4B --gpu-type L4-24GB --no-cache   # one-step HF deploy
@@ -380,6 +383,9 @@ runs these:
    still references will not delete; a model with an active deployment returns 409; a
    deployment only deletes once it is stopped AND its final billing settlement has landed
    (a few seconds after stopping). Stop first, then delete.
+   A volume that a queued or running job mounts (or reads a dataset from) returns 409 naming the jobs.
+   A dataset with an experiment pinned to one of its snapshots returns 409 naming the experiments.
+   A model with a running Hugging Face export, and the job it was saved from, return 409 until the export ends.
 
 ## Webhooks (API only, no CLI)
 
