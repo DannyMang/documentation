@@ -52,7 +52,7 @@ Deterministic across every command. Designed for shell scripting.
 | --- | --- |
 | `0` | Success. |
 | `1` | User error (validation failed, missing flag, bad config). |
-| `2` | API error (server returned 4xx or 5xx that isn't auth). |
+| `2` | API error (server returned 4xx or 5xx that isn't auth). The server's message is printed as one line on stderr, ending in the error code when the server sent one: `Error: <message> (code: <code>)`. |
 | `4` | Auth error (401 / 403, missing credentials). |
 | `130` | SIGINT (Ctrl-C). |
 
@@ -289,7 +289,7 @@ veri version --format json
 Prints SDK version, Python version, and platform string. The `--version` and `-v` root flags are aliases — they emit the same output and exit. From CI:
 
 ```bash
-test "$(veri version --format json | jq -r .sdk_version)" = "0.2.44" || exit 1
+test "$(veri version --format json | jq -r .sdk_version)" = "0.2.45" || exit 1
 ```
 
 ## Phase-2 deferrals
