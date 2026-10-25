@@ -124,7 +124,7 @@ veri deployments create \
 | `--trace-bodies` / `--no-trace-bodies` | Capture this deployment's request/response bodies as browsable [traces](/deployments/observability#request-traces). Off by default: enabling stores your end users' prompt/completion content. Also available as `deployment.trace_bodies` in a deploy config. |
 | `--trace-retention` | Trace retention class: `base` (14 days, default) or `extended` (400 days, extended rate). Requires `--trace-bodies`. Also available as `deployment.trace_retention`. |
 
-See [Replicas, autoscaling, and scale to zero](#replicas-autoscaling-and-scale-to-zero) for how the bounds behave. A workspace can run 2 active deployment replicas by default: a create, wake or update that would boot more fails with `429` (`ACTIVE_DEPLOYMENT_LIMIT`).
+See [Replicas, autoscaling, and scale to zero](#replicas-autoscaling-and-scale-to-zero) for how the bounds behave. A workspace can run 2 active deployment replicas on the Free plan (4 on Pro, see [Plans](/billing#plans)): a create, wake or update that would boot more fails with `429` (`ACTIVE_DEPLOYMENT_LIMIT`).
 
 ## Smoke-test with `chat`
 
