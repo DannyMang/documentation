@@ -79,6 +79,8 @@ The new job has its own id, logs and bill. When it starts, the training machine 
 
 What must stay the same, because the checkpoint only fits the run it came from: `method`, `base_model`, the dataset (and its snapshot), the LoRA settings (`lora_rank`, `lora_alpha`, `lora_dropout`, `load_in_4bit`) and `gpu_count`. The source job's reward functions are reused automatically; do not send new ones. What may change: `max_steps` or `num_epochs` (raise them to train further), `output_name`, the provider, region and GPU type. The source job must have finished, and the checkpoint must still be ready. A request that breaks any rule is refused at submit with the reason.
 
+`veri jobs resume` and `client.training_jobs.resume` send the snapshot the source job trained on (its `dataset_snapshot_id`), so rows appended to a stream dataset since then do not change the run; when you build the request yourself, pass that snapshot (`<dataset_id>@snap-N`) as `dataset_id`.
+
 GRPO jobs regenerate their rollouts after a resume. A step-count `checkpoint_every` is aligned to a generation boundary automatically so the continued run matches an uninterrupted one.
 
 ## Retention
