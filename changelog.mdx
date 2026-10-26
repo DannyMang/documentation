@@ -5,6 +5,11 @@ description: "Recent product and platform changes in Veri"
 keywords: ["changelog", "releases", "platform updates"]
 ---
 
+## 2026-10-26: a silent worker's failure says why
+
+- A training job whose worker stops reporting for more than 15 minutes (900 s) still fails with `worker_failed`, but the message now says how long the worker was silent and the last status and step it reported ("Worker stopped reporting for 960 s (last status: training, step 40). ..."), instead of "Job failed". A job whose instance ended before its worker reported a result says that instead.
+- [Custom scripts](/training/custom-script#keeping-the-job-alive): the worker keeps the job alive on its own (a status post at least once a minute), so a script that is quiet for a long time is not failed. Progress still comes only from `$VERI_METRICS_FILE` and mid-run checkpoints only from `$VERI_CHECKPOINT_DIR`.
+
 ## 2026-10-26: checkpoint storage is billed on the GiB you keep
 
 A training job no longer carries a flat checkpoint-storage charge (8 GiB for a month, about $0.24, on every billed job). Its charge is GPU time only. The checkpoints your jobs keep are billed monthly instead, at about $0.03 per GiB-month, prorated by the days kept; a job that keeps no checkpoint adds nothing. Checkpoints are kept until you delete them, and the first month billed is November 2026. See [Checkpoint storage](/billing#checkpoint-storage).
