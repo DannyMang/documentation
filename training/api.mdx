@@ -251,7 +251,7 @@ learning_rate: float = 1e-6
 num_epochs: int = 1            # not used by GRPO; the run length is max_steps
 max_steps: int | None = None   # omitted = 100 steps (one prompt per step)
 rollouts_per_prompt: int = 8
-kl_coef: float = 0.0           # omitted = 0.0: no KL penalty, no reference model
+kl_coef: float = 0.0           # >= 0; omitted = 0.0: no KL penalty, no reference model (null or negative is a 400)
 max_prompt_length: int = 1024  # only with use_unsloth; setting it without use_unsloth is a 400
 max_response_length: int = 2048
 # global_batch_size: not supported by GRPO; setting it is a 400
@@ -263,7 +263,7 @@ lora_alpha: int | None = None  # LoRA scaling; pairs with lora_rank
 load_in_4bit: bool = False     # QLoRA: 4-bit base + LoRA (needs lora_rank, else 400; single GPU)
 ```
 
-LoRA and QLoRA are supported on GRPO: see [GRPO algorithm](/training/grpo). The job object echoes `kl_coef: 0.001` and `max_prompt_length: 1024` for a job that omitted them; the trainer applies neither unless you set it (the omitted values are the ones above).
+LoRA and QLoRA are supported on GRPO: see [GRPO algorithm](/training/grpo). The job object echoes `kl_coef` only when the job set it. It echoes `max_prompt_length: 1024` for a job that omitted it; the trainer applies that only with `use_unsloth`.
 
 ### AgenticGRPOHyperparameters (method=grpo_agentic)
 

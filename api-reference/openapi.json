@@ -14417,7 +14417,8 @@
           },
           "kl_coef": {
             "type": "number",
-            "format": "double"
+            "format": "double",
+            "description": "KL penalty weight against the frozen reference model (GRPOConfig.beta),\na number >= 0. Omitted = 0.0: no KL term and no reference model. Echoed\nonly when the job set it."
           },
           "max_prompt_length": {
             "type": "integer",

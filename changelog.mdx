@@ -5,6 +5,13 @@ description: "Recent product and platform changes in Veri"
 keywords: ["changelog", "releases", "platform updates"]
 ---
 
+## 2026-10-25: a resumed GRPO job keeps the source run's KL setting
+
+- A GRPO job submitted without `kl_coef` no longer shows `kl_coef: 0.001` on its job object. The job trained without a KL penalty, but `client.training_jobs.resume()` and `veri jobs resume` sent the shown value back, so the resumed job trained with a KL penalty of 0.001 (and, for a full fine-tune, a second copy of the model in memory as the reference). The job object now shows `kl_coef` only when the job set it, and a resume carries exactly that.
+- A job object shows `checkpoint_every` and `checkpoint_keep` as `null` when the job left them unset. Submitting that `null` back is now the same as omitting the field (it was a `400`).
+- `kl_coef` must be a number of 0 or more: `null` or a negative value is a `400` at submit. Omit it for no KL penalty.
+- `lora_dropout` may change on a resume; it is a training-time setting, not part of the checkpoint.
+
 ## 2026-10-26: a silent worker's failure says why
 
 - A training job whose worker stops reporting for more than 15 minutes (900 s) still fails with `worker_failed`, but the message now says how long the worker was silent and the last status and step it reported ("Worker stopped reporting for 960 s (last status: training, step 40). ..."), instead of "Job failed". A job whose instance ended before its worker reported a result says that instead.

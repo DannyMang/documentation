@@ -17,8 +17,10 @@ Two hyperparameters on every managed method:
 
 | Hyperparameter | Default | Meaning |
 | --- | --- | --- |
-| `checkpoint_every` | `0.1` for LoRA and QLoRA jobs, `0.25` for full fine-tunes | How often to save. A value between 0 and 1 is a **fraction of the run** (`0.1` is ten checkpoints, whatever the run length). A value of 1 or more is a **literal step count** and must be a whole number. `0` turns intermediate checkpoints off. |
-| `checkpoint_keep` | every checkpoint | A keep-last limit: keep only the newest N checkpoints of the job and delete older ones as new ones are written. Unset or `0` keeps every checkpoint. |
+| `checkpoint_every` | `0.1` for LoRA and QLoRA jobs, `0.25` for full fine-tunes | How often to save. A value between 0 and 1 is a **fraction of the run** (`0.1` is ten checkpoints, whatever the run length). A value of 1 or more is a **literal step count** and must be a whole number. `0` turns intermediate checkpoints off. Omitted (or `null`, for this knob) uses the default. |
+| `checkpoint_keep` | every checkpoint | A keep-last limit: keep only the newest N checkpoints of the job and delete older ones as new ones are written. Omitted, `null` or `0` keeps every checkpoint. |
+
+`null` counts as unset only for these two knobs, because the job object shows them as `null` when they are unset. Other hyperparameters take a value or are left out: `kl_coef`, for example, must be a number of 0 or more, and `null` is a `400`.
 
 ```python
 job = client.training_jobs.create(
@@ -78,7 +80,7 @@ job2 = client.training_jobs.create(
 
 The new job has its own id, logs and bill. When it starts, the training machine downloads the checkpoint and the trainer continues from it: the global step, the optimizer, the learning-rate schedule and the data order all pick up where they stopped, so the loss curve continues rather than restarting.
 
-What must stay the same, because the checkpoint only fits the run it came from: `method`, `base_model`, the dataset (and its snapshot), the LoRA settings (`lora_rank`, `lora_alpha`, `lora_dropout`, `load_in_4bit`) and `gpu_count`. The source job's reward functions are reused automatically; do not send new ones. What may change: `max_steps` or `num_epochs` (raise them to train further), `output_name`, the provider, region and GPU type. The source job must have finished, and the checkpoint must still be ready. A request that breaks any rule is refused at submit with the reason.
+What must stay the same, because the checkpoint only fits the run it came from: `method`, `base_model`, the dataset (and its snapshot), the LoRA settings (`lora_rank`, `lora_alpha`, `load_in_4bit`) and `gpu_count`. The source job's reward functions are reused automatically; do not send new ones. What may change: `max_steps` or `num_epochs` (raise them to train further), `lora_dropout`, `output_name`, the provider, region and GPU type. `resume()` sends back the source job's hyperparameters as its job object shows them, so the continued run keeps the source's `kl_coef` (none, if the source left it unset). The source job must have finished, and the checkpoint must still be ready. A request that breaks any rule is refused at submit with the reason.
 
 `veri jobs resume` and `client.training_jobs.resume` send the snapshot the source job trained on (its `dataset_snapshot_id`), so rows appended to a stream dataset since then do not change the run; when you build the request yourself, pass that snapshot (`<dataset_id>@snap-N`) as `dataset_id` when it is set, and the plain dataset id otherwise (uploaded datasets have no snapshot).
 
