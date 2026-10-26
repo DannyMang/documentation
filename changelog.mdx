@@ -5,6 +5,12 @@ description: "Recent product and platform changes in Veri"
 keywords: ["changelog", "releases", "platform updates"]
 ---
 
+## 2026-10-25: a resumed GRPO job keeps the source run's KL setting
+
+- A GRPO job submitted without `kl_coef` no longer shows `kl_coef: 0.001` on its job object. The job trained without a KL penalty, but `client.training_jobs.resume()` and `veri jobs resume` sent the shown value back, so the resumed job trained with a KL penalty of 0.001 (and, for a full fine-tune, a second copy of the model in memory as the reference). The job object now shows `kl_coef` only when the job set it, and a resume carries exactly that.
+- A job object shows `checkpoint_every` and `checkpoint_keep` as `null` when the job left them unset. Submitting that `null` back is now the same as omitting the field (it was a `400`).
+- `lora_dropout` may change on a resume; it is a training-time setting, not part of the checkpoint.
+
 ## 2026-10-22: LoRA-trained jobs deploy directly
 
 - A job trained with `lora_rank` deploys like a full fine-tune: `veri deploy <job_id>`, `veri deployments create --model <job_id>`, or `source: "training_job"` in the API. Veri keeps the merged weights (adapter merged into the base model) next to the adapter and serves those. Pushing merged weights to Hugging Face is no longer required to serve a LoRA run.
