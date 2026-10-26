@@ -5,6 +5,10 @@ description: "Recent product and platform changes in Veri"
 keywords: ["changelog", "releases", "platform updates"]
 ---
 
+## 2026-10-26: checkpoint storage is billed on the GiB you keep
+
+A training job no longer carries a flat checkpoint-storage charge (8 GiB for a month, about $0.24, on every billed job). Its charge is GPU time only. The checkpoints your jobs keep are billed monthly instead, at about $0.03 per GiB-month, prorated by the days kept; a job that keeps no checkpoint adds nothing. Checkpoints are kept until you delete them, and the first month billed is November 2026. See [Checkpoint storage](/billing#checkpoint-storage).
+
 ## 2026-10-22: LoRA-trained jobs deploy directly
 
 - A job trained with `lora_rank` deploys like a full fine-tune: `veri deploy <job_id>`, `veri deployments create --model <job_id>`, or `source: "training_job"` in the API. Veri keeps the merged weights (adapter merged into the base model) next to the adapter and serves those. Pushing merged weights to Hugging Face is no longer required to serve a LoRA run.

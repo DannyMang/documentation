@@ -83,7 +83,7 @@ GRPO jobs regenerate their rollouts after a resume. A step-count `checkpoint_eve
 
 ## Retention
 
-Checkpoints and the final artifact are kept until you delete them: deleting the job (or the workspace) deletes its checkpoints and its final artifact. Nothing expires on its own. The only automatic deletion is the keep-last limit you set with `checkpoint_keep`: with it, older checkpoints of the job are deleted as new ones are written. Rolling checkpoints are not billed.
+Checkpoints and the final artifact are kept until you delete them: deleting the job (or the workspace) deletes its checkpoints and its final artifact. Nothing expires on its own. The only automatic deletion is the keep-last limit you set with `checkpoint_keep`: with it, older checkpoints of the job are deleted as new ones are written. The checkpoints you keep are billed for storage, about $0.03 per GiB-month, prorated by the days kept (see [Checkpoint storage](/billing#checkpoint-storage)); the final artifact is not charged.
 
 ## Custom scripts
 
