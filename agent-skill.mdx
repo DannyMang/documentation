@@ -219,6 +219,7 @@ Read `error.code` first, then the log (`veri jobs logs <id>` or `GET /v1/trainin
 | `config_error` | Fix the config; never retry the same payload. |
 | `dependency_error` | Fix the harness requirements / optimizer opt-in; never retry unchanged. |
 | `distributed_error`, `hardware_error` | Re-submit once; if it repeats, report the job id to Veri (hardware is the platform's fault, never the user's). |
+| `upload_failed` | Training finished but the final model did not fully reach Veri storage (the message names the files). Re-submit once; if it repeats, report the job id to Veri. |
 | `training_stalled` | The log tail carries every GPU's Python stack; lower `micro_batch_size` or the sequence length, then re-submit. |
 | `CAPACITY_UNAVAILABLE`, `QUOTA_EXCEEDED` | Never booted, unbilled. Resubmit with a shape the message names (`Alternatives:` / `or use:`), or retry the same shape at most 3 times (see Capacity above). |
 | `provisioning_*`, `configuring_timeout`, `heartbeat_timeout` | Re-submit; try another `gpu_type` or region if it repeats. |
