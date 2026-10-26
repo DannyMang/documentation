@@ -74,6 +74,7 @@ When a job ends in `failed`, `error.code` carries one of:
 | `distributed_error` | Multi-GPU job: the GPUs stopped talking to each other (NCCL error, collective timeout, rendezvous failure) | Re-submit once; if it repeats on the same configuration, report the job id. See [Multi-GPU training](/training/multi-gpu) |
 | `training_stalled` | Multi-GPU job: no progress line for the longer of 10 minutes and three times the median step time | Check the log tail (it carries each GPU's stack); lower `micro_batch_size` or the sequence length |
 | `hardware_error` | The box failed a hardware check (missing GPU, memory errors) | Re-submit; this one is on the platform |
+| `upload_failed` | Training finished, but files of the final model could not be uploaded to Veri storage. The job fails rather than completing with missing weights; `error.message` names each file and why | Re-submit; this one is on the platform, and the run is reviewed for a credit |
 | `provider_reclaimed` | GCP deleted or stopped the VM (host error, host maintenance, preemption) before the job finished. Credited back automatically | Resume from the newest checkpoint with `resume_from` (`veri jobs resume <id>`) |
 | `max_run_duration_reached` | GCP ended the VM at its 24-hour maximum run duration | Lower `max_steps` or split the run; resume from the newest checkpoint with `resume_from` |
 

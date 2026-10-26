@@ -5,6 +5,11 @@ description: "Recent product and platform changes in Veri"
 keywords: ["changelog", "releases", "platform updates"]
 ---
 
+## 2026-10-26: a job completes only with its whole model uploaded
+
+- A training job whose final model did not fully reach Veri storage now fails with `upload_failed` instead of completing with files missing. `error.message` names each file and the reason. Files above 5 GiB upload in parts, so a large single weights file no longer fails.
+- `GET /v1/training_jobs/{id}/model` and saving a job to your model library (`POST /v1/models`, `POST /v1/models/register`) return `409` when a completed job's checkpoint is missing a shard its `model.safetensors.index.json` names, or an adapter's `adapter_model.safetensors`. The message names the missing files.
+
 ## 2026-10-22: LoRA-trained jobs deploy directly
 
 - A job trained with `lora_rank` deploys like a full fine-tune: `veri deploy <job_id>`, `veri deployments create --model <job_id>`, or `source: "training_job"` in the API. Veri keeps the merged weights (adapter merged into the base model) next to the adapter and serves those. Pushing merged weights to Hugging Face is no longer required to serve a LoRA run.
