@@ -34,6 +34,7 @@ job = client.training_jobs.create(
 - Vast.ai rents individual GPU cards on shared hosts, so `gpu_count=1` rents exactly one GPU (unlike AWS where A100/H100 are whole 8-GPU nodes).
 - Availability and pricing vary by host and fluctuate in real time — check `veri gpu list --provider vast` before submitting.
 - A submit that finds no acceptable offer fails with `CAPACITY_UNAVAILABLE` and is not billed.
+- A launch Vast refuses because Veri's prepaid Vast balance ran out fails at once with `PROVIDER_OUT_OF_FUNDS` (no retries; `error.attribution` is `platform`) and is not billed.
 
 ## Where to go next
 
