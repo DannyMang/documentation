@@ -8959,7 +8959,7 @@
           {
             "name": "name",
             "in": "path",
-            "description": "Volume name",
+            "description": "Volume id or name",
             "required": true,
             "schema": {
               "type": "string"
@@ -8997,7 +8997,7 @@
           {
             "name": "name",
             "in": "path",
-            "description": "Volume name",
+            "description": "Volume id or name",
             "required": true,
             "schema": {
               "type": "string"
@@ -9033,7 +9033,7 @@
           {
             "name": "name",
             "in": "path",
-            "description": "Volume name",
+            "description": "Volume id or name",
             "required": true,
             "schema": {
               "type": "string"
@@ -9090,7 +9090,7 @@
           {
             "name": "name",
             "in": "path",
-            "description": "Volume name",
+            "description": "Volume id or name",
             "required": true,
             "schema": {
               "type": "string"
@@ -9135,7 +9135,7 @@
           {
             "name": "name",
             "in": "path",
-            "description": "Volume name",
+            "description": "Volume id or name",
             "required": true,
             "schema": {
               "type": "string"
@@ -9191,7 +9191,7 @@
           {
             "name": "name",
             "in": "path",
-            "description": "Volume name",
+            "description": "Volume id or name",
             "required": true,
             "schema": {
               "type": "string"
@@ -9247,7 +9247,7 @@
           {
             "name": "name",
             "in": "path",
-            "description": "Volume name",
+            "description": "Volume id or name",
             "required": true,
             "schema": {
               "type": "string"
