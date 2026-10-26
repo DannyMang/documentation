@@ -109,6 +109,8 @@ veri volumes delete my-corpus
 
 Without `--yes`, the CLI prompts for the volume name as a confirmation and shows the file count and total bytes that will be deleted. The row is dropped immediately; the stored objects are cleaned up by a background job within a few minutes.
 
+Over the REST API, `DELETE /v1/volumes/{name}` takes either the volume's name or the `id` that `POST /v1/volumes` returned. The same holds for `GET /v1/volumes/{name}` and every `/v1/volumes/{name}/...` route (list files, delete a file, upload URLs).
+
 A volume that a queued or running training job still uses, as its mount or through a dataset connected from the volume, cannot be deleted: the request returns `409` naming those jobs. Wait for them to finish or cancel them first.
 
 There is no time-based garbage collection. Volumes stay until you delete them; the monthly billing meter is what keeps storage bills aligned with what you actually use.
