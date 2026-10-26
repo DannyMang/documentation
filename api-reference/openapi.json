@@ -5556,6 +5556,27 @@
         ]
       }
     },
+    "/v1/plans": {
+      "get": {
+        "tags": [
+          "Account"
+        ],
+        "summary": "List plans",
+        "operationId": "plans",
+        "responses": {
+          "200": {
+            "description": "The free and pro limits and the Pro pack",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Plans"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/public/runs": {
       "get": {
         "tags": [
@@ -15095,7 +15116,15 @@
               "string",
               "null"
             ],
-            "description": "Reserved for future billing plan surfacing."
+            "description": "The active workspace's plan: \"free\", or \"pro\" while the Pro pack is in\nforce (billing/plans.json names the limits of each)."
+          },
+          "plan_until": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When the pro plan ends; null on free."
           },
           "org_id": {
             "type": [
@@ -19466,6 +19495,122 @@
           "pinned": {
             "type": "boolean",
             "description": "true (default) pins; false unpins."
+          }
+        }
+      },
+      "PlanLimits": {
+        "type": "object",
+        "description": "One plan's limits. The field names are the JSON keys and, for the\nper-workspace override columns, the `workspaces` column names.",
+        "required": [
+          "max_inflight_jobs",
+          "max_active_deployment_replicas",
+          "max_concurrent_sessions",
+          "max_concurrent_experiments",
+          "max_triggers",
+          "max_traces_per_month",
+          "trace_free_per_month",
+          "team_workspaces",
+          "seats_per_workspace"
+        ],
+        "properties": {
+          "max_inflight_jobs": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Concurrent training jobs, node-weighted (`enforce_job_cap`).",
+            "minimum": 0
+          },
+          "max_active_deployment_replicas": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Active deployment replicas, replica-weighted (`enforce_deployment_cap`).",
+            "minimum": 0
+          },
+          "max_concurrent_sessions": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Non-terminal agent sessions, paused included (`enforce_session_cap`).",
+            "minimum": 0
+          },
+          "max_concurrent_experiments": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Queued, running or awaiting-local experiments (`enforce_experiment_cap`).",
+            "minimum": 0
+          },
+          "max_triggers": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Active session triggers (`enforce_trigger_cap`).",
+            "minimum": 0
+          },
+          "max_traces_per_month": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Traces accepted per workspace per calendar month (`reserve_trace_slot`).",
+            "minimum": 0
+          },
+          "trace_free_per_month": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Base-class traces per month settled at $0 (billing/trace_billing.py).",
+            "minimum": 0
+          },
+          "team_workspaces": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Clerk per-user `create_organizations_limit`; the web tier sets it.",
+            "minimum": 0
+          },
+          "seats_per_workspace": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Clerk per-org `max_allowed_memberships`; the web tier sets it.",
+            "minimum": 0
+          }
+        }
+      },
+      "Plans": {
+        "type": "object",
+        "required": [
+          "free",
+          "pro",
+          "pro_pack"
+        ],
+        "properties": {
+          "free": {
+            "$ref": "#/components/schemas/PlanLimits"
+          },
+          "pro": {
+            "$ref": "#/components/schemas/PlanLimits"
+          },
+          "pro_pack": {
+            "$ref": "#/components/schemas/ProPack"
+          }
+        }
+      },
+      "ProPack": {
+        "type": "object",
+        "description": "The Pro pack: one Stripe checkout buys `credit_usd` of balance plus the\n`pro` limits for `duration_days`.",
+        "required": [
+          "price_usd",
+          "credit_usd",
+          "duration_days"
+        ],
+        "properties": {
+          "price_usd": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "credit_usd": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "duration_days": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
           }
         }
       },
