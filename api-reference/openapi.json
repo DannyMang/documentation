@@ -14416,8 +14416,12 @@
             "format": "int32"
           },
           "kl_coef": {
-            "type": "number",
-            "format": "double"
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "KL penalty weight against the frozen reference model (GRPOConfig.beta).\nOmitted = 0.0: no KL term and no reference model. Echoed only when the\njob set it, so a resume or clone built from a job GET trains with the\nsource run's setting (VS-567: a 0.001 default used to be echoed)."
           },
           "max_prompt_length": {
             "type": "integer",
