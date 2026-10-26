@@ -5,6 +5,11 @@ description: "Recent product and platform changes in Veri"
 keywords: ["changelog", "releases", "platform updates"]
 ---
 
+## 2026-10-26: a silent worker's failure says why
+
+- A training job whose worker stops reporting for more than 15 minutes (900 s) still fails with `worker_failed`, but the message now says how long the worker was silent and the last status and step it reported ("Worker stopped reporting for 960 s (last status: training, step 40). ..."), instead of "Job failed". A job whose instance ended before its worker reported a result says that instead.
+- [Custom scripts](/training/custom-script#keeping-the-job-alive): the worker keeps the job alive on its own (a status post at least once a minute), so a script that is quiet for a long time is not failed. Progress still comes only from `$VERI_METRICS_FILE` and mid-run checkpoints only from `$VERI_CHECKPOINT_DIR`.
+
 ## 2026-10-22: LoRA-trained jobs deploy directly
 
 - A job trained with `lora_rank` deploys like a full fine-tune: `veri deploy <job_id>`, `veri deployments create --model <job_id>`, or `source: "training_job"` in the API. Veri keeps the merged weights (adapter merged into the base model) next to the adapter and serves those. Pushing merged weights to Hugging Face is no longer required to serve a LoRA run.
