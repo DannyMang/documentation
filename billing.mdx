@@ -68,6 +68,24 @@ To avoid running dry, an owner can turn on **auto-reload**: when the balance dro
 - Veri checks balances every few minutes and reloads at most once per hour per workspace. Pick a reload amount larger than an hour of your usual burn so a single reload covers you.
 - If the charge fails (declined card, no card), the billing page shows the reason and the owners receive an email. Nothing is reloaded until the card is fixed.
 
+## Plans
+
+Every workspace starts on **Free**. The **Pro pack** is a one-time purchase under **Settings > Credits**: $20 that lands on the workspace's balance as $20 of credit and switches the workspace to the Pro limits for 30 days. It is not a subscription: nothing renews. Buying another pack while one is active adds 30 days to the current end date. When the pack ends the limits return to Free on their own; the credit stays.
+
+| Limit | Free | Pro |
+| --- | --- | --- |
+| Concurrent training jobs (node-weighted) | 4 | 8 |
+| Active deployment replicas (replica-weighted) | 2 | 4 |
+| Concurrent agent sessions (paused ones count) | 10 | 25 |
+| Concurrent experiments | 2 | 4 |
+| Active session triggers | 10 | 25 |
+| Request traces free each month | 5,000 | 25,000 |
+| Request traces accepted each month | 100,000 | 250,000 |
+| Team workspaces (plus your personal one) | 1 | 3 |
+| Seats per team workspace | 3 | 10 |
+
+The pack applies to the workspace you buy it in. In a team workspace the credit and the limits land on the team, and the buyer's team-workspace allowance and the team's seats are raised. `veri whoami` and `GET /v1/me` report the workspace's `plan` (`free` or `pro`) and, while Pro, `plan_until`. The current limits of every plan are public at `GET /v1/plans` (no key needed). Need more than Pro? Contact support for Enterprise limits.
+
 ## Budget alerts
 
 An owner can set a monthly spend threshold under **Spend alert**. Veri emails when spend for the calendar month crosses 75% and again at 100% of the threshold, once each per month. For a team, every owner receives the email. Alerts are informational: they never stop work. To stop work at a limit, stop the resource or rely on the $0 rule below.

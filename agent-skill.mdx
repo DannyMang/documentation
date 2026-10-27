@@ -54,8 +54,10 @@ Docs: https://docs.veri.studio/quickstart · https://docs.veri.studio/cli
 
 ## Account limits — plan around these
 
-Concurrency is capped per account. Defaults: **4 in-flight training jobs**, **2 active
-deployment replicas**, 2 unfinished experiments, 2 agent sessions (paused ones count). Jobs and
+Concurrency is capped per workspace. Free plan: **4 in-flight training jobs** (8 on Pro),
+**2 active deployment replicas** (4 on Pro), 2 unfinished experiments (4 on Pro),
+10 agent sessions (25 on Pro; paused ones count), 10 active triggers (25 on Pro). `GET /v1/me`
+reports the workspace's `plan`; `GET /v1/plans` lists every plan's limits. Jobs and
 replicas are counted weighted, so a 4-node job consumes 4 job slots and a 2-replica
 deployment consumes the whole replica budget.
 

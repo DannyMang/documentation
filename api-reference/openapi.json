@@ -5559,6 +5559,27 @@
         ]
       }
     },
+    "/v1/plans": {
+      "get": {
+        "tags": [
+          "Account"
+        ],
+        "summary": "List plans",
+        "operationId": "plans",
+        "responses": {
+          "200": {
+            "description": "The free and pro limits and the Pro pack",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Plans"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/public/runs": {
       "get": {
         "tags": [
@@ -7984,10 +8005,29 @@
           {
             "name": "limit",
             "in": "query",
+            "description": "Page size, 1 to 500 (default 50).",
             "required": false,
             "schema": {
               "type": "integer",
               "format": "int32"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "description": "Cursor: the id of an event on this job. Only events created after it\nare returned (events created at the same instant order by id). Pass\nthe newest id you hold to poll for new events.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "description": "`desc` (newest first, the default) or `asc` (oldest first).",
+            "required": false,
+            "schema": {
+              "type": "string"
             }
           }
         ],
@@ -7998,6 +8038,49 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/EventList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`after` names no event of this job, or `order` is not asc/desc"
+          },
+          "404": {
+            "description": "Not found or not owned by the caller"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/training_jobs/{job_id}/files": {
+      "get": {
+        "tags": [
+          "Training jobs"
+        ],
+        "summary": "List job files",
+        "operationId": "files",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "description": "Training job ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The job's reward sources, code archive, dependency file and entrypoint",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobFileList"
                 }
               }
             }
@@ -13410,7 +13493,8 @@
             }
           },
           "has_more": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "True when more events match than this page holds: page on with the\nlast event's id as `after` (with `order=asc`)."
           }
         }
       },
@@ -14855,6 +14939,64 @@
           }
         }
       },
+      "JobFile": {
+        "type": "object",
+        "description": "One file a job was submitted with.",
+        "required": [
+          "name",
+          "kind"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "`reward_<i>.py`, `code.tar.gz`, `requirements.txt`, `uv.lock` or `entrypoint`."
+          },
+          "kind": {
+            "type": "string",
+            "description": "`reward`, `code_artifact`, `requirements`, `uv_lock` or `entrypoint`."
+          },
+          "size_bytes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Size in bytes; null when the stored object is gone (code archives\nexpire 30 days after upload) or unreadable."
+          },
+          "content": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The file text: reward sources up to 64 KiB, dependency files and the\nentrypoint. Null for the code archive and larger reward sources."
+          },
+          "download_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Presigned GET valid for 15 minutes (reward sources and the code\narchive); null for inline-only files and missing objects."
+          }
+        }
+      },
+      "JobFileList": {
+        "type": "object",
+        "required": [
+          "object",
+          "data"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/JobFile"
+            }
+          }
+        }
+      },
       "JobRewardSourceResponse": {
         "type": "object",
         "required": [
@@ -15102,7 +15244,15 @@
               "string",
               "null"
             ],
-            "description": "Reserved for future billing plan surfacing."
+            "description": "The active workspace's plan: \"free\", or \"pro\" while the Pro pack is in\nforce (billing/plans.json names the limits of each)."
+          },
+          "plan_until": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When the pro plan ends; null on free."
           },
           "org_id": {
             "type": [
@@ -18723,7 +18873,8 @@
                     "string",
                     "null"
                   ],
-                  "format": "date-time"
+                  "format": "date-time",
+                  "description": "When the job first reached `running` (training started)."
                 },
                 "completed_at": {
                   "type": [
@@ -18731,6 +18882,46 @@
                     "null"
                   ],
                   "format": "date-time"
+                },
+                "launched_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time",
+                  "description": "When the launch returned the instance: queued is\n`created_at`..`launched_at`. Null until launched (and on jobs launched\nbefore the column existed)."
+                },
+                "provision_started_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time",
+                  "description": "Billing start: the instance's metering anchor that `cost_usd` and\n`cost_so_far_usd` count from. Stamped at launch on providers that bill\nfrom launch, otherwise when the job reaches `configuring`."
+                },
+                "terminated_at": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time",
+                  "description": "When the instance was released (set on every terminal status)."
+                },
+                "user_rate_per_hour_usd": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "format": "double",
+                  "description": "The job's price in USD per hour: every GPU of every node, at the rate\nit is billed. Null when no price is known for its GPU shape."
+                },
+                "cost_so_far_usd": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "format": "double",
+                  "description": "Live cost in USD while the job is `provisioning`, `configuring` or\n`running`: `user_rate_per_hour_usd` times the hours since\n`provision_started_at`. Null otherwise; a finished job reports its\nsettled `cost_usd`."
                 },
                 "visibility": {
                   "$ref": "#/components/schemas/RunVisibility",
@@ -19473,6 +19664,122 @@
           "pinned": {
             "type": "boolean",
             "description": "true (default) pins; false unpins."
+          }
+        }
+      },
+      "PlanLimits": {
+        "type": "object",
+        "description": "One plan's limits. The field names are the JSON keys and, for the\nper-workspace override columns, the `workspaces` column names.",
+        "required": [
+          "max_inflight_jobs",
+          "max_active_deployment_replicas",
+          "max_concurrent_sessions",
+          "max_concurrent_experiments",
+          "max_triggers",
+          "max_traces_per_month",
+          "trace_free_per_month",
+          "team_workspaces",
+          "seats_per_workspace"
+        ],
+        "properties": {
+          "max_inflight_jobs": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Concurrent training jobs, node-weighted (`enforce_job_cap`).",
+            "minimum": 0
+          },
+          "max_active_deployment_replicas": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Active deployment replicas, replica-weighted (`enforce_deployment_cap`).",
+            "minimum": 0
+          },
+          "max_concurrent_sessions": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Non-terminal agent sessions, paused included (`enforce_session_cap`).",
+            "minimum": 0
+          },
+          "max_concurrent_experiments": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Queued, running or awaiting-local experiments (`enforce_experiment_cap`).",
+            "minimum": 0
+          },
+          "max_triggers": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Active session triggers (`enforce_trigger_cap`).",
+            "minimum": 0
+          },
+          "max_traces_per_month": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Traces accepted per workspace per calendar month (`reserve_trace_slot`).",
+            "minimum": 0
+          },
+          "trace_free_per_month": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Base-class traces per month settled at $0 (billing/trace_billing.py).",
+            "minimum": 0
+          },
+          "team_workspaces": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Clerk per-user `create_organizations_limit`; the web tier sets it.",
+            "minimum": 0
+          },
+          "seats_per_workspace": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Clerk per-org `max_allowed_memberships`; the web tier sets it.",
+            "minimum": 0
+          }
+        }
+      },
+      "Plans": {
+        "type": "object",
+        "required": [
+          "free",
+          "pro",
+          "pro_pack"
+        ],
+        "properties": {
+          "free": {
+            "$ref": "#/components/schemas/PlanLimits"
+          },
+          "pro": {
+            "$ref": "#/components/schemas/PlanLimits"
+          },
+          "pro_pack": {
+            "$ref": "#/components/schemas/ProPack"
+          }
+        }
+      },
+      "ProPack": {
+        "type": "object",
+        "description": "The Pro pack: one Stripe checkout buys `credit_usd` of balance plus the\n`pro` limits for `duration_days`.",
+        "required": [
+          "price_usd",
+          "credit_usd",
+          "duration_days"
+        ],
+        "properties": {
+          "price_usd": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "credit_usd": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "duration_days": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
           }
         }
       },
@@ -22968,7 +23275,8 @@
               "string",
               "null"
             ],
-            "format": "date-time"
+            "format": "date-time",
+            "description": "When the job first reached `running` (training started)."
           },
           "completed_at": {
             "type": [
@@ -22976,6 +23284,46 @@
               "null"
             ],
             "format": "date-time"
+          },
+          "launched_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When the launch returned the instance: queued is\n`created_at`..`launched_at`. Null until launched (and on jobs launched\nbefore the column existed)."
+          },
+          "provision_started_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "Billing start: the instance's metering anchor that `cost_usd` and\n`cost_so_far_usd` count from. Stamped at launch on providers that bill\nfrom launch, otherwise when the job reaches `configuring`."
+          },
+          "terminated_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When the instance was released (set on every terminal status)."
+          },
+          "user_rate_per_hour_usd": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "The job's price in USD per hour: every GPU of every node, at the rate\nit is billed. Null when no price is known for its GPU shape."
+          },
+          "cost_so_far_usd": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Live cost in USD while the job is `provisioning`, `configuring` or\n`running`: `user_rate_per_hour_usd` times the hours since\n`provision_started_at`. Null otherwise; a finished job reports its\nsettled `cost_usd`."
           },
           "visibility": {
             "$ref": "#/components/schemas/RunVisibility",
