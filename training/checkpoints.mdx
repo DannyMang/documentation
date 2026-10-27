@@ -84,6 +84,38 @@ What must stay the same, because the checkpoint only fits the run it came from: 
 
 `veri jobs resume` and `client.training_jobs.resume` send the snapshot the source job trained on (its `dataset_snapshot_id`), so rows appended to a stream dataset since then do not change the run; when you build the request yourself, pass that snapshot (`<dataset_id>@snap-N`) as `dataset_id` when it is set, and the plain dataset id otherwise (uploaded datasets have no snapshot).
 
+### Resuming from a config file
+
+A `kind = "train"` config resumes when its `[job]` section sets `resume_from` to a checkpoint id or `<job_id>@<step>`. The rest of the config must describe the same run as the source job (the rules above); raise `max_steps` to train further.
+
+```toml
+kind = "train"
+
+[job]
+output_model = "qwen3-4b-sft-continued"
+resume_from = "job_abc123@400"
+
+[model]
+base = "Qwen/Qwen3-4B"
+
+[dataset]
+id = "ds_abc123"        # the source job's dataset id
+
+[method]
+type = "sft_text"
+max_steps = 2000
+
+[resources]
+gpu_type = "L4-24GB"
+gpu_count = 4
+```
+
+```bash
+veri jobs create configs/resume.toml    # or: veri run configs/resume.toml
+```
+
+With `resume_from = "<job_id>@<step>"`, the SDK and CLI look up the source job and, when `[dataset].id` is that job's dataset id, send the snapshot it trained on instead, so rows appended to a stream dataset since then do not get the resume refused. A `ckpt_...` id does not name its job, so `[dataset].id` is sent as written: for a stream dataset, use the `<job_id>@<step>` form or set `[dataset].id` to the source job's `dataset_snapshot_id`.
+
 GRPO jobs regenerate their rollouts after a resume. A step-count `checkpoint_every` is aligned to a generation boundary automatically so the continued run matches an uninterrupted one.
 
 ## Retention
