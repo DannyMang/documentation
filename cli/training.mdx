@@ -109,6 +109,19 @@ veri jobs delete 3f9c2a7b1d4e               # finished jobs only; removes the st
 
 `list` supports `--limit`, `--after`, `--status`, `--method`. All commands accept `--format json`.
 
+Under the job's row, `veri jobs get` prints what a live job has cost so far at its hourly rate (a finished job shows the rate; its settled cost is in the `cost_usd` column) and every lifecycle timestamp the job has reached:
+
+```text
+Cost so far: $0.39 at $1.26/h
+Lifecycle:
+  created            2026-05-12T10:23:45Z
+  launched           2026-05-12T10:24:02Z
+  provision_started  2026-05-12T10:24:02Z
+  started            2026-05-12T10:29:31Z
+```
+
+`--format json` carries the same values as `cost_so_far_usd`, `user_rate_per_hour_usd`, `created_at`, `launched_at`, `provision_started_at` (billing start), `started_at`, `completed_at` and `terminated_at`. The [Training jobs API](/training/api) explains each field.
+
 ### Stream logs
 
 `veri jobs logs` prints everything the job has logged so far (bootstrap and worker output) and exits. Pass `-f`/`--follow` to attach to the live stream until the job reaches a terminal state:
@@ -131,6 +144,19 @@ while :; do
 done
 echo "$STATUS"
 ```
+
+### Events
+
+`veri jobs events` lists the job's lifecycle events: the launch, each setup stage (dependencies, data, model download), checkpoints, warnings, the outcome and billing. Newest first by default:
+
+```bash
+veri jobs events 3f9c2a7b1d4e                                   # newest 50
+veri jobs events 3f9c2a7b1d4e --order asc --limit 500           # oldest first
+veri jobs events 3f9c2a7b1d4e --order asc --after 7d0e4b19a2c6  # only events after that one
+veri jobs events 3f9c2a7b1d4e --format json                     # with each event's metadata
+```
+
+`--limit` is 1 to 500 (default 50). The table shows each event's time, level, type and message; `--format json` adds its `metadata` (download and load durations, checkpoint sizes, the GPU inventory). When more events match an `--order asc` page, the CLI prints the `--after` command for the next one. The [event types](/training/api#event-types) are listed in the API reference.
 
 ### Download a completed checkpoint
 

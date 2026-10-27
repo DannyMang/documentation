@@ -15,13 +15,14 @@ Reference for `/v1/training_jobs/*`. All endpoints require Bearer token auth (`A
 | `POST` | `/v1/training_jobs` | Create a job |
 | `GET` | `/v1/training_jobs/{id}` | Get one |
 | `GET` | `/v1/training_jobs/{id}/logs` | Stream the worker's log as server-sent events |
-| `GET` | `/v1/training_jobs/{id}/logs/full` | Full stdout from S3 (after job ends) |
-| `GET` | `/v1/training_jobs/{id}/events` | Audit trail |
+| `GET` | `/v1/training_jobs/{id}/logs/full` | The full log as plain text (complete once the job ends) |
+| `GET` | `/v1/training_jobs/{id}/events` | Lifecycle events: setup stages, checkpoints, warnings, the outcome, billing |
 | `GET` | `/v1/training_jobs/{id}/metrics` | Sampled training metrics |
 | `POST` | `/v1/training_jobs/{id}/cancel` | Cancel a non-terminal job |
 | `DELETE` | `/v1/training_jobs/{id}` | Hard-delete a finished job (S3 + DB) |
 | `GET` | `/v1/training_jobs/{id}/model` | Presigned download URLs for the checkpoint files |
 | `GET` | `/v1/training_jobs/{id}/rewards/{index}/source` | The reward source a job was submitted with ([Reward functions](/training/reward-functions#viewing-a-jobs-reward)) |
+| `GET` | `/v1/training_jobs/{id}/files` | Every file a job was submitted with: reward sources, code archive, dependency file, entrypoint |
 | `GET` | `/v1/training_jobs/{id}/trajectories` | Trajectory archive of a `grpo_harness` job ([Harness training](/training/harness)) |
 | `POST`, `DELETE` | `/v1/training_jobs/{id}/publish` | Publish or unpublish a run ([Sharing runs](/training/sharing)) |
 
@@ -135,9 +136,14 @@ Create a job. Returns immediately with status `queued`.
   "total_steps": null,
   "current_loss": null,
   "cost_usd": null,
+  "user_rate_per_hour_usd": 1.26,
+  "cost_so_far_usd": null,
   "duration_seconds": null,
+  "launched_at": null,
+  "provision_started_at": null,
   "started_at": null,
   "completed_at": null,
+  "terminated_at": null,
   "visibility": "private",
   "published_at": null,
   "created_at": "2026-05-12T10:23:45Z",
@@ -158,7 +164,49 @@ Response is `PaginatedList[TrainingJobResponse]`: `{"object": "list", "data": [.
 
 ## GET /v1/training_jobs/\{id\}
 
-Single job. Same shape as the create response, but with timestamps populated as the job progresses.
+Single job. Same shape as the create response, with the lifecycle timestamps, progress and cost filled in as the job moves. A running job, trimmed to those fields:
+
+```json
+{
+  "object": "training_job",
+  "id": "a1b2c3d4e5f6",
+  "status": "running",
+  "provider": "aws",
+  "current_step": 42,
+  "total_steps": 200,
+  "current_loss": 0.0123,
+  "cost_usd": null,
+  "user_rate_per_hour_usd": 1.26,
+  "cost_so_far_usd": 0.39,
+  "error": null,
+  "created_at": "2026-05-12T10:23:45Z",
+  "launched_at": "2026-05-12T10:24:02Z",
+  "provision_started_at": "2026-05-12T10:24:02Z",
+  "started_at": "2026-05-12T10:29:31Z",
+  "completed_at": null,
+  "terminated_at": null
+}
+```
+
+A job is live while its `status` is `queued`, `provisioning`, `configuring` or `running` (these count toward the in-flight job limit); `completed`, `failed` and `cancelled` are final. `configuring` is the worker setting up the machine (dependencies, data, model); the [setup events](#event-types) time each stage.
+
+**Lifecycle and cost fields:**
+
+| Field | Meaning |
+| --- | --- |
+| `created_at` | Submitted. The job is `queued` until `launched_at`. |
+| `launched_at` | The provider returned the instance and `provisioning` began. |
+| `provision_started_at` | Billing start: `cost_so_far_usd` and the settled `cost_usd` count from here. On AWS, DigitalOcean and GCP it is the launch (equal to `launched_at`); on Vast, which bills a box once it runs, it is set when the job reaches `configuring`. |
+| `started_at` | The first time the job reached `running` (training started). |
+| `completed_at` | When the job reached `completed`, `failed` or `cancelled`. |
+| `terminated_at` | When the instance was released. |
+| `user_rate_per_hour_usd` | The job's price per hour: every GPU of every node at the rate it is billed. `null` when the shape has no price. |
+| `cost_so_far_usd` | While the job is `provisioning`, `configuring` or `running`: `user_rate_per_hour_usd` times the hours since `provision_started_at`. `null` before billing starts and once the job has finished. |
+| `cost_usd` | The settled cost of a finished job. |
+
+Timestamps of jobs created before a field existed stay `null`.
+
+**Error and refund.** `error` is `null` unless the job failed: `{"code": "...", "message": "...", "attribution": "customer"}`. `code` is one of the [failure codes](/training/managed#failure-modes) and `attribution` says [who the failure belongs to](/training/managed#who-the-failure-belongs-to) (`customer`, `platform` or `pending`; absent on jobs that failed before it existed). A platform-attributed failure also carries `refund`: `{"status": "credited", "amount_usd": 1.84}`, with `status` one of `approved`, `credited`, `pending` or `denied`. `refund` is omitted otherwise.
 
 ## GET /v1/training_jobs/\{id\}/metrics
 
@@ -182,13 +230,121 @@ Sampled training metrics for charting. Server-side stride downsampling if you as
 }
 ```
 
+Every step the trainer logs is stored: the worker batches the steps logged since its last status report (it reports every 5 seconds) and sends them all, so the series has no gaps. `max_points` thins it on read.
+
+### Step timing and system keys
+
+Next to the trainer's own keys, the worker writes these per step. All are numbers; a key is absent when its value is unknown.
+
+| Key | Meaning |
+| --- | --- |
+| `time/ts` | Unix time in seconds when the step was logged. Differences between steps give wall time per step and an ETA. |
+| `time/step_s` | Wall seconds for the step. |
+| `time/gen_s` | Generation seconds: GRPO completions, or for `grpo_harness` the whole rollout phase including the sandboxes. |
+| `time/reward_s` | Seconds in the reward functions, summed over all of them. |
+| `time/weight_sync_s` | Seconds pushing the updated weights to the rollout server (`grpo_harness`). |
+| `time/update_s` | The rest of the step: `time/step_s` minus generation, reward and weight sync (never below 0). |
+| `time/checkpoint_save_s` | Seconds writing a checkpoint to local disk, on the steps that save one. |
+| `sys/gpu.{i}.util_pct` | GPU utilization, percent. |
+| `sys/gpu.{i}.mem_used_bytes`, `sys/gpu.{i}.mem_total_bytes` | GPU memory in use and in total. |
+| `sys/gpu.{i}.mem_peak_bytes` | Peak memory PyTorch has allocated on the GPU during the run. On multi-GPU jobs it can be present for GPU 0 only. |
+| `sys/gpu.{i}.power_w`, `sys/gpu.{i}.temp_c`, `sys/gpu.{i}.sm_clock_mhz` | Power draw (W), temperature (C) and SM clock (MHz). |
+| `sys/gpu.{i}.throttle_mask` | Why the GPU's clocks are held down, as the NVML bitmask: `0x1` idle, `0x2` application clocks, `0x4` software power cap, `0x8` hardware slowdown, `0x10` sync boost, `0x20` software thermal, `0x40` hardware thermal, `0x80` hardware power brake, `0x100` display clocks. `0` means not throttled. |
+| `sys/gpu.{i}.ecc_volatile_uncorrected` | Uncorrected ECC memory errors since the driver loaded. |
+| `sys/host.rss_bytes`, `sys/host.disk_free_bytes`, `sys/host.cpu_pct` | The worker host's resident memory, free disk and CPU use (percent). |
+
+`{i}` is the GPU's index on its machine, from 0. The `time/` keys come from the managed methods' trainers: `time/gen_s` and `time/reward_s` are GRPO only, and `time/weight_sync_s` is `grpo_harness` only. The `sys/` values are the latest sample from a sampler that reads the machine every 15 seconds, so neighboring steps can carry the same sample; GPU values come from NVIDIA's NVML, so hosts without it (AMD GPUs) have no `sys/gpu` keys.
+
 ## GET /v1/training_jobs/\{id\}/events
 
-Job lifecycle audit trail, newest first. Each event has `id`, `job_id`, `level` (`info` / `warning` / `error`), `event_type`, `message`, `metadata`, `request_id`, and `created_at`. `limit` is 1 to 200 (default 50).
+The job's lifecycle events: the launch, each setup stage, checkpoints, warnings, the outcome and billing. Each event has `id`, `object` (`"training_job.event"`), `job_id`, `level` (`info` / `warning` / `error`), `event_type`, `message`, `metadata` (an object or `null`), `request_id`, and `created_at`.
+
+**Query params:**
+- `order`: `desc` (newest first, the default) or `asc` (oldest first)
+- `after`: an event `id`. Only events created after that event are returned. An id that is not an event of this job is a `400`.
+- `limit`: 1 to 500, default `50`
+
+`has_more` is `true` when more events match than the page holds. To read the whole history, or to poll a live job for new events, page forward with `order=asc` and the last `id` you have as `after`:
 
 ```bash
-curl "https://api.veri.studio/v1/training_jobs/$JOB_ID/events?limit=50" -H "Authorization: Bearer vk_..."
+curl "https://api.veri.studio/v1/training_jobs/$JOB_ID/events?order=asc&limit=500" \
+  -H "Authorization: Bearer vk_..."
+# next page, or new events since the last poll:
+curl "https://api.veri.studio/v1/training_jobs/$JOB_ID/events?order=asc&after=$LAST_EVENT_ID" \
+  -H "Authorization: Bearer vk_..."
 ```
+
+**Response:**
+
+```json
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "7d0e4b19a2c6",
+      "object": "training_job.event",
+      "job_id": "a1b2c3d4e5f6",
+      "level": "info",
+      "event_type": "checkpoint_committed",
+      "message": "checkpoint ckpt_4f0b9c2e81a committed at step 100 (14 files, 0.45 GB, 6.1s, 74 MB/s)",
+      "metadata": {"checkpoint_id": "ckpt_4f0b9c2e81a", "step": 100, "size_bytes": 452984832, "file_count": 14, "upload_seconds": 6.1, "mb_per_s": 74.26},
+      "request_id": null,
+      "created_at": "2026-05-12T10:41:12Z"
+    }
+  ],
+  "has_more": false
+}
+```
+
+The SDK pages with `client.training_jobs.events(job_id, after=..., order="asc", limit=500)` and the CLI with [`veri jobs events`](/cli/training#events).
+
+### Event types
+
+Setup, roughly in the order a job goes through it. All are `info`. `waiting_for_provider_gpu`, `job_submitted`, `job_configuring` and `job_running` come from Veri; the others come from the worker on the training machine.
+
+| `event_type` | When | `metadata` |
+| --- | --- | --- |
+| `waiting_for_provider_gpu` | The job stays `queued` because the provider's GPUs are all in use | `provider`, `cap`, `held` |
+| `job_submitted` | The instance launched; the job is `provisioning` | `runner_id`, `provider` |
+| `job_configuring` | The instance is up and the worker is setting up | none |
+| `system_inventory` | The worker started: the machine it runs on | `gpus` (each `index`, `uuid`, `name`, `mem_total_bytes`), `driver`, `cuda`, `nccl_version` (or `null`), `host` (`cpu_count`, `ram_bytes`, `disk_free_bytes`), `instance_type` (or `null`) |
+| `deps_installed` | The training dependencies are installed | `duration_s`, `installed` (package names) |
+| `artifacts_downloaded` | The dataset and reward sources are on the machine | `duration_s`, `reward_count`, `dataset_bytes` (or `null`) |
+| `model_download_started` | A managed job starts downloading a Hugging Face base model | `model` |
+| `model_download_finished` | The base model is on disk | `model`, `duration_s`, `bytes` (or `null`), `cached` (`true` when it was already there) |
+| `job_running` | Training started (`started_at`) | none |
+| `model_loaded` | The trainer loaded the model | `duration_s` |
+| `first_step` | Step 1 finished (sent once) | `step_s` |
+
+Training and outcome:
+
+| `event_type` | `level` | When | `metadata` |
+| --- | --- | --- | --- |
+| `resumed_from_checkpoint` | `info` | At submit, for a job created with `resume_from` | `source_job_id`, `checkpoint_id`, `step` |
+| `ignored_hyperparameter_keys` | `warning` | At submit: hyperparameters the method does not read | `keys` |
+| `checkpoint_saved` | `info` | An intermediate checkpoint was written to local disk | `step`, `local_save_s` |
+| `checkpoint_committed` | `info` | That checkpoint finished uploading and is listed under the job's [checkpoints](/training/checkpoints) | `checkpoint_id`, `step`, `size_bytes`, `file_count`, `upload_seconds`, `mb_per_s` |
+| `checkpoint_upload_skipped` | `warning` | A checkpoint was dropped because a newer one was saved while an older one was still uploading | `step`, `in_flight_step`, `newer_step` |
+| `checkpoint_disabled_disk` | `warning` | Intermediate checkpoints were turned off because they do not fit on local disk (the final weights are still saved) | `checkpoint_bytes`, `copies`, `free_bytes` |
+| `final_upload_started` | `info` | Training finished; the final weights started uploading | none |
+| `final_upload_finished` | `info` | The final weights are stored | `duration_s`, `files`, `bytes` |
+| `job_completed` | `info` | The job completed | none |
+| `job_failed` | `error` | The job failed; the message is the error message | varies |
+| `provisioning_timeout`, `configuring_timeout`, `heartbeat_timeout`, `max_runtime_exceeded` | `error` | A deadline stopped the job (see [Failure modes](/training/managed#failure-modes)) | `elapsed_seconds`, `deadline_seconds` |
+| `job_submission_failed` | `error` | The launch failed | `error` |
+| `job_cancelled` | `warning` | The job was cancelled | none |
+
+Billing, after the job ends:
+
+| `event_type` | `level` | When | `metadata` |
+| --- | --- | --- | --- |
+| `job_cost_attributed` | `info` | The job's cost was computed | `duration_seconds`, `user_cost_usd` |
+| `job_billed` | `info` | The cost was deducted from the workspace balance | `user_cost_usd` |
+| `job_not_billed` | `info` | Cancelled before it reached `running`, so not billed | none |
+| `job_refund_pending` | `warning` | A platform-attributed failure's credit is under review | `amount_usd` |
+| `job_refunded` | `info` | That credit was returned to the workspace balance | `amount_usd` |
+
+Unknown `event_type` values can appear as Veri adds events: treat the list as open.
 
 ## GET /v1/training_jobs/\{id\}/logs
 
@@ -198,7 +354,38 @@ For the **full log** after a job completes, use `/logs/full` instead.
 
 ## GET /v1/training_jobs/\{id\}/logs/full
 
-Returns the complete stdout as plain text from S3 (uploaded ~30s during the run + a final flush at exit). Returns `206 Partial Content` with the recent tail (or the boot log) if the full log hasn't been uploaded yet; `404` if no log exists yet.
+Returns the instance's boot log followed by the worker's stdout, as plain text. The worker uploads its log every 10 seconds while it runs and once more when it exits, so during a run the `200` body is at most about 10 seconds behind, and once the job has ended it is complete.
+
+- `206 Partial Content` before the first upload: the latest lines the worker reported, ending in a `[partial ...]` marker line, or only the boot log, ending in `[provisioning ...]`.
+- `404` with the plain-text body `[no logs available yet]` for a live job with no log yet.
+- `404` with the JSON error code `log_never_uploaded` for a finished job whose log was never uploaded.
+
+Use `/logs` to follow a live job and `/logs/full` to read a finished one.
+
+## GET /v1/training_jobs/\{id\}/files
+
+The files a job was submitted with: its inline reward sources and, for `custom_script` and `grpo_harness` jobs, the code archive, the dependency file and the entrypoint. The script's `env` is never returned. `404` for a job outside your workspace.
+
+```json
+{
+  "object": "list",
+  "data": [
+    {"name": "reward_0.py", "kind": "reward", "size_bytes": 412, "content": "def reward(completions, answer, **kwargs):\n    ...", "download_url": "https://...?X-Amz-..."},
+    {"name": "code.tar.gz", "kind": "code_artifact", "size_bytes": 18233, "content": null, "download_url": "https://...?X-Amz-..."},
+    {"name": "requirements.txt", "kind": "requirements", "size_bytes": 25, "content": "openai>=1.40\nhttpx>=0.27\n", "download_url": null},
+    {"name": "entrypoint", "kind": "entrypoint", "size_bytes": 14, "content": "python main.py", "download_url": null}
+  ]
+}
+```
+
+| `kind` | `name` | `content` | `download_url` |
+| --- | --- | --- | --- |
+| `reward` | `reward_0.py`, `reward_1.py`, ... (one per reward source) | The source, when it is 64 KiB or smaller | A link valid for 15 minutes |
+| `code_artifact` | `code.tar.gz` | `null` | A link valid for 15 minutes. Code archives expire 30 days after upload; after that `size_bytes` and `download_url` are `null` |
+| `requirements`, `uv_lock` | `requirements.txt`, `uv.lock` | The file | `null` |
+| `entrypoint` | `entrypoint` | The command the job runs | `null` |
+
+The SDK returns the list with `client.training_jobs.files(job_id)`.
 
 ## POST /v1/training_jobs/\{id\}/cancel
 
