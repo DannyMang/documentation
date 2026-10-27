@@ -222,6 +222,7 @@
               "GET /v1/training_jobs/{job_id}/metrics",
               "GET /v1/training_jobs/{job_id}/model",
               "GET /v1/training_jobs/{job_id}/rewards/{index}/source",
+              "GET /v1/training_jobs/{job_id}/files",
               "GET /v1/training_jobs/{job_id}/trajectories",
               "GET /v1/training_jobs/{job_id}/trajectories/{trajectory_id}/download",
               "POST /v1/training_jobs/{job_id}/publish",
