@@ -11,7 +11,8 @@ Veri is prepaid. You add credit to a balance, and every resource you run draws i
 
 | Resource | Metered how | Settled when |
 | --- | --- | --- |
-| Training jobs | GPU-hours from instance boot to completion, at the per-GPU rate, plus a flat checkpoint-storage charge (see [Training job charges](#training-job-charges)) | On completion |
+| Training jobs | GPU-hours from instance boot to completion, at the per-GPU rate (see [Training job charges](#training-job-charges)) | On completion |
+| Checkpoints | Average GiB of training checkpoints kept over the calendar month (see [Checkpoint storage](#checkpoint-storage)) | Monthly |
 | Deployments | Per replica, per minute, from box launch to termination | Every minute while serving, then a final settlement at stop |
 | Volumes | Average GiB stored over the calendar month, above a **512 GiB free tier per workspace** | Monthly |
 | Request traces | Traces captured over the calendar month (see [Observability](/deployments/observability)) | Monthly |
@@ -24,14 +25,17 @@ See [Deployment billing](/deployments/cost) for deployment billing states and sc
 
 ## Training job charges
 
-A training job is charged once, when it ends, as one debit made of two parts:
+A training job is charged once, when it ends, for its **GPU time**: from the moment its instance boots (setup and model download before the first training step included) until the job ends, at the per-GPU rate times the GPU count. Rates on the rate card are rounded to the cent; the charge uses the exact rate. The checkpoints the job keeps are billed separately, by the month (see [Checkpoint storage](#checkpoint-storage)).
 
-- **GPU time**: from the moment its instance boots (setup and model download before the first training step included) until the job ends, at the per-GPU rate times the GPU count. Rates on the rate card are rounded to the cent; the charge uses the exact rate.
-- **Checkpoint storage**: a flat charge for one month of 8 GiB of checkpoint storage, about $0.24 per job, whatever the job's outcome or checkpoint size.
+The total is rounded to the cent. For example, an L4 job (exact rate $1.0462/GPU-hour, listed as $1.05) that boots in about 6 minutes and then trains for about 60 minutes is billed 3,948 seconds of GPU time: $1.15. A job that never gets a GPU is not charged at all.
 
-The total is rounded to the cent. For example, an L4 job (exact rate $1.0462/GPU-hour, listed as $1.05) that boots in about 6 minutes and then trains for about 60 minutes is billed 3,948 seconds of GPU time ($1.15) plus checkpoint storage ($0.24): $1.39. Divided by the run time, that is about $1.27/hour, higher than the listed rate because of the flat storage charge. A job that never gets a GPU is not charged at all.
+Cancel before training starts and you pay nothing. A job you cancel before it reaches `running` is not charged (no GPU time, and it has saved no checkpoint to store), and the job page and `veri jobs get` show "Cancelled before start, not billed". A job cancelled after it reaches `running` is charged for its whole run, setup included.
 
-Cancel before training starts and you pay nothing. A job you cancel before it reaches `running` is not charged (no GPU time, no storage charge), and the job page and `veri jobs get` show "Cancelled before start, not billed". A job cancelled after it reaches `running` is charged for its whole run, setup included.
+## Checkpoint storage
+
+[Checkpoints](/training/checkpoints) are kept until you delete them, so the GiB of checkpoints you keep are billed every month at about $0.03 per GiB-month, prorated by the days each checkpoint is kept in that month. A job that keeps no checkpoint, such as one cancelled before its first save, adds nothing. Checkpoints that `checkpoint_keep` rotation deleted, and the final model of a job, are not charged. Deleting a job deletes its checkpoints and ends their charge.
+
+For example, a full fine-tune of a 4B model that keeps three 22.4 GiB checkpoints (67.2 GiB) for a whole month adds about $2.01 to that month; if it wrote them on the 16th of a 30-day month, about $1.00. The month is settled on the first days of the next month, like [volumes](#volumes-free-tier). The first month billed is November 2026.
 
 ## Personal and team workspaces
 

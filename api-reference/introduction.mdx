@@ -77,6 +77,8 @@ See the [Volumes guide](/volumes) for usage.
 | `DELETE` | `/v1/volumes/{name}/files/{path}` | Delete a file |
 | `POST` | `/v1/volumes/{name}/upload-url` | Get a presigned upload URL |
 
+`{name}` accepts the volume's name or its `id` (the one `POST /v1/volumes` returns).
+
 ### Billing
 
 | Method | Endpoint | Description |
