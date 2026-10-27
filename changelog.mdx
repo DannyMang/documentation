@@ -5,6 +5,27 @@ description: "Recent product and platform changes in Veri"
 keywords: ["changelog", "releases", "platform updates"]
 ---
 
+## 2026-10-25: a resumed GRPO job keeps the source run's KL setting
+
+- A GRPO job submitted without `kl_coef` no longer shows `kl_coef: 0.001` on its job object. The job trained without a KL penalty, but `client.training_jobs.resume()` and `veri jobs resume` sent the shown value back, so the resumed job trained with a KL penalty of 0.001 (and, for a full fine-tune, a second copy of the model in memory as the reference). The job object now shows `kl_coef` only when the job set it, and a resume carries exactly that.
+- A job object shows `checkpoint_every` and `checkpoint_keep` as `null` when the job left them unset. Submitting that `null` back is now the same as omitting the field (it was a `400`).
+- `kl_coef` must be a number of 0 or more: `null` or a negative value is a `400` at submit. Omit it for no KL penalty.
+- `lora_dropout` may change on a resume; it is a training-time setting, not part of the checkpoint.
+
+## 2026-10-26: a silent worker's failure says why
+
+- A training job whose worker stops reporting for more than 15 minutes (900 s) still fails with `worker_failed`, but the message now says how long the worker was silent and the last status and step it reported ("Worker stopped reporting for 960 s (last status: training, step 40). ..."), instead of "Job failed". A job whose instance ended before its worker reported a result says that instead.
+- [Custom scripts](/training/custom-script#keeping-the-job-alive): the worker keeps the job alive on its own (a status post at least once a minute), so a script that is quiet for a long time is not failed. Progress still comes only from `$VERI_METRICS_FILE` and mid-run checkpoints only from `$VERI_CHECKPOINT_DIR`.
+
+## 2026-10-26: checkpoint storage is billed on the GiB you keep
+
+A training job no longer carries a flat checkpoint-storage charge (8 GiB for a month, about $0.24, on every billed job). Its charge is GPU time only. The checkpoints your jobs keep are billed monthly instead, at about $0.03 per GiB-month, prorated by the days kept; a job that keeps no checkpoint adds nothing. Checkpoints are kept until you delete them, and the first month billed is November 2026. See [Checkpoint storage](/billing#checkpoint-storage).
+
+## 2026-10-26: a job completes only with its whole model uploaded
+
+- A training job whose final model did not fully reach Veri storage now fails with `upload_failed` instead of completing with files missing. `error.message` names each file and the reason. Files above 5 GiB upload in parts, so a large single weights file no longer fails.
+- `GET /v1/training_jobs/{id}/model` and saving a job to your model library (`POST /v1/models`, `POST /v1/models/register`) return `409` when a completed job's checkpoint is missing a shard its `model.safetensors.index.json` names, or an adapter's `adapter_model.safetensors`. The message names the missing files.
+
 ## 2026-10-22: LoRA-trained jobs deploy directly
 
 - A job trained with `lora_rank` deploys like a full fine-tune: `veri deploy <job_id>`, `veri deployments create --model <job_id>`, or `source: "training_job"` in the API. Veri keeps the merged weights (adapter merged into the base model) next to the adapter and serves those. Pushing merged weights to Hugging Face is no longer required to serve a LoRA run.

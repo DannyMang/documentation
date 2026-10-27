@@ -4251,7 +4251,7 @@
             "description": "Training job not found or not owned by the caller"
           },
           "409": {
-            "description": "The job is already saved with a different artifact"
+            "description": "The job is already saved with a different artifact, or its checkpoint is missing weight files (a shard its safetensors index names, or an adapter's weights)"
           },
           "501": {
             "description": "Source type not yet supported (huggingface, upload)"
@@ -4308,6 +4308,9 @@
           },
           "404": {
             "description": "Training job not found or not owned by the caller"
+          },
+          "409": {
+            "description": "The job is already saved with a different artifact, or its checkpoint is missing weight files (a shard its safetensors index names, or an adapter's weights)"
           }
         },
         "security": [
@@ -8211,6 +8214,9 @@
           },
           "400": {
             "description": "Job has not completed yet"
+          },
+          "409": {
+            "description": "The job completed but its checkpoint is missing weight files (a shard its model.safetensors.index.json names, or an adapter's adapter_model.safetensors); the message names them"
           }
         },
         "security": [
@@ -8959,7 +8965,7 @@
           {
             "name": "name",
             "in": "path",
-            "description": "Volume name",
+            "description": "Volume id or name",
             "required": true,
             "schema": {
               "type": "string"
@@ -8997,7 +9003,7 @@
           {
             "name": "name",
             "in": "path",
-            "description": "Volume name",
+            "description": "Volume id or name",
             "required": true,
             "schema": {
               "type": "string"
@@ -9033,7 +9039,7 @@
           {
             "name": "name",
             "in": "path",
-            "description": "Volume name",
+            "description": "Volume id or name",
             "required": true,
             "schema": {
               "type": "string"
@@ -9090,7 +9096,7 @@
           {
             "name": "name",
             "in": "path",
-            "description": "Volume name",
+            "description": "Volume id or name",
             "required": true,
             "schema": {
               "type": "string"
@@ -9135,7 +9141,7 @@
           {
             "name": "name",
             "in": "path",
-            "description": "Volume name",
+            "description": "Volume id or name",
             "required": true,
             "schema": {
               "type": "string"
@@ -9191,7 +9197,7 @@
           {
             "name": "name",
             "in": "path",
-            "description": "Volume name",
+            "description": "Volume id or name",
             "required": true,
             "schema": {
               "type": "string"
@@ -9247,7 +9253,7 @@
           {
             "name": "name",
             "in": "path",
-            "description": "Volume name",
+            "description": "Volume id or name",
             "required": true,
             "schema": {
               "type": "string"
@@ -14417,7 +14423,8 @@
           },
           "kl_coef": {
             "type": "number",
-            "format": "double"
+            "format": "double",
+            "description": "KL penalty weight against the frozen reference model (GRPOConfig.beta),\na number >= 0. Omitted = 0.0: no KL term and no reference model. Echoed\nonly when the job set it."
           },
           "max_prompt_length": {
             "type": "integer",

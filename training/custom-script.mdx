@@ -25,8 +25,9 @@ Veri runs your entrypoint inside the base image on the GPU, with a set of `VERI_
 | Variable | Meaning |
 | --- | --- |
 | `VERI_DATA_DIR` | Your dataset is materialized here (if you attach one). |
-| `VERI_OUTPUT_DIR` | Write checkpoints and artifacts here. Everything in this dir is captured to your account. |
-| `VERI_METRICS_FILE` | Append metrics here (or use `veri_sdk.log_metrics`, below). |
+| `VERI_OUTPUT_DIR` | Write the run's final artifacts here. Everything in this dir is captured to your account when your script exits with status `0`. |
+| `VERI_CHECKPOINT_DIR` | Write `checkpoint-<step>/` directories here during the run; Veri uploads each one once it stops changing. Set when checkpointing is on for the job (see [Checkpoints](/training/checkpoints#custom-scripts)). |
+| `VERI_METRICS_FILE` | Append one JSON line per step, `{"step": n, ...}` (or use `veri_sdk.log_metrics`, below). The job's step and curves come only from this file. |
 | `VERI_NUM_GPUS` | GPUs on this node. |
 | `VERI_NODE_RANK` | This node's 0-based rank in the gang. Single node: `0`. |
 | `VERI_NUM_NODES` | Number of nodes in the gang (`N`). Single node: `1`. |
@@ -48,6 +49,23 @@ KeyError: 'prompt'
 ```
 
 Python tracebacks already go to stderr; print your own errors there too so they land in the job's error. Status `137` means the container was killed for running out of memory, and the error says so: try a smaller batch or a bigger GPU shape. The error shows on the job page and in `veri jobs get <id>`; the full output (stdout and stderr) is in `veri jobs logs <id>`.
+
+### Keeping the job alive
+
+The worker that runs your script tells Veri the job is alive at least once a minute for as long as the worker runs, whether or not your script prints anything or finishes a step. A quiet script (a long data load, a step that takes an hour, a run that never logs a metric) is not failed for being quiet.
+
+That report only says your script is still running. Progress and checkpoints have to come from your script:
+
+- **Progress**: append one JSON line per step to `$VERI_METRICS_FILE`, for example `{"step": 40, "loss": 1.21}`, or call `veri_sdk.log_metrics`. The job's current step and its curves come only from this file; without it the job shows no step.
+- **Checkpoints**: write `checkpoint-<step>/` directories into `$VERI_CHECKPOINT_DIR` during the run (see [Checkpoints](/training/checkpoints#custom-scripts)). `$VERI_OUTPUT_DIR` is captured only when your script exits with status `0`, so a run that dies midway keeps only the checkpoints it already wrote to `$VERI_CHECKPOINT_DIR`.
+
+If the worker itself goes silent for more than 15 minutes (900 s), for example because the machine ran out of memory and the worker was killed, or the host went away, Veri fails the job with `error.code` `worker_failed` and terminates the instance. The error says how long the worker was silent and the last status and step it reported:
+
+```text
+Worker stopped reporting for 960 s (last status: training, step 40). The worker reports at least once a minute while it is alive, so after more than 900 s of silence the control plane failed the job and terminated its instance.
+```
+
+`no step reported` in place of the step means your script never wrote `$VERI_METRICS_FILE`. The job's `error.attribution` is `platform`, and Veri reviews it for a credit.
 
 ## Base images
 

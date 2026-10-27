@@ -219,9 +219,11 @@ Read `error.code` first, then the log (`veri jobs logs <id>` or `GET /v1/trainin
 | `config_error` | Fix the config; never retry the same payload. |
 | `dependency_error` | Fix the harness requirements / optimizer opt-in; never retry unchanged. |
 | `distributed_error`, `hardware_error` | Re-submit once; if it repeats, report the job id to Veri (hardware is the platform's fault, never the user's). |
+| `upload_failed` | Training finished but the final model did not fully reach Veri storage (the message names the files). Re-submit once; if it repeats, report the job id to Veri. |
 | `training_stalled` | The log tail carries every GPU's Python stack; lower `micro_batch_size` or the sequence length, then re-submit. |
 | `CAPACITY_UNAVAILABLE`, `QUOTA_EXCEEDED` | Never booted, unbilled. Resubmit with a shape the message names (`Alternatives:` / `or use:`), or retry the same shape at most 3 times (see Capacity above). |
 | `provisioning_*`, `configuring_timeout`, `heartbeat_timeout` | Re-submit; try another `gpu_type` or region if it repeats. |
+| `worker_failed` | The worker went silent for more than 900 s (OOM-killed worker, lost host) or the box ended before it reported; the message names the silence and the last status and step. Resume from the newest checkpoint (`veri jobs resume <id>`) or re-submit; report the job id if it repeats. |
 | `provider_reclaimed` (GCP ended the VM early; credited back), `max_run_duration_reached` (GCP 24 h cap; charged) | Resume from the newest checkpoint as a new job: `veri jobs resume <id>` (or `resume_from="<id>@<step>"`). For the 24 h cap also lower `max_steps`. |
 
 ### Custom scripts
@@ -233,7 +235,9 @@ veri run-script ./my-run \
   --requirements ./my-run/requirements.txt
 ```
 
-Base images: `veri/base`, `veri/base-vllm`, `veri/base-sglang`, `veri/base-claude-agent`. Env injected: `VERI_DATA_DIR`, `VERI_OUTPUT_DIR` (write checkpoints here), `VERI_METRICS_FILE`, `VERI_NUM_GPUS`. NVIDIA only (AMD gpu_type → 400). Multi-node (`--num-nodes` ≥ 2) is not enabled yet (400). Exit 0 = completed.
+Base images: `veri/base`, `veri/base-vllm`, `veri/base-sglang`, `veri/base-claude-agent`. Env injected: `VERI_DATA_DIR`, `VERI_OUTPUT_DIR` (final artifacts, captured on exit 0 only), `VERI_CHECKPOINT_DIR` (write `checkpoint-<step>/` dirs here mid-run; set when checkpointing is on), `VERI_METRICS_FILE`, `VERI_NUM_GPUS`. NVIDIA only (AMD gpu_type → 400). Multi-node (`--num-nodes` ≥ 2) is not enabled yet (400). Exit 0 = completed.
+
+Liveness: the worker keeps the job alive by itself (a status post at least once a minute), so a quiet script is never failed for silence. Progress and checkpoints still come only from the script: append `{"step": n, ...}` JSON lines to `$VERI_METRICS_FILE` (or `veri_sdk.log_metrics`) for the step and curves, and write checkpoints to `$VERI_CHECKPOINT_DIR` (a run that dies keeps only those). A worker silent for more than 900 s (killed, host lost) fails the job as `worker_failed` with "Worker stopped reporting for N s (last status: training, step S)"; "no step reported" means the script never wrote `$VERI_METRICS_FILE`.
 
 Docs (env contract, images, worked examples): https://docs.veri.studio/training/custom-script
 
