@@ -5,6 +5,14 @@ description: "Recent product and platform changes in Veri"
 keywords: ["changelog", "releases", "platform updates"]
 ---
 
+## 2026-10-26: training job detail: live cost, lifecycle, setup events, step timing
+
+- The job object gains `launched_at`, `provision_started_at` (billing start) and `terminated_at`, plus `user_rate_per_hour_usd` and `cost_so_far_usd` (what a live job has cost so far). See [Training jobs API](/training/api).
+- `GET /v1/training_jobs/{id}/events` pages with an `after` event-id cursor and `order=asc|desc`; `limit` goes up to 500 and `has_more` is set when more events match. New worker events break setup down (`system_inventory`, `deps_installed`, `artifacts_downloaded`, `model_download_started` / `model_download_finished`, `model_loaded`, `first_step`) and time checkpoints and the final upload (`checkpoint_saved`, `final_upload_started` / `final_upload_finished`). The [event types](/training/api#event-types) are listed with their metadata.
+- Every logged training step is stored, and the metrics gain per-step timing (`time/step_s`, `time/gen_s`, `time/reward_s`, `time/update_s`, ...) and GPU and host samples (`sys/gpu.{i}.util_pct`, memory, power, temperature, clocks, throttle reasons, ECC).
+- New `GET /v1/training_jobs/{id}/files` lists the files a job was submitted with: reward sources, code archive, dependency file and entrypoint.
+- SDK and CLI: `client.training_jobs.events()` and `.files()`, `veri jobs events <id>`, and `veri jobs get` prints the cost so far and the lifecycle. The MCP job tools carry the new fields.
+
 ## 2026-10-22: LoRA-trained jobs deploy directly
 
 - A job trained with `lora_rank` deploys like a full fine-tune: `veri deploy <job_id>`, `veri deployments create --model <job_id>`, or `source: "training_job"` in the API. Veri keeps the merged weights (adapter merged into the base model) next to the adapter and serves those. Pushing merged weights to Hugging Face is no longer required to serve a LoRA run.
