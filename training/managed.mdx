@@ -77,7 +77,7 @@ When a job ends in `failed`, `error.code` carries one of:
 | `provider_reclaimed` | GCP deleted or stopped the VM (host error, host maintenance, preemption) before the job finished. Credited back automatically | Resume from the newest checkpoint with `resume_from` (`veri jobs resume <id>`) |
 | `max_run_duration_reached` | GCP ended the VM at its 24-hour maximum run duration | Lower `max_steps` or split the run; resume from the newest checkpoint with `resume_from` |
 
-The last 200 log lines from the worker are surfaced in `error.log_tail` for fast triage; the full stdout is uploaded to S3 and accessible via `GET /v1/training_jobs/{id}/logs/full`.
+`error` carries `code`, `message` and `attribution` (there is no `log_tail` field). For triage, read the last worker lines in the dashboard's Logs tab or fetch the full stdout, uploaded every 10 seconds and retained after the job ends, via `GET /v1/training_jobs/{id}/logs/full`.
 
 ### Who the failure belongs to
 
