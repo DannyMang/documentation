@@ -73,6 +73,8 @@ function JobPage({ job }) {
 }
 ```
 
+By default the panel floats as a card in the bottom-right corner. `layout="dock"` pins it to the right edge instead and publishes `--veri-helper-dock-width` on `<html>`, so your main column can pad by it and slide left as the panel slides in (the Veri dashboard does this). The package README has the three lines of CSS.
+
 Page content is sent to the model as untrusted input. The assistant cannot change its own permission mode or approve an action from anything it reads on the page; both come only from the buttons you click.
 
 ## What it can do
