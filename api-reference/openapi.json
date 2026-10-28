@@ -3009,6 +3009,27 @@
         ],
         "summary": "List environments",
         "operationId": "list",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size, 1..200 (default 50).",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "description": "Cursor: the id of the last row of the previous page.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "The workspace's environments with their latest version, newest first",
@@ -3177,6 +3198,25 @@
             "in": "path",
             "description": "Environment ID",
             "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size, 1..200 (default 50).",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "description": "Cursor: the id of the last row of the previous page.",
+            "required": false,
             "schema": {
               "type": "string"
             }
@@ -6142,10 +6182,20 @@
           {
             "name": "limit",
             "in": "query",
+            "description": "Page size, 1..200 (default 50).",
             "required": false,
             "schema": {
               "type": "integer",
               "format": "int64"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "description": "Cursor: the id of the last row of the previous page.",
+            "required": false,
+            "schema": {
+              "type": "string"
             }
           }
         ],
@@ -7433,9 +7483,30 @@
         ],
         "summary": "List skills",
         "operationId": "list",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size, 1..200 (default 50).",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "description": "Cursor: the id of the last row of the previous page.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
-            "description": "The latest version of every skill in the workspace",
+            "description": "The latest version of every skill in the workspace, by name",
             "content": {
               "application/json": {
                 "schema": {
