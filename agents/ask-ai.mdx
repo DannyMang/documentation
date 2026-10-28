@@ -93,9 +93,9 @@ In the Veri dashboard the read tools mirror the [MCP tools](/agents/tools): jobs
 
 The chip under the composer picks one of three modes (`Shift+Tab` cycles them):
 
-- **Ask before actions**: every write waits for you.
-- **Accept safe actions**: reads and writes you marked acceptable run; the rest wait.
-- **Run everything**: everything runs. Every call still shows in the thread and is undoable where the API allows.
+- **Manual mode** (`ask`): every write waits for you.
+- **Ask mode** (`accept`): reads and writes you marked acceptable run; the rest ask first.
+- **Auto mode** (`auto`): everything runs. Every call still shows in the thread and is undoable where the API allows.
 
 ## Feedback and versions
 
