@@ -62,11 +62,13 @@ Every answer is a traced request on a Veri deployment, every thumbs up or down i
 The panel reads the current route, the document title, and the visible text of the page (capped, 8,000 characters by default). Pages can add structured context so answers do not depend on scraping:
 
 ```jsx
+import { useRef } from "react";
 import { useHelperContext, useHelperRegion } from "@veri/helper";
 
 function JobPage({ job }) {
   useHelperContext("training_job", job);
-  const etaRef = useHelperRegion("eta");
+  const etaRef = useRef(null);
+  useHelperRegion("eta", etaRef);
   return <div ref={etaRef}>ETA 42 min</div>;
 }
 ```
