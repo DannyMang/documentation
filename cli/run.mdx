@@ -220,7 +220,7 @@ veri jobs estimate configs/train.toml --minutes 90
 
 Add `--format json` for the same fields as a JSON object (`gpu_type`, `gpu_count`, `provider`, `duration_minutes`, `rate_usd_per_hour`, `estimated_cost_usd`), plus `duration_assumption` with the sentence printed under the table. `--minutes` and the step-based duration need `veri-sdk` 0.2.45 or later; older CLIs priced `max_steps` as minutes.
 
-The estimate covers GPU time only, not the monthly storage of the checkpoints a job keeps (see [Checkpoint storage](/billing#checkpoint-storage)).
+The estimate covers GPU time only, not the monthly storage of the checkpoints and the final model a job keeps (see [Checkpoint storage](/billing#checkpoint-storage) and [Model storage](/billing#model-storage)).
 
 The estimate does not check the GPU shape or the dataset: submitting is what validates them. A submit that fails validation is rejected before anything is created or billed.
 

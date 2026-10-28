@@ -90,7 +90,7 @@ Each provider has its own rate card. Check current pricing with:
 veri gpu list --format json   # includes usd_per_gpu_hr per provider and GPU type
 ```
 
-Rates are per-GPU-hour. You are billed from the moment the instance boots (during `provisioning`, before the first training step) until the job terminates and the instance is reaped. This applies to failed jobs too: GPU time actually used is billed. A job that never secures a GPU (e.g. `CAPACITY_UNAVAILABLE`) rents nothing and is not billed. The checkpoints a job keeps are billed separately, per GiB-month kept; see [Checkpoint storage](/billing#checkpoint-storage).
+Rates are per-GPU-hour. You are billed from the moment the instance boots (during `provisioning`, before the first training step) until the job terminates and the instance is reaped. This applies to failed jobs too: GPU time actually used is billed. A job that never secures a GPU (e.g. `CAPACITY_UNAVAILABLE`) rents nothing and is not billed. The checkpoints and the final model a job keeps are billed separately, per GiB-month kept; see [Checkpoint storage](/billing#checkpoint-storage) and [Model storage](/billing#model-storage).
 
 ## Provider guides
 
