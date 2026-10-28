@@ -120,7 +120,8 @@
               "agents/tools",
               "agents/sessions",
               "agents/session-ops",
-              "agents/triggers"
+              "agents/triggers",
+              "agents/ask-ai"
             ]
           },
           {

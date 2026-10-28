@@ -1,0 +1,112 @@
+---
+title: "Ask AI"
+description: "The in-app helper: an open-source React panel that explains what is on screen, takes actions only with permission, and trains a new version from the thumbs it collects"
+keywords: ["ask ai", "helper", "assistant", "in-app agent", "react", "feedback", "thumbs", "sft", "flywheel", "permissions"]
+---
+
+## Overview
+
+Ask AI is the assistant in the bottom-right corner of the Veri dashboard. Press `⌘J` (or `Ctrl+J`), ask about the page you are on, and it answers from what is visible: the training job, the deployment list, the dataset. When an answer calls for an action, it proposes the action as a card and waits for you to allow or deny it.
+
+Every answer is a traced request on a Veri deployment, every thumbs up or down is a human score on that trace, and the thumbs-up traces become the dataset that trains the next version of the assistant. The panel is an open-source React package, `@veri/helper`, so you can mount the same assistant in your own product and point it at your own tools.
+
+<Steps>
+  <Step title="Install">
+    ```bash
+    npm i @veri/helper
+    ```
+  </Step>
+  <Step title="Mount with your tools">
+    ```jsx App.jsx
+    import { VeriHelper, veriTransport } from "@veri/helper";
+    import "@veri/helper/styles.css";
+
+    const tools = [
+      {
+        name: "list_jobs",
+        description: "List the user's training jobs",
+        parameters: { type: "object", properties: {} },
+        safe: true,
+        run: () => fetch("/api/jobs").then((r) => r.json()),
+      },
+      {
+        name: "cancel_job",
+        description: "Cancel a running training job",
+        parameters: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
+        safe: false,
+        run: ({ id }) => fetch(`/api/jobs/${id}/cancel`, { method: "POST" }),
+      },
+    ];
+
+    export function App() {
+      return (
+        <>
+          {/* your app */}
+          <VeriHelper transport={veriTransport({ baseUrl: "/api/v1" })} tools={tools} mode="ask" />
+        </>
+      );
+    }
+    ```
+  </Step>
+  <Step title="Train a new version from feedback">
+    ```bash
+    veri helper dataset --since 7d
+    veri helper train --gpu l4
+    veri helper promote <job_id>
+    ```
+  </Step>
+</Steps>
+
+## What it sees
+
+The panel reads the current route, the document title, and the visible text of the page (capped, 8,000 characters by default). Pages can add structured context so answers do not depend on scraping:
+
+```jsx
+import { useHelperContext, useHelperRegion } from "@veri/helper";
+
+function JobPage({ job }) {
+  useHelperContext("training_job", job);
+  const etaRef = useHelperRegion("eta");
+  return <div ref={etaRef}>ETA 42 min</div>;
+}
+```
+
+Page content is sent to the model as untrusted input. The assistant cannot change its own permission mode or approve an action from anything it reads on the page; both come only from the buttons you click.
+
+## What it can do
+
+Tools are functions you hand to the component. Each one has a name, a description, a JSON schema for its arguments, a `run` function, and a `safe` flag. Tools run in the browser as the signed-in user, so the assistant can never reach more than the user can.
+
+| Flag | Behaviour |
+| --- | --- |
+| `safe: true` | Reads. Run as soon as the model asks. Shown as a row in the thread. |
+| `safe: false` | Writes. Shown as an action card with the request and Allow / Deny / Edit. |
+| `undo` | Optional. Shown as an Undo button after the action ran. |
+
+In the Veri dashboard the read tools mirror the [MCP tools](/agents/tools): jobs, metrics, deployments, billing, datasets. The writes are cancel a training job, stop a deployment, and register a model.
+
+## Permission modes
+
+The chip under the composer picks one of three modes (`Shift+Tab` cycles them):
+
+- **Ask before actions**: every write waits for you.
+- **Accept safe actions**: reads and writes you marked acceptable run; the rest wait.
+- **Run everything**: everything runs. Every call still shows in the thread and is undoable where the API allows.
+
+## Feedback and versions
+
+Thumbs up or down under an answer writes a human boolean score on the answer's trace. The version chip in the panel header names the model version that answered. **Settings / Ask AI** shows the versions, their thumbs-up rates, and your recent ratings, plus the three CLI commands above.
+
+`veri helper dataset` imports the thumbs-up traces of the last window into a `helper-feedback` dataset (chat format, tool calls included) and cuts a snapshot. `veri helper train` submits an SFT job on that snapshot from the current version's base model. `veri helper promote` registers the job into the `ask-ai` lineage as the next version and moves the `production` alias, so the next answer carries the new version.
+
+## API
+
+The component talks to three routes, which the Veri web app proxies with the user's session:
+
+| Route | Purpose |
+| --- | --- |
+| `POST /v1/helper/chat/completions` | OpenAI-compatible chat with `tools` and `stream`. Header `X-Veri-Thread-Id` names the conversation. The reply carries `X-Veri-Helper-Version`. |
+| `POST /v1/helper/feedback` | `{ thread_id, turn_index, value: "up" \| "down", comment? }` writes the score on that turn's answer. |
+| `GET /v1/helper/stats` | Versions, 7-day answer and thumbs counts, your recent feedback. |
+
+The package source and a runnable example live in the [veri-helper repository](https://github.com/Veri-Studios/veri-helper).
