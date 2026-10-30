@@ -11,6 +11,10 @@ keywords: ["changelog", "releases", "platform updates"]
 - `GET /v1/traces` lists every model call, thread and managed session of the workspace in one keyset-paged list, and `GET /v1/requests/{id}` returns one call with its body and a `body_state` that says why a body is missing. `GET /v1/traces/usage` shows the month's traces against your limits. See [Request traces](/deployments/observability#list-every-call-conversation-and-session).
 - With capture on, a failed `/chat/completions` call now stores its request and whatever output exists: the error body, or the stream as far as it got. Failed calls are stored free for 14 days, up to 10,000 a month on Free and 25,000 on Pro: they don't count toward your allowance or your bill, and monitors and dataset imports skip them. See [Request traces](/deployments/observability#request-traces).
 
+## 2026-10-30: the request log counts its matches
+
+`GET /v1/deployments/{id}/requests` returns `total`, the number of requests matching your filters across every page, and `limit` now goes up to 500. See [the request log](/deployments/api#get-v1deploymentsidrequests). On the dashboard, Analytics charts start at the deployment's creation when it falls inside the picked window, and the recent requests table follows the chart window and shows how many of the window's requests it lists.
+
 ## 2026-10-27: the final model a completed job keeps is billed like its checkpoints
 
 The final model a completed training job keeps in Veri storage (the final checkpoint, plus the merged weights of a LoRA run) is now billed monthly at the checkpoint rate, about $0.03 per GiB-month, prorated by the days kept, on its own line. It is kept until you delete the job, and the first month billed is November 2026. See [Model storage](/billing#model-storage).
