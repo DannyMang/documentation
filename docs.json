@@ -432,6 +432,7 @@
               "GET /v1/billing/balance",
               "GET /v1/billing/transactions",
               "GET /v1/billing/burn_rate",
+              "GET /v1/cost/by_day",
               "POST /v1/credits/redeem"
             ]
           },
