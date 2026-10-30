@@ -5,6 +5,10 @@ description: "Recent product and platform changes in Veri"
 keywords: ["changelog", "releases", "platform updates"]
 ---
 
+## 2026-10-30: the request log counts its matches
+
+`GET /v1/deployments/{id}/requests` returns `total`, the number of requests matching your filters across every page, and `limit` now goes up to 500. See [the request log](/deployments/api#get-v1deploymentsidrequests). On the dashboard, Analytics charts start at the deployment's creation when it falls inside the picked window, and the recent requests table follows the chart window and shows how many of the window's requests it lists.
+
 ## 2026-10-27: the final model a completed job keeps is billed like its checkpoints
 
 The final model a completed training job keeps in Veri storage (the final checkpoint, plus the merged weights of a LoRA run) is now billed monthly at the checkpoint rate, about $0.03 per GiB-month, prorated by the days kept, on its own line. It is kept until you delete the job, and the first month billed is November 2026. See [Model storage](/billing#model-storage).

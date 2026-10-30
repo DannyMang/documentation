@@ -372,11 +372,12 @@ curl "https://api.veri.studio/v1/deployments/$DEPLOYMENT_ID/requests?limit=50" -
       "created_at": "2026-05-12T..."
     }
   ],
-  "has_more": true
+  "has_more": true,
+  "total": 312
 }
 ```
 
-Includes failed requests (`status_code >= 400`) for debugging.
+Includes failed requests (`status_code >= 400`) for debugging. Rows come newest first; `limit` takes 1 to 500 (default 50). `total` is the number of requests matching the same filters (`from`, `to`, `errors_only`, `replica_id`, `origin`) across every page, so it doesn't change as you page with `after`.
 
 `model_version_id` pins the request to the registered model version that
 answered it: on a [multi-adapter fleet](#multi-adapter-fleets) (beta), the version behind the adapter alias the

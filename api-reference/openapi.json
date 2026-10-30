@@ -848,6 +848,44 @@
         ]
       }
     },
+    "/v1/cost/by_day": {
+      "get": {
+        "tags": [
+          "Billing"
+        ],
+        "summary": "Spend by day",
+        "operationId": "by_day",
+        "parameters": [
+          {
+            "name": "days",
+            "in": "query",
+            "description": "Window length in days, 1 to 365 (default 30)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Spend per UTC day with totals and a month-end projection",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpendByDayResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/credits/redeem": {
       "post": {
         "tags": [
@@ -2599,6 +2637,7 @@
           {
             "name": "limit",
             "in": "query",
+            "description": "Page size, 1 to 500.",
             "required": false,
             "schema": {
               "type": "integer",
@@ -2665,11 +2704,11 @@
         ],
         "responses": {
           "200": {
-            "description": "A paginated list of inference requests",
+            "description": "A page of inference requests, newest first, with `total`: the number matching the same filters across all pages",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PaginatedList_DeploymentRequestResponse"
+                  "$ref": "#/components/schemas/DeploymentRequestList"
                 }
               }
             }
@@ -4051,6 +4090,120 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/GpuCatalogList"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/helper/chat/completions": {
+      "post": {
+        "tags": [
+          "Ask AI"
+        ],
+        "summary": "Ask the in-app helper",
+        "operationId": "chat_completions",
+        "parameters": [
+          {
+            "name": "X-Veri-Thread-Id",
+            "in": "header",
+            "description": "Conversation id, 1-64 chars of [A-Za-z0-9._:-]",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {}
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "An OpenAI-compatible chat completion (SSE when stream=true) from the helper deployment",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "Ask AI is not enabled, or the thread id is missing or invalid"
+          },
+          "429": {
+            "description": "Per-user rate limit reached"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/helper/feedback": {
+      "post": {
+        "tags": [
+          "Ask AI"
+        ],
+        "summary": "Rate a helper answer",
+        "operationId": "feedback",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeedbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The human score written on the answer's trace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeedbackResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No helper answer of yours matches the thread and turn"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/helper/stats": {
+      "get": {
+        "tags": [
+          "Ask AI"
+        ],
+        "summary": "Helper versions and ratings",
+        "operationId": "stats",
+        "responses": {
+          "200": {
+            "description": "Versions, 7-day answers and thumbs rates, your recent feedback",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HelperStats"
                 }
               }
             }
@@ -12272,6 +12425,34 @@
           }
         }
       },
+      "DeploymentRequestList": {
+        "type": "object",
+        "description": "GET /v1/deployments/{id}/requests: one page, newest first, plus `total`,\nthe number of requests matching the same filters across every page.",
+        "required": [
+          "object",
+          "data",
+          "has_more",
+          "total"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeploymentRequestResponse"
+            }
+          },
+          "has_more": {
+            "type": "boolean"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "DeploymentRequestResponse": {
         "type": "object",
         "required": [
@@ -13956,6 +14137,69 @@
           }
         }
       },
+      "FeedbackRequest": {
+        "type": "object",
+        "required": [
+          "thread_id",
+          "turn_index",
+          "value"
+        ],
+        "properties": {
+          "thread_id": {
+            "type": "string",
+            "description": "The conversation id the client sent as `X-Veri-Thread-Id`."
+          },
+          "turn_index": {
+            "type": "integer",
+            "format": "int32",
+            "description": "1-based count of user messages at the answer being rated (the server\nrecords the same number on every model call of that turn)."
+          },
+          "value": {
+            "$ref": "#/components/schemas/Thumbs"
+          },
+          "comment": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Free text, shown on the Settings page and kept as the score's reasoning."
+          }
+        }
+      },
+      "FeedbackResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "score_id",
+          "request_id",
+          "thread_id",
+          "turn_index",
+          "value"
+        ],
+        "properties": {
+          "object": {
+            "type": "string",
+            "description": "Always \"helper_feedback\"."
+          },
+          "score_id": {
+            "type": "string"
+          },
+          "request_id": {
+            "type": "string",
+            "description": "The rated model call. Trace id = `veri-<request_id>`."
+          },
+          "thread_id": {
+            "type": "string"
+          },
+          "turn_index": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "value": {
+            "$ref": "#/components/schemas/Thumbs"
+          }
+        }
+      },
       "FileEntry": {
         "type": "object",
         "required": [
@@ -14721,6 +14965,168 @@
           "step": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "HelperFeedbackItem": {
+        "type": "object",
+        "required": [
+          "request_id",
+          "thread_id",
+          "value",
+          "created_at"
+        ],
+        "properties": {
+          "request_id": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": "string",
+            "description": "The client's thread id (your own threads only)."
+          },
+          "turn_index": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "value": {
+            "$ref": "#/components/schemas/Thumbs"
+          },
+          "comment": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "version": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The version that answered, `v<N>`."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "HelperStats": {
+        "type": "object",
+        "required": [
+          "object",
+          "version",
+          "workspace_id",
+          "deployment_id",
+          "evaluator",
+          "lineage",
+          "answers_7d",
+          "actions_approved_7d",
+          "traces_logged",
+          "versions",
+          "recent_feedback"
+        ],
+        "properties": {
+          "object": {
+            "type": "string",
+            "description": "Always \"helper_stats\"."
+          },
+          "version": {
+            "type": "string",
+            "description": "The version answering now, `v<N>`."
+          },
+          "workspace_id": {
+            "type": "string"
+          },
+          "deployment_id": {
+            "type": "string"
+          },
+          "evaluator": {
+            "type": "string"
+          },
+          "lineage": {
+            "type": "string"
+          },
+          "answers_7d": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "thumbs_up_rate_7d": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "actions_approved_7d": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "traces_logged": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "versions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HelperVersion"
+            }
+          },
+          "recent_feedback": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HelperFeedbackItem"
+            }
+          }
+        }
+      },
+      "HelperVersion": {
+        "type": "object",
+        "required": [
+          "name",
+          "version",
+          "status",
+          "registered_at",
+          "answers"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "`v<N>`."
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "status": {
+            "type": "string",
+            "description": "production | ready | purged"
+          },
+          "trained_on": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The training job that produced it (null for the base model)."
+          },
+          "registered_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "answers": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Answers (thread turns) served by this version."
+          },
+          "thumbs_up_rate": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Share of rated answers rated up; null while nothing is rated."
           }
         }
       },
@@ -17095,215 +17501,6 @@
                     "null"
                   ],
                   "description": "Why the last `drain?replace=true` of this replica failed (the\nreplacement crashed, did not become ready within its provisioning\ndeadline, or could not launch). The replica kept serving; it is not\nretried automatically, so call the drain with replace=true again."
-                }
-              }
-            }
-          },
-          "has_more": {
-            "type": "boolean"
-          }
-        }
-      },
-      "PaginatedList_DeploymentRequestResponse": {
-        "type": "object",
-        "required": [
-          "object",
-          "data",
-          "has_more"
-        ],
-        "properties": {
-          "object": {
-            "type": "string"
-          },
-          "data": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "required": [
-                "object",
-                "id",
-                "deployment_id",
-                "prompt_tokens",
-                "cached_prompt_tokens",
-                "completion_tokens",
-                "streamed",
-                "usage_reported",
-                "latency_ms",
-                "status_code",
-                "created_at"
-              ],
-              "properties": {
-                "object": {
-                  "type": "string"
-                },
-                "id": {
-                  "type": "string"
-                },
-                "deployment_id": {
-                  "type": "string"
-                },
-                "replica_id": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "adapter_serve_name": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "description": "The adapter alias (serve_name) this request resolved through on a\nmulti_adapter deployment; null for base-model requests."
-                },
-                "model_version_id": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "description": "The model version id that answered this request: the adapter alias'\nversion on a multi_adapter deployment, the base model's version for\nbase requests on a deployment built from a library model, null\notherwise."
-                },
-                "thread_id": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "description": "The client-sent thread id (X-Veri-Thread-Id, alias X-Veri-Session-Id);\nnull when none was sent."
-                },
-                "agent_name": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "description": "The client-sent X-Veri-Agent header; null when none was sent."
-                },
-                "turn_index": {
-                  "type": [
-                    "integer",
-                    "null"
-                  ],
-                  "format": "int32",
-                  "description": "The request's user-turn count."
-                },
-                "tool_names": {
-                  "type": [
-                    "array",
-                    "null"
-                  ],
-                  "items": {
-                    "type": "string"
-                  },
-                  "description": "The tools whose results this request carries (one entry per call)."
-                },
-                "prompt_tokens": {
-                  "type": "integer",
-                  "format": "int32"
-                },
-                "cached_prompt_tokens": {
-                  "type": "integer",
-                  "format": "int32"
-                },
-                "completion_tokens": {
-                  "type": "integer",
-                  "format": "int32"
-                },
-                "streamed": {
-                  "type": "boolean"
-                },
-                "usage_reported": {
-                  "type": "boolean"
-                },
-                "latency_ms": {
-                  "type": "number",
-                  "format": "double",
-                  "description": "Backward-compatible alias for e2e_latency_ms on newly recorded requests."
-                },
-                "ttfb_ms": {
-                  "type": [
-                    "number",
-                    "null"
-                  ],
-                  "format": "double"
-                },
-                "ttft_ms": {
-                  "type": [
-                    "number",
-                    "null"
-                  ],
-                  "format": "double"
-                },
-                "e2e_latency_ms": {
-                  "type": [
-                    "number",
-                    "null"
-                  ],
-                  "format": "double"
-                },
-                "generation_ms": {
-                  "type": [
-                    "number",
-                    "null"
-                  ],
-                  "format": "double"
-                },
-                "tpot_ms": {
-                  "type": [
-                    "number",
-                    "null"
-                  ],
-                  "format": "double"
-                },
-                "request_bytes": {
-                  "type": [
-                    "integer",
-                    "null"
-                  ],
-                  "format": "int64"
-                },
-                "response_bytes": {
-                  "type": [
-                    "integer",
-                    "null"
-                  ],
-                  "format": "int64"
-                },
-                "status_code": {
-                  "type": "integer",
-                  "format": "int32"
-                },
-                "finish_reason": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "error_category": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "error_message": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "client_cancelled": {
-                  "type": "boolean"
-                },
-                "client_disconnected": {
-                  "type": "boolean"
-                },
-                "created_at": {
-                  "type": "string",
-                  "format": "date-time"
-                },
-                "completed_at": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "format": "date-time"
                 }
               }
             }
@@ -22351,6 +22548,159 @@
           }
         }
       },
+      "SpendByDayResponse": {
+        "type": "object",
+        "required": [
+          "window_days",
+          "start_date",
+          "end_date",
+          "days",
+          "totals",
+          "average_per_day_usd",
+          "month_to_date_usd",
+          "projected_month_usd"
+        ],
+        "properties": {
+          "window_days": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "days": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SpendDay"
+            },
+            "description": "One entry per UTC day from start_date to end_date inclusive, oldest first."
+          },
+          "totals": {
+            "$ref": "#/components/schemas/SpendTotals"
+          },
+          "average_per_day_usd": {
+            "type": "number",
+            "format": "double"
+          },
+          "peak": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SpendPeak",
+                "description": "The day with the highest total, null when nothing was spent."
+              }
+            ]
+          },
+          "month_to_date_usd": {
+            "type": "number",
+            "format": "double",
+            "description": "Spend since the first of the current month (UTC)."
+          },
+          "projected_month_usd": {
+            "type": "number",
+            "format": "double",
+            "description": "month_to_date_usd scaled to the full month at the month's average pace."
+          }
+        }
+      },
+      "SpendDay": {
+        "type": "object",
+        "description": "One UTC day of the workspace's spend, by what it was spent on.",
+        "required": [
+          "date",
+          "training_usd",
+          "serving_usd",
+          "storage_usd",
+          "traces_usd",
+          "total_usd"
+        ],
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "training_usd": {
+            "type": "number",
+            "format": "double",
+            "description": "Training jobs settled that day (their final charge lands on the day\nthe job finished)."
+          },
+          "serving_usd": {
+            "type": "number",
+            "format": "double",
+            "description": "Serving accrued that day: every replica's hours inside the day at its\nper-box rate, the same accrual the balance enforcer uses."
+          },
+          "storage_usd": {
+            "type": "number",
+            "format": "double",
+            "description": "Volume and model storage settlements charged that day."
+          },
+          "traces_usd": {
+            "type": "number",
+            "format": "double",
+            "description": "Stored trace bodies settled that day."
+          },
+          "total_usd": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "SpendPeak": {
+        "type": "object",
+        "required": [
+          "date",
+          "total_usd"
+        ],
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "total_usd": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "SpendTotals": {
+        "type": "object",
+        "required": [
+          "training_usd",
+          "serving_usd",
+          "storage_usd",
+          "traces_usd",
+          "total_usd"
+        ],
+        "properties": {
+          "training_usd": {
+            "type": "number",
+            "format": "double"
+          },
+          "serving_usd": {
+            "type": "number",
+            "format": "double"
+          },
+          "storage_usd": {
+            "type": "number",
+            "format": "double"
+          },
+          "traces_usd": {
+            "type": "number",
+            "format": "double"
+          },
+          "total_usd": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
       "SupersededRow": {
         "type": "object",
         "required": [
@@ -22627,6 +22977,13 @@
             "format": "int64"
           }
         }
+      },
+      "Thumbs": {
+        "type": "string",
+        "enum": [
+          "up",
+          "down"
+        ]
       },
       "TombstoneRequest": {
         "type": "object",
@@ -24586,6 +24943,10 @@
     {
       "name": "Observability",
       "description": "Agent conversations, agents and their traffic."
+    },
+    {
+      "name": "Ask AI",
+      "description": "The in-app helper agent: chat, ratings and versions."
     },
     {
       "name": "Public runs",
