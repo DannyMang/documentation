@@ -1,8 +1,8 @@
 ---
 title: "Billing"
 sidebarTitle: "Billing"
-description: "How Veri bills: prepaid credits per workspace, who can add funds, auto-reload, budget alerts, what happens at $0, and how team workspaces pay."
-keywords: ["billing", "credits", "workspace billing", "team billing", "add funds", "auto-reload", "budget alert", "spend alert", "balance", "credit code", "free tier"]
+description: "How Veri bills: prepaid credits per workspace, who can add funds, auto-reload, budget and low-balance alerts, what happens at $0, and how team workspaces pay."
+keywords: ["billing", "credits", "workspace billing", "team billing", "add funds", "auto-reload", "budget alert", "spend alert", "low balance", "balance", "credit code", "free tier"]
 ---
 
 Veri is prepaid. You add credit to a balance, and every resource you run draws it down as it runs. The **workspace** is the billing entity: your personal workspace has its own balance, and each team workspace has its own separate balance. Nothing you run inside a team is ever charged to your personal balance, and nothing you run personally touches a team's.
@@ -55,7 +55,7 @@ Switch between your personal workspace and your teams from the sidebar. The bill
 | Add funds (card checkout) | You | Any member |
 | Redeem a credit code | You | Any member (see [Credit codes](#credit-codes)) |
 | Saved cards, billing address | You | Owners only |
-| Budget alerts, auto-reload | You | Owners only |
+| Budget and low-balance alerts, auto-reload | You | Owners only |
 | Delete the workspace | Not possible | Owners only |
 
 A team owner is a member with the admin role in the team.
@@ -97,13 +97,23 @@ The pack applies to the workspace you buy it in. In a team workspace the credit 
 
 An owner can set a monthly spend threshold under **Spend alert**. Veri emails when spend for the calendar month crosses 75% and again at 100% of the threshold, once each per month. For a team, every owner receives the email. Alerts are informational: they never stop work. To stop work at a limit, stop the resource or rely on the $0 rule below.
 
+## Low-balance alert
+
+Veri warns by email when a workspace balance runs low, because running work stops at $0. For a team, every owner receives the email. Alerts are informational: they never stop work.
+
+- **Default:** a one-time warning at $25, sent while training jobs, deployments or agent sessions are running and auto-reload is off. It is not sent again.
+- **Your own threshold:** set an amount under **Low-balance alert** on the billing page to be warned every time the balance drops below it. A top-up back to that amount or above re-arms the alert.
+- Veri checks balances every few minutes. An owner can turn the alert off on the billing page.
+
 ## What happens at $0
 
 Veri does not extend overdraft. Each workspace is enforced on its own balance:
 
 1. While work runs, Veri counts the cost accrued since the last settlement against the balance, so a long job cannot outrun its credit before the next settlement.
-2. When the effective balance drops below $0, every running training job and deployment in **that workspace** is terminated and its final window is settled. Work in your other workspaces is not affected.
+2. When the effective balance drops below $0, every running training job, deployment and agent session in **that workspace** is terminated and its final window is settled. Work in your other workspaces is not affected.
 3. Terminated resources show a reason of `insufficient_credits`. Add funds, then launch again. A training job stopped this way is charged for the time its GPU ran, even if it had not reached `running` yet: only a cancel you make is free.
+
+When work is stopped this way, Veri emails within minutes and lists the deployments, training jobs and agent sessions it stopped. For a team, every owner receives the email. Turning off the low-balance alert does not turn this off.
 
 Check headroom before a long run:
 
