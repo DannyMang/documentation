@@ -14,7 +14,7 @@ Reference for `/v1/deployments/*`. All endpoints require Bearer token auth (`Aut
 | `POST` | `/v1/deployments` | Create a deployment |
 | `GET` | `/v1/deployments` | List (paginated, filter by `status`) |
 | `GET` | `/v1/deployments/{id}` | Get one |
-| `PATCH` | `/v1/deployments/{id}` | Update scaling settings (replica bounds, concurrency target, idle windows) |
+| `PATCH` | `/v1/deployments/{id}` | Update scaling settings (replica bounds, concurrency target, idle windows) and trace capture |
 | `GET` | `/v1/deployments/{id}/replicas` | List the deployment's replicas |
 | `POST` | `/v1/deployments/{id}/replicas/{replica_id}/drain` | Retire one replica (scale in, or swap it with `replace=true`: launch first, drain second) |
 | `POST` | `/v1/deployments/{id}/wake` | Pre-warm a `scaled_to_zero` deployment (202, idempotent) |
@@ -161,7 +161,7 @@ Single deployment. Same shape as create response, with timestamps populated as i
 
 ## PATCH /v1/deployments/\{id\} {#patch-v1deploymentsid}
 
-Partial update of the scaling settings on a live deployment. Mutable fields: `num_replicas`, `min_replicas`, `max_replicas`, `concurrency_target`, `scale_to_zero_window_seconds`, `idle_delete_after_days`, `self_heal_attempts` (`0` to `5`). Anything else (model, gpu, source, engine, provider) is immutable and fails validation. Any PATCH also restarts the replacement budget of [self-healing](/deployments#self-healing).
+Partial update of a live deployment. Mutable fields: the scaling settings `num_replicas`, `min_replicas`, `max_replicas`, `concurrency_target`, `scale_to_zero_window_seconds`, `idle_delete_after_days` and `self_heal_attempts` (`0` to `5`), and the [trace capture](#turn-trace-capture-on-or-off) settings `trace_bodies` and `trace_retention`. Anything else (model, gpu, source, engine, provider) is immutable and fails validation. A PATCH that changes scaling also restarts the replacement budget of [self-healing](/deployments#self-healing).
 
 Returns the updated deployment immediately with the new *desired* state; the control plane converges the replica fleet in the background. Compare `ready_replicas` (observed) against `num_replicas` (desired) to watch convergence.
 
@@ -185,9 +185,24 @@ When the update takes effect depends on the deployment's status:
 | `provisioning` (first boot) | Saved now, applied **once the deployment is serving**: the response shows the new desired `num_replicas` next to `ready_replicas: 0`, and extra replicas launch only after the first one serves, so a broken configuration does not boot several GPUs before it fails. |
 | `waking` | No second wake. The new floor applies to the wake in progress, or as soon as it serves. |
 
-`self_heal_attempts` is the exception: in every status it applies immediately, as the policy for the next time the deployment's last box dies while serving. Any PATCH also restarts the replacement count, so a self-heal in progress gets the full new budget.
+`self_heal_attempts` is the exception: in every status it applies immediately, as the policy for the next time the deployment's last box dies while serving. A PATCH that changes scaling also restarts the replacement count, so a self-heal in progress gets the full new budget.
 
 Waking on update is checked against the workspace active-replica limit before anything is saved: if the new floor does not fit, the update returns `429` with code `ACTIVE_DEPLOYMENT_LIMIT` and the deployment stays parked with its previous settings. An update that raises `num_replicas` on a running deployment is checked the same way.
+
+### Turn trace capture on or off
+
+`trace_bodies` and `trace_retention` take effect on the next call, in any live status. With capture on, failed calls store their bodies too, [free](/deployments/observability#request-traces). A PATCH with only these two changes nothing about scaling: it does not wake a parked deployment, restart an idle window or restart the self-healing budget, and it also works on a BYOC deployment.
+
+```bash
+curl -X PATCH "https://api.veri.studio/v1/deployments/$DEPLOYMENT_ID" \
+  -H "Authorization: Bearer vk_..." -H "Content-Type: application/json" \
+  -d '{"trace_bodies": true, "trace_retention": "base"}'
+```
+
+- `trace_retention` is `base` (14 days) or `extended` (400 days, at the extended rate). It applies to bodies stored from the next call on: a body already stored keeps the retention it was stored with.
+- `trace_retention` needs capture on after the update, or the update returns `400` with code `invalid_trace_retention`. Turning capture on returns `400` while request traces are not enabled for the platform.
+- Turning capture off stops new bodies; those already stored stay until they expire. The deployment keeps its `trace_retention`, and turning capture back on without one resumes it.
+- [Monitors](/evals#monitors) judge stored bodies, so a monitor on the deployment scores nothing while capture is off and resumes when it is back on.
 
 ```python
 dep = client.deployments.update(deployment_id, min_replicas=1, max_replicas=4)
@@ -369,12 +384,16 @@ curl "https://api.veri.studio/v1/deployments/$DEPLOYMENT_ID/requests?limit=50" -
       "latency_ms": 245.3,
       "status_code": 200,
       "error_message": null,
+      "body_state": "off",
+      "session_id": null,
       "created_at": "2026-05-12T..."
     }
   ],
   "has_more": true
 }
 ```
+
+`body_state` says why the call's request and response bodies are or aren't stored: see [the values](/deployments/observability#read-one-model-call). `session_id` is the managed session the call belongs to, and `null` otherwise.
 
 Includes failed requests (`status_code >= 400`) for debugging.
 
