@@ -1829,7 +1829,8 @@
         "tags": [
           "Deployments"
         ],
-        "summary": "Update deployment scaling settings",
+        "summary": "Update deployment settings",
+        "description": "Scaling settings converge asynchronously. `trace_bodies` and `trace_retention` take effect on the next call, and a PATCH with only those two changes nothing about scaling. Turning capture off pauses the monitors that judge this deployment's stored bodies until it is back on.",
         "operationId": "update",
         "parameters": [
           {
@@ -1864,7 +1865,7 @@
             }
           },
           "400": {
-            "description": "Invalid bounds, terminal deployment, or a pre-replica deployment that cannot scale"
+            "description": "Invalid bounds, terminal deployment, a pre-replica deployment that cannot scale, or invalid trace options (trace_retention without capture on, an unknown retention class, or turning capture on while request traces are disabled)"
           },
           "404": {
             "description": "Not found or not owned by the caller"
@@ -2637,6 +2638,7 @@
           {
             "name": "limit",
             "in": "query",
+            "description": "Page size, 1 to 500.",
             "required": false,
             "schema": {
               "type": "integer",
@@ -2703,11 +2705,11 @@
         ],
         "responses": {
           "200": {
-            "description": "A paginated list of inference requests",
+            "description": "A page of inference requests, newest first, with `total`: the number matching the same filters across all pages",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PaginatedList_DeploymentRequestResponse"
+                  "$ref": "#/components/schemas/DeploymentRequestList"
                 }
               }
             }
@@ -5945,6 +5947,50 @@
         ]
       }
     },
+    "/v1/requests/{request_id}": {
+      "get": {
+        "tags": [
+          "Observability"
+        ],
+        "summary": "Get a model call",
+        "description": "One model call: its request row, and its request and response bodies when one is stored. `body_state` says why there is none. The row answers even when the trace store does not: the body is then null with `body_state` `unavailable`.",
+        "operationId": "request",
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "description": "The request id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Observability disabled"
+          },
+          "404": {
+            "description": "No such request in this workspace"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/scores": {
       "get": {
         "tags": [
@@ -7794,6 +7840,201 @@
           },
           "404": {
             "description": "No such skill in this workspace"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/traces": {
+      "get": {
+        "tags": [
+          "Observability"
+        ],
+        "summary": "List traces",
+        "description": "Every model call without a thread, every thread and every managed session with activity in the window, newest activity first, keyset paged with `after` = the previous page's `next_cursor`. A managed session lists once, as a session: the thread its model calls carry is not a row of its own. Eval calls are excluded. Listing is free; only stored bodies are billed.",
+        "operationId": "traces",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "description": "Window start (RFC 3339). Default: `to` minus 24 hours.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "Window end (RFC 3339). Default: now. At most 30 days after `from`.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "deployment_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "agent",
+            "in": "query",
+            "description": "Only this agent (its `key`).",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "kind",
+            "in": "query",
+            "description": "call | thread | session",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "errors_only",
+            "in": "query",
+            "description": "Only traces with errors.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "active",
+            "in": "query",
+            "description": "Only threads and sessions live now. Single calls are never active.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Case-insensitive substring of a request id (a thread or session\nmatches on any of its calls in the window), thread id, session id,\ntitle or preview.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tool",
+            "in": "query",
+            "description": "Only traces that used this tool in the window (a call or thread request\ncarrying its result, a session's `agent.tool_use`). Exact name, as the\noverview's `top_tools` lists it.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "model",
+            "in": "query",
+            "description": "Only traces with a model call on this model in the window (a request's\nadapter alias or deployment model, a session's model). Exact name, as\nthe overview's `top_models` lists it.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "session_id",
+            "in": "query",
+            "description": "One managed session: its row, and one `call` row per model call it made\nin the window. With `kind=call`, only those calls. On an id that is not\na session of this workspace, an empty list.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size, 1..=500 (default 50).",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "description": "`next_cursor` of the previous page. It pins the window end `to` of the\npage it came from, so omit `to` (or repeat the same value) on the\nfollowing pages; another `to` is a 400.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TraceList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad window, filter or cursor, or observability disabled"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/traces/usage": {
+      "get": {
+        "tags": [
+          "Observability"
+        ],
+        "summary": "Trace usage this month",
+        "description": "This calendar month's stored traces against the workspace's free allowance and monthly cap, with the rates billed beyond the allowance.",
+        "operationId": "trace_usage",
+        "parameters": [
+          {
+            "name": "deployment_id",
+            "in": "query",
+            "description": "Also count what this deployment stored this month (`deployment_used`).",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TraceUsage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Request traces disabled"
+          },
+          "404": {
+            "description": "`deployment_id` is not a deployment of this workspace"
           }
         },
         "security": [
@@ -12424,6 +12665,34 @@
           }
         }
       },
+      "DeploymentRequestList": {
+        "type": "object",
+        "description": "GET /v1/deployments/{id}/requests: one page, newest first, plus `total`,\nthe number of requests matching the same filters across every page.",
+        "required": [
+          "object",
+          "data",
+          "has_more",
+          "total"
+        ],
+        "properties": {
+          "object": {
+            "type": "string"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeploymentRequestResponse"
+            }
+          },
+          "has_more": {
+            "type": "boolean"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "DeploymentRequestResponse": {
         "type": "object",
         "required": [
@@ -12448,6 +12717,17 @@
           },
           "deployment_id": {
             "type": "string"
+          },
+          "body_state": {
+            "type": "string",
+            "description": "Why this call's body is or is not stored, as on GET /v1/requests/{id}:\nstored | off | expired | dropped_cap | dropped_other | too_large |\nnot_covered | unavailable | unknown."
+          },
+          "session_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The managed session this call belongs to; null otherwise."
           },
           "replica_id": {
             "type": [
@@ -12725,7 +13005,7 @@
               "string",
               "null"
             ],
-            "description": "Trace retention class (\"extended\" or null = base). Null unless\ntrace_bodies deployments set it."
+            "description": "Trace retention class of newly stored bodies (\"extended\" or null =\nbase). Kept when capture is turned off: bodies already stored live out\ntheir class."
           },
           "startup_metrics": {
             "description": "Startup phase timings reported by a profiled deployment's first healthy\nheartbeat (seconds: model_sync_s, engine_start_to_healthy_s, total_s).\nNull unless startup_profiling was set and the engine reached healthy."
@@ -12868,7 +13148,7 @@
       },
       "DeploymentUpdate": {
         "type": "object",
-        "description": "PATCH /v1/deployments/{id}: the mutable-field whitelist. Everything else on\na deployment (model, source, gpu, engine, provider) is immutable: changing\nthose means creating a new deployment. Sending an immutable field in a\nPATCH is a validation error instead of a silent no-op.\n\nDesired-state semantics: the PATCH validates + persists the new bounds and\nreturns immediately (desired + observed); the reconciler's scaling pass\nconverges the replica fleet asynchronously. A scaled_to_zero deployment\nleft with min_replicas >= 1 is woken by the PATCH itself (cap-checked);\nduring a first boot the new bounds apply once the deployment serves.\nAn omitted field keeps its stored value; only scale_to_zero_window_seconds\nand idle_delete_after_days read an explicit null as \"clear\".",
+        "description": "PATCH /v1/deployments/{id}: the mutable-field whitelist. Everything else on\na deployment (model, source, gpu, engine, provider) is immutable: changing\nthose means creating a new deployment. Sending an immutable field in a\nPATCH is a validation error instead of a silent no-op.\n\nDesired-state semantics: the PATCH validates + persists the new bounds and\nreturns immediately (desired + observed); the reconciler's scaling pass\nconverges the replica fleet asynchronously. A scaled_to_zero deployment\nleft with min_replicas >= 1 is woken by the PATCH itself (cap-checked);\nduring a first boot the new bounds apply once the deployment serves.\nAn omitted field keeps its stored value; only scale_to_zero_window_seconds\nand idle_delete_after_days read an explicit null as \"clear\". The trace\nfields are not scaling: they take effect on the next call, and a PATCH with\nonly them skips everything above.",
         "properties": {
           "num_replicas": {
             "type": [
@@ -12920,7 +13200,21 @@
               "null"
             ],
             "format": "int32",
-            "description": "Replacements of a lost last GPU box, 0..=5. Any PATCH also\nrestarts the replacement budget."
+            "description": "Replacements of a lost last GPU box, 0..=5. Any PATCH that changes\nscaling also restarts the replacement budget."
+          },
+          "trace_bodies": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Request traces: store this deployment's chat request and response\nbodies, from the next call on, failed calls included (those free).\nRequires the traces feature to turn on (never to turn off). Bodies\nalready stored stay until they expire. A PATCH with only trace fields\nchanges nothing about scaling."
+          },
+          "trace_retention": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Retention class of the bodies stored from the next call on: \"base\"\n(14 days) or \"extended\" (400 days, at the extended rate). Requires\ntrace_bodies to be on after this PATCH. Omitted keeps the stored class,\nalso across turning capture off and on again."
           }
         },
         "additionalProperties": false
@@ -17481,215 +17775,6 @@
           }
         }
       },
-      "PaginatedList_DeploymentRequestResponse": {
-        "type": "object",
-        "required": [
-          "object",
-          "data",
-          "has_more"
-        ],
-        "properties": {
-          "object": {
-            "type": "string"
-          },
-          "data": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "required": [
-                "object",
-                "id",
-                "deployment_id",
-                "prompt_tokens",
-                "cached_prompt_tokens",
-                "completion_tokens",
-                "streamed",
-                "usage_reported",
-                "latency_ms",
-                "status_code",
-                "created_at"
-              ],
-              "properties": {
-                "object": {
-                  "type": "string"
-                },
-                "id": {
-                  "type": "string"
-                },
-                "deployment_id": {
-                  "type": "string"
-                },
-                "replica_id": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "adapter_serve_name": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "description": "The adapter alias (serve_name) this request resolved through on a\nmulti_adapter deployment; null for base-model requests."
-                },
-                "model_version_id": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "description": "The model version id that answered this request: the adapter alias'\nversion on a multi_adapter deployment, the base model's version for\nbase requests on a deployment built from a library model, null\notherwise."
-                },
-                "thread_id": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "description": "The client-sent thread id (X-Veri-Thread-Id, alias X-Veri-Session-Id);\nnull when none was sent."
-                },
-                "agent_name": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "description": "The client-sent X-Veri-Agent header; null when none was sent."
-                },
-                "turn_index": {
-                  "type": [
-                    "integer",
-                    "null"
-                  ],
-                  "format": "int32",
-                  "description": "The request's user-turn count."
-                },
-                "tool_names": {
-                  "type": [
-                    "array",
-                    "null"
-                  ],
-                  "items": {
-                    "type": "string"
-                  },
-                  "description": "The tools whose results this request carries (one entry per call)."
-                },
-                "prompt_tokens": {
-                  "type": "integer",
-                  "format": "int32"
-                },
-                "cached_prompt_tokens": {
-                  "type": "integer",
-                  "format": "int32"
-                },
-                "completion_tokens": {
-                  "type": "integer",
-                  "format": "int32"
-                },
-                "streamed": {
-                  "type": "boolean"
-                },
-                "usage_reported": {
-                  "type": "boolean"
-                },
-                "latency_ms": {
-                  "type": "number",
-                  "format": "double",
-                  "description": "Backward-compatible alias for e2e_latency_ms on newly recorded requests."
-                },
-                "ttfb_ms": {
-                  "type": [
-                    "number",
-                    "null"
-                  ],
-                  "format": "double"
-                },
-                "ttft_ms": {
-                  "type": [
-                    "number",
-                    "null"
-                  ],
-                  "format": "double"
-                },
-                "e2e_latency_ms": {
-                  "type": [
-                    "number",
-                    "null"
-                  ],
-                  "format": "double"
-                },
-                "generation_ms": {
-                  "type": [
-                    "number",
-                    "null"
-                  ],
-                  "format": "double"
-                },
-                "tpot_ms": {
-                  "type": [
-                    "number",
-                    "null"
-                  ],
-                  "format": "double"
-                },
-                "request_bytes": {
-                  "type": [
-                    "integer",
-                    "null"
-                  ],
-                  "format": "int64"
-                },
-                "response_bytes": {
-                  "type": [
-                    "integer",
-                    "null"
-                  ],
-                  "format": "int64"
-                },
-                "status_code": {
-                  "type": "integer",
-                  "format": "int32"
-                },
-                "finish_reason": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "error_category": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "error_message": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "client_cancelled": {
-                  "type": "boolean"
-                },
-                "client_disconnected": {
-                  "type": "boolean"
-                },
-                "created_at": {
-                  "type": "string",
-                  "format": "date-time"
-                },
-                "completed_at": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
-                  "format": "date-time"
-                }
-              }
-            }
-          },
-          "has_more": {
-            "type": "boolean"
-          }
-        }
-      },
       "PaginatedList_DeploymentResponse": {
         "type": "object",
         "required": [
@@ -17814,7 +17899,7 @@
                     "string",
                     "null"
                   ],
-                  "description": "Trace retention class (\"extended\" or null = base). Null unless\ntrace_bodies deployments set it."
+                  "description": "Trace retention class of newly stored bodies (\"extended\" or null =\nbase). Kept when capture is turned off: bodies already stored live out\ntheir class."
                 },
                 "startup_metrics": {
                   "description": "Startup phase timings reported by a profiled deployment's first healthy\nheartbeat (seconds: model_sync_s, engine_start_to_healthy_s, total_s).\nNull unless startup_profiling was set and the engine reached healthy."
@@ -20126,6 +20211,7 @@
           "max_triggers",
           "max_traces_per_month",
           "trace_free_per_month",
+          "max_failed_traces_per_month",
           "team_workspaces",
           "seats_per_workspace"
         ],
@@ -20170,6 +20256,12 @@
             "type": "integer",
             "format": "int32",
             "description": "Base-class traces per month settled at $0 (billing/trace_billing.py).",
+            "minimum": 0
+          },
+          "max_failed_traces_per_month": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Failed calls' bodies stored free per month (`reserve_failed_trace_slot`).",
             "minimum": 0
           },
           "team_workspaces": {
@@ -20948,6 +21040,171 @@
         "properties": {
           "name": {
             "type": "string"
+          }
+        }
+      },
+      "RequestDetail": {
+        "type": "object",
+        "description": "One model call: the request row, and its body when one is stored.",
+        "required": [
+          "id",
+          "deployment_id",
+          "deployment_name",
+          "model",
+          "status_code",
+          "streamed",
+          "latency_ms",
+          "prompt_tokens",
+          "cached_prompt_tokens",
+          "completion_tokens",
+          "created_at",
+          "body_state",
+          "scores"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "deployment_id": {
+            "type": "string"
+          },
+          "deployment_name": {
+            "type": "string"
+          },
+          "replica_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "model": {
+            "type": "string"
+          },
+          "api": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "chat | messages | responses. Null on calls from before this was recorded."
+          },
+          "agent": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentRef",
+                "description": "The session's environment, else the `X-Veri-Agent` header. Null without either."
+              }
+            ]
+          },
+          "thread_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "session_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Set when the call belongs to a managed session (`thread_id` is its id)."
+          },
+          "turn_index": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "status_code": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "error_category": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "error_message": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "finish_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "streamed": {
+            "type": "boolean"
+          },
+          "latency_ms": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "ttft_ms": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "prompt_tokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "cached_prompt_tokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "completion_tokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completed_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "body_state": {
+            "type": "string",
+            "description": "stored | off | expired | dropped_cap | dropped_other | too_large |\nnot_covered | unavailable | unknown. `unavailable` means the body could\nnot be read just now: retry. A failed call with capture on reads stored:\nstatus_code and the error fields tell the rest, and `output` holds whatever\ncame back. Failed calls are stored free."
+          },
+          "body_expires_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When a stored body is purged, or was. Null if none was ever stored."
+          },
+          "input": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "The chat request as sent; null without a stored body."
+          },
+          "output": {
+            "description": "The assistant message; null without a stored body. On a failed call,\nwhatever came back: the error body, the stream as far as it got, or null."
+          },
+          "scores": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScoreResponse"
+            },
+            "description": "The call's scores, oldest first."
           }
         }
       },
@@ -22725,6 +22982,10 @@
           "ms": {
             "type": "integer",
             "format": "int64"
+          },
+          "error": {
+            "type": "boolean",
+            "description": "true on a failed call or a failed tool call; left out otherwise."
           }
         }
       },
@@ -23329,6 +23590,257 @@
           }
         }
       },
+      "Trace": {
+        "type": "object",
+        "description": "One row of the Traces list: a single model call, a thread or a session.",
+        "required": [
+          "id",
+          "kind",
+          "status",
+          "turns",
+          "llm_calls",
+          "tool_calls",
+          "tool_errors",
+          "errors",
+          "prompt_tokens",
+          "cached_prompt_tokens",
+          "completion_tokens",
+          "started_at",
+          "last_activity_at",
+          "span_strip",
+          "scores"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "call: the request id. thread: `{deployment_id}:{thread_id}`. session:\nthe session id."
+          },
+          "kind": {
+            "type": "string",
+            "description": "call | thread | session"
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Sessions only."
+          },
+          "preview": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The first user message (200 chars). Stored calls only; null once the\nbody has expired."
+          },
+          "request_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Calls only."
+          },
+          "agent": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentRef",
+                "description": "Null on a single call sent without an `X-Veri-Agent` header."
+              }
+            ]
+          },
+          "deployment_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "deployment_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "model": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The model of the newest call in the window."
+          },
+          "thread_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "A thread's id. On a call, only with the `session_id` filter."
+          },
+          "session_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "A session's id. On a call, only with the `session_id` filter."
+          },
+          "environment_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "environment_version": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Sessions only: the environment version the session runs."
+          },
+          "status": {
+            "type": "string",
+            "description": "call: ok | error. thread: active | idle. session: active | paused |\nended | failed."
+          },
+          "status_code": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Calls only."
+          },
+          "latency_ms": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Calls only."
+          },
+          "error_category": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Calls only."
+          },
+          "error_message": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Calls only."
+          },
+          "body_state": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Calls only: stored | off | expired | dropped_cap | dropped_other |\ntoo_large | not_covered | unavailable | unknown. A failed call with\ncapture on reads stored: status_code and the error fields tell the rest."
+          },
+          "turns": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "llm_calls": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tool_calls": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tool_errors": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "errors": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "prompt_tokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "cached_prompt_tokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "completion_tokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "cost_usd": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Sessions: charged so far. Otherwise null."
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "last_activity_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "span_strip": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Span"
+            },
+            "description": "Ordered, the most recent 60."
+          },
+          "scores": {
+            "$ref": "#/components/schemas/ScoreSummary"
+          }
+        }
+      },
+      "TraceCounts": {
+        "type": "object",
+        "description": "What the whole filtered list holds, across all pages.",
+        "required": [
+          "calls",
+          "single_calls",
+          "threads",
+          "sessions",
+          "active_threads",
+          "active_sessions"
+        ],
+        "properties": {
+          "calls": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Every model call, the ones inside threads and sessions included."
+          },
+          "single_calls": {
+            "type": "integer",
+            "format": "int64",
+            "description": "`call` rows."
+          },
+          "threads": {
+            "type": "integer",
+            "format": "int64",
+            "description": "`thread` rows."
+          },
+          "sessions": {
+            "type": "integer",
+            "format": "int64",
+            "description": "`session` rows."
+          },
+          "active_threads": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "active_sessions": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "TraceImportRequest": {
         "type": "object",
         "required": [
@@ -23402,6 +23914,13 @@
               "null"
             ],
             "description": "Import one thread of `deployment` as one row, built from its newest\nstored trace (whose messages hold the whole conversation).\n`from`/`to`/`limit`/`model_version_id` do not apply. Importing the\nsame thread again while that trace is still its newest is a 409\nunless `force` is set."
+          },
+          "request_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Import one model call of `deployment` as one row, from its stored body.\n`from`/`to`/`limit`/`model_version_id` do not apply. Importing the same\ncall again is a 409 unless `force` is set."
           }
         },
         "additionalProperties": false
@@ -23482,6 +24001,46 @@
           }
         }
       },
+      "TraceList": {
+        "type": "object",
+        "required": [
+          "object",
+          "total",
+          "counts",
+          "has_more",
+          "data"
+        ],
+        "properties": {
+          "object": {
+            "type": "string",
+            "description": "Always \"list\"."
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Traces matching the filters across all pages."
+          },
+          "counts": {
+            "$ref": "#/components/schemas/TraceCounts"
+          },
+          "has_more": {
+            "type": "boolean"
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Pass as `after` for the next page; null on the last page."
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Trace"
+            }
+          }
+        }
+      },
       "TraceScoreFilter": {
         "type": "object",
         "description": "Score filter for a window import (see `scores`).",
@@ -23547,6 +24106,63 @@
           }
         },
         "additionalProperties": false
+      },
+      "TraceUsage": {
+        "type": "object",
+        "description": "This calendar month's stored traces against the workspace's limits.",
+        "required": [
+          "year_month",
+          "used",
+          "used_base",
+          "free_allowance",
+          "cap",
+          "price_per_1k_base",
+          "price_per_1k_extended"
+        ],
+        "properties": {
+          "year_month": {
+            "type": "string",
+            "description": "The UTC month counted, `YYYY-MM`."
+          },
+          "used": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Traces accepted this month, both classes: what `cap` limits. Failed\ncalls are stored free and don't count here."
+          },
+          "used_base": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Base-class traces accepted this month: what `free_allowance` covers.\nExtended-class traces bill from the first one."
+          },
+          "deployment_used": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "With `deployment_id`: bodies that deployment stored this month."
+          },
+          "free_allowance": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Base-class traces free this month. 0 = unlimited."
+          },
+          "cap": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Traces accepted per month before new bodies are dropped. 0 = unlimited."
+          },
+          "price_per_1k_base": {
+            "type": "number",
+            "format": "double",
+            "description": "$ per 1k base-class traces beyond the allowance (14-day retention)."
+          },
+          "price_per_1k_extended": {
+            "type": "number",
+            "format": "double",
+            "description": "$ per 1k extended-class traces (400-day retention)."
+          }
+        }
       },
       "TrainingJobCreate": {
         "type": "object",

@@ -300,7 +300,10 @@
               "GET /v1/observability/overview",
               "GET /v1/observability/agents",
               "GET /v1/observability/conversations",
-              "GET /v1/deployments/{deployment_id}/threads/{thread_id}"
+              "GET /v1/deployments/{deployment_id}/threads/{thread_id}",
+              "GET /v1/traces",
+              "GET /v1/traces/usage",
+              "GET /v1/requests/{request_id}"
             ]
           },
           {

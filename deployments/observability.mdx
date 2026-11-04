@@ -216,6 +216,14 @@ veri deploy Qwen/Qwen3-4B --trace-bodies --trace-retention extended   # 400-day
 
 Or in the SDK: `client.deployments.create(..., trace_bodies=True)`.
 
+Or [turn it on or off on a live deployment](/deployments/api#turn-trace-capture-on-or-off), effective from the next call, with no new deployment and no new endpoint:
+
+```bash
+curl -X PATCH "https://api.veri.studio/v1/deployments/$DEPLOYMENT_ID" \
+  -H "Authorization: Bearer $VERI_API_KEY" -H "Content-Type: application/json" \
+  -d '{"trace_bodies": true}'
+```
+
 Browse traces from the deployment page in the dashboard, the CLI, or the API:
 
 ```bash
@@ -243,14 +251,25 @@ Details worth knowing:
 - **Retention.** `base` traces are deleted after 14 days, `extended` after 400.
 - **Pricing.** The first 5,000 base-retention traces per workspace each month are
   free; beyond that, $2.50 per 1k traces at base retention and $5.00 per 1k at
-  extended, metered from credits at month end.
+  extended, metered from credits at month end. Failed calls are stored free: see
+  below.
+- **Failed calls.** With capture on, a failed `/chat/completions` call stores its
+  request and whatever output exists: the error body, the stream as far as it got
+  (a cut-off stream or a client that disconnected), or nothing if no answer came
+  back. It reads `body_state: "stored"`, and `status_code`, `error_category` and
+  `error_message` tell the rest. It isn't billed: it doesn't count toward your
+  allowance or `used`. It's kept for 14 days whatever the deployment's retention,
+  up to its own [monthly limit](/billing#plans) of 10,000 on Free and 25,000 on Pro.
+  Past that limit, a failed call's body is dropped (`dropped_cap`) at no cost.
+  Failed calls are also never sampled by [monitors](/evals#monitors) and never
+  imported into datasets: their output isn't a real answer.
 - **Never in the request path.** Capture is asynchronous and drop-tolerant: if the
   trace store is unavailable, requests are unaffected and the affected traces are
   dropped.
 - **Streaming.** Streamed (`stream: true`) responses are captured once the stream
   completes: content, reasoning, tool calls, and finish reason are assembled into
-  one response. A stream that is cut off, errors, or exceeds 1 MiB is not
-  captured; the request still appears in request telemetry.
+  one response. A stream that is cut off or errors is captured as a failed call. A
+  stream over 1 MiB is not captured; the request still appears in request telemetry.
 - **Threads.** Send the same `X-Veri-Thread-Id` header (1-128 characters of
   `A-Z a-z 0-9 . _ : -`) on every request of a conversation to group its traces
   into a thread; the SDK's `session_id` sends the equivalent `X-Veri-Session-Id`.
@@ -263,6 +282,55 @@ Details worth knowing:
   [dataset stream](/training/dataset-streams#import-request-traces) as `chat`
   or `prompt` rows (`veri datasets import-traces`), snapshotted, and trained
   on — production traffic feeding the next fine-tune.
+
+### List every call, conversation and session
+
+`GET /v1/traces` lists the workspace's traffic in one place: each model call sent without a thread id, each thread and each managed session with activity in the window, newest activity first. A thread or session is one row however many calls it made. It reads from request telemetry, so every call is listed whether or not a body was stored. Listing is free; only stored bodies are billed.
+
+```bash
+curl --get "https://api.veri.studio/v1/traces" \
+  -H "Authorization: Bearer $VERI_API_KEY" \
+  --data-urlencode "errors_only=true" \
+  --data-urlencode "limit=50"
+```
+
+| Parameter | Meaning |
+| --- | --- |
+| `from`, `to` | The window (RFC 3339). `to` defaults to now and `from` to 24 hours before it; at most 30 days. |
+| `deployment_id` | Only this deployment. |
+| `agent` | Only this agent, by its `key`. |
+| `kind` | `call`, `thread` or `session`. |
+| `errors_only` | Only traces with errors. |
+| `active` | Only threads and sessions live now. A single call is never active. |
+| `q` | Case-insensitive substring of a request id (a thread or session matches on any of its calls in the window), thread id, session id, title or preview. |
+| `tool`, `model` | Only traces that used this tool, or called this model, in the window. Exact names, as the overview's `top_tools` and `top_models` list them. |
+| `session_id` | One managed session: its row, and one `call` row per model call it made in the window. Add `kind=call` for only the calls. |
+| `limit` | Page size, `1` to `500` (default `50`). |
+| `after` | The previous page's `next_cursor`. It pins that page's window end, so omit `to` or repeat the same value. |
+
+The response is `{ object, total, counts, has_more, next_cursor, data }`. `total` and `counts` describe the whole filtered list on every page: `counts.calls` is every model call, including the ones inside threads and sessions, and `single_calls`, `threads`, `sessions`, `active_threads` and `active_sessions` count rows. A row's `kind` says what it is and its `id` is the request id, `{deployment_id}:{thread_id}`, or the session id. `status` is `ok` or `error` for a call, `active` or `idle` for a thread, and `active`, `paused`, `ended` or `failed` for a session. `request_id`, `status_code`, `latency_ms`, `error_category`, `error_message` and `body_state` are set on calls and null on the other kinds. Open a thread with [`GET /v1/deployments/{id}/threads/{thread_id}`](#agent-conversations) and a session with `GET /v1/sessions/{id}/events`.
+
+### Read one model call
+
+`GET /v1/requests/{id}` returns one call's telemetry, its scores, and its request (`input`) and response (`output`) bodies when one is stored. It answers for every call, and `404` outside your workspace. If the trace store can't be read, you still get the telemetry, with `body_state: "unavailable"`: retry for the body.
+
+`body_state`, on a call in the list, in `GET /v1/deployments/{id}/requests` and here, says why a body is or isn't there:
+
+| `body_state` | Meaning |
+| --- | --- |
+| `stored` | The body is stored until `body_expires_at`. On a failed call, `output` holds whatever came back, and may be null. |
+| `off` | Capture was off for the deployment when the call was made. It can't be recovered. |
+| `expired` | The body passed its retention and was deleted, at `body_expires_at`. |
+| `dropped_cap` | The workspace had reached its monthly trace cap. For a failed call, the monthly limit on failed bodies. |
+| `dropped_other` | The trace store failed or refused the trace. |
+| `too_large` | A stream over the 1 MiB capture limit, or a failed call whose request or error body is over 1 MiB. |
+| `not_covered` | A `/messages` or `/responses` call, failed or not. Capture covers `/chat/completions` only so far. |
+| `unavailable` | The body can't be read right now, or is still on its way: retry. |
+| `unknown` | A call from before Veri recorded this. |
+
+### Check this month's usage
+
+`GET /v1/traces/usage` returns the month's accepted traces against the workspace's limits: `year_month`, `used` (both retention classes, what `cap` limits), `used_base` (what `free_allowance` covers), `free_allowance`, `cap` (`0` means unlimited for either), `price_per_1k_base` and `price_per_1k_extended`. Failed calls are stored free and aren't in any of them. With `deployment_id`, it adds `deployment_used`: the bodies that deployment stored this month, failed calls included.
 
 ## Agent conversations
 

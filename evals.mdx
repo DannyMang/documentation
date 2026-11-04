@@ -74,7 +74,7 @@ curl "https://api.veri.studio/v1/monitors" \
   -d '{"name": "helpful-live", "deployment_id": "4f2a9c1e7b3d", "evaluator_id": "helpful", "sampling_rate": 0.1}'
 ```
 
-- The deployment must store trace bodies, because the judge reads them: create it with `--trace-bodies` (see [request traces](/deployments/observability#request-traces)). Otherwise the call returns `409 trace_bodies_required`.
+- The deployment must store trace bodies, because the judge reads them: create it with `--trace-bodies` or [turn capture on](/deployments/api#turn-trace-capture-on-or-off) (see [request traces](/deployments/observability#request-traces)). Otherwise the call returns `409 trace_bodies_required`.
 - The evaluator must be an `llm_judge`, a `jev`, or a `cloud` code evaluator that does not set `requires_reference` (live traffic has no expected answer). Human and local code evaluators are refused with `400`.
 - A `single_turn` evaluator scores sampled requests shortly after their traces are stored. A `thread` evaluator scores a conversation once it has had no request for `idle_minutes`, and again if it resumes and goes idle again.
 
@@ -104,7 +104,7 @@ What evaluations do not do today:
 - **No templates.** Veri ships no built-in evaluators, rubrics, or benchmark suites; you write every prompt and function.
 - **Text only.** No multimodal inputs or outputs.
 - **Cloud code evaluators are JavaScript or TypeScript only.** Python code evaluators run locally through the SDK or CLI.
-- **Monitors need traced traffic and a reference-free evaluator.** A monitor scores a sampled share of one deployment's live traffic, so the deployment must capture bodies ([`trace_bodies`](/deployments/observability#request-traces)), and only `llm_judge`, `jev`, and cloud code evaluators that need no reference answer can run on it. [Monitors](#monitors) are API only: there is no CLI or SDK command for them yet.
+- **Monitors need traced traffic and a reference-free evaluator.** A monitor scores a sampled share of one deployment's successful live traffic (a failed call is never sampled), so the deployment must capture bodies ([`trace_bodies`](/deployments/observability#request-traces)), and only `llm_judge`, `jev`, and cloud code evaluators that need no reference answer can run on it. [Monitors](#monitors) are API only: there is no CLI or SDK command for them yet.
 
 ## Where to go next
 
