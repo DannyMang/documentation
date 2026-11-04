@@ -23241,6 +23241,7 @@
           "models",
           "totals",
           "turns",
+          "truncated",
           "scores"
         ],
         "properties": {
@@ -23305,6 +23306,10 @@
               "$ref": "#/components/schemas/Turn"
             },
             "description": "The latest 1000 model calls, oldest first, grouped into turns."
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "True when the thread has older calls than `turns` holds. `started_at`\nand `totals` then cover the latest 1000 calls too, not the whole thread."
           },
           "scores": {
             "type": "array",
