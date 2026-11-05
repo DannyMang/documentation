@@ -283,7 +283,7 @@ Delete up to 1000 deployments in one call. The same route exists for [training j
 { "ids": ["5b0e7c2d9a14", "8f31c0d2b7e6"], "dry_run": false }
 ```
 
-`ids` takes 1 to 1000 ids of at most 128 characters each. Duplicates collapse, keeping the first position. Set `dry_run` to `true` to see what would happen first.
+`ids` takes 1 to 1000 ids of at most 128 characters each. Duplicates collapse, keeping the first position. Set `dry_run` to `true` to see what would happen first. An unknown field is a `422`, so a misspelled `dry_run` can't turn a dry run into a real delete.
 
 The work runs on the server: the call writes one durable item per id and answers `202`, so closing the client changes nothing. Partial failure never changes the HTTP status, it lives on each result. Read the batch with `GET /v1/bulk_deletes/{id}`.
 
@@ -319,7 +319,7 @@ The work runs on the server: the call writes one durable item per id and answers
 
 | Status | Meaning |
 | --- | --- |
-| `would_delete` | A real call would delete it |
+| `would_delete` | A real call would delete it. One that is only waiting for its final bill reads this way too, because a real call waits that out |
 | `would_stop_then_delete` | A live deployment: a real call stops it first |
 | `blocked` | Refused today, with `code`, `message` and `blockers` |
 | `not_found` | Missing or not yours |
@@ -328,7 +328,7 @@ The work runs on the server: the call writes one durable item per id and answers
 
 A live deployment, parked ones included, stops first. It stops answering right away and its hourly charge ends, then the server waits for the final bill to settle (usually about a minute) and deletes it. If a cloud cancel fails, the delete waits 200 seconds so the box cleanup still sees the replica. If the bill hasn't settled after 10 minutes the item fails with `billing_unsettled` and the deployment stays stopped; the bill still settles, and a retry deletes it.
 
-Training jobs are never stopped this way: a job that hasn't finished is `job_active`. Cancel it, or wait for it.
+Training jobs are never stopped this way: a job that hasn't finished is `job_active`. Cancel it, or wait for it. A finished job waits for its final bill in the same way, and fails with `job_billing_unsettled` if it hasn't settled after 10 minutes. A job with a refund waiting for review is `refund_pending`, because the job is that refund's only record: it can go once the refund is approved or denied.
 
 ### Reasons
 
@@ -336,6 +336,8 @@ Training jobs are never stopped this way: a job that hasn't finished is `job_act
 | --- | --- | --- |
 | `billing_unsettled` | Deployment | The final bill didn't settle within 10 minutes |
 | `job_active` | Training job | The job hasn't finished |
+| `job_billing_unsettled` | Training job | The job's final bill didn't settle within 10 minutes |
+| `refund_pending` | Training job | A refund on the job is waiting for review |
 | `hf_export_running` | Training job, model | A Hugging Face export is still copying the weights |
 | `model_uses_weights` | Training job | A library model or version uses its final weights |
 | `deployment_uses_weights` | Training job | A deployment references the job |
@@ -345,14 +347,15 @@ Training jobs are never stopped this way: a job that hasn't finished is `job_act
 | `adapter_attached` | Model | It is attached to a deployment as an adapter |
 | `version_protected` | Model | An alias or pin protects its version |
 | `internal_error` | Any | Nothing was removed for this one. Retrying is safe |
+| `expired` | Any | Status `halted`, not `failed`: it waited over an hour without running, so it was not done. Send it again if you still want it deleted |
 
 ### Read and stop a batch
 
-`GET /v1/bulk_deletes/{id}` returns the same object with results in the order you sent them. `running` and `settling` items both read `deleting`. `POST /v1/bulk_deletes/{id}/stop` halts every item that hasn't gone yet and returns the batch; it is safe to repeat. An item being worked on right now finishes, and a deployment already stopped stays stopped. A batch that isn't yours is a `404`. Finished batches are kept for 7 days.
+`GET /v1/bulk_deletes/{id}` returns the same object with results in the order you sent them. `running` and `settling` items both read `deleting`. `POST /v1/bulk_deletes/{id}/stop` halts every item that hasn't gone yet and returns the batch; it is safe to repeat. An item being worked on right now halts before its next destructive step, or finishes if it is past that, and a deployment already stopped stays stopped. Both routes keep working while bulk delete is turned off, so you can see and stop what was left. A batch that isn't yours is a `404`. Finished batches are kept for 7 days.
 
 ### Errors and limits
 
-`400` with code `ids_required`, `too_many_ids`, `invalid_id` or `bulk_delete_disabled`. The `POST .../bulk_delete` routes have their own budget of 30 calls per window, answered with `429` and code `RATE_LIMITED`. Reading and stopping a batch count toward the regular budget. Session keys and deployment keys are refused.
+`400` with code `ids_required`, `too_many_ids`, `invalid_id` or `bulk_delete_disabled`, and `422` for an unknown field. The `POST .../bulk_delete` routes have their own budget of 30 calls per window, answered with `429` and code `RATE_LIMITED`. Reading and stopping a batch count toward the regular budget. Session keys and deployment keys are refused.
 
 ## POST /v1/deployments/\{id\}/chat/completions {#post-v1deploymentsidchatcompletions}
 

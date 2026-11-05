@@ -268,8 +268,8 @@ Details worth knowing:
   trace store is unavailable, requests are unaffected and the affected traces are
   dropped.
 - **Streaming.** Streamed (`stream: true`) responses are captured once the stream
-  completes: content, tool calls, and finish reason are assembled into one response.
-  A streamed reply's reasoning is not stored yet; a buffered reply's is. A stream that is cut off or errors is captured as a failed call. A
+  completes: content, reasoning, tool calls, and finish reason are assembled into
+  one response. A stream that is cut off or errors is captured as a failed call. A
   stream over 1 MiB is not captured; the request still appears in request telemetry.
 - **Threads.** Send the same `X-Veri-Thread-Id` header (1-128 characters of
   `A-Z a-z 0-9 . _ : -`) on every request of a conversation to group its traces

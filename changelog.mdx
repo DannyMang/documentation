@@ -5,6 +5,13 @@ description: "Recent product and platform changes in Veri"
 keywords: ["changelog", "releases", "platform updates"]
 ---
 
+## 2026-11-05: bulk delete, and reasoning in stored traces
+
+- Deployments, Training, Datasets and Models have a **Delete** button that opens a picker. Tick rows, or shift-click a range, and confirm; at 10 rows or more you type yes. The work runs on the server, so closing the tab changes nothing, and **Stop** halts what hasn't gone yet. A live deployment stops first, and a running training job is refused, never cancelled. The same work is available over the API: see [bulk delete](/deployments/api#post-v1deploymentsbulkdelete).
+- Those lists now read your newest 1,000 rows and show 50 at a time, with a button for the next 50.
+- A training job can't be deleted until its final bill has settled, or while a refund on it is waiting for review, on the single delete route too.
+- A streamed reply now stores its reasoning, as a buffered one already did. When a reply carries reasoning, a `chat` dataset row holds it in `reasoning_content` on the final assistant message, where chat templates read it. See [Import request traces](/training/dataset-streams#import-request-traces).
+
 ## 2026-11-04: the Traces page, and long conversations you can read
 
 - **Traces** in the dashboard lists every model call, conversation and managed session in one place, and rows on Analytics, deployment pages and the Agents pages open there. It replaces the Conversations tab under Agents. You can turn capture on or off for a live deployment from that page. See [The Traces page](/deployments/observability#the-traces-page).

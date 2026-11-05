@@ -473,6 +473,18 @@
             ]
           },
           {
+            "group": "Bulk delete",
+            "openapi": "api-reference/openapi.json",
+            "pages": [
+              "POST /v1/deployments/bulk_delete",
+              "POST /v1/training_jobs/bulk_delete",
+              "POST /v1/datasets/bulk_delete",
+              "POST /v1/models/bulk_delete",
+              "GET /v1/bulk_deletes/{id}",
+              "POST /v1/bulk_deletes/{id}/stop"
+            ]
+          },
+          {
             "group": "Ask AI",
             "openapi": "api-reference/openapi.json",
             "pages": [
