@@ -11,15 +11,19 @@ Veri runs SFT on TRL's `SFTTrainer`. You provide a dataset of text or chat examp
 
 ## Dataset format
 
-SFT accepts either plain text or conversational rows. For chat data, the trainer applies the model's chat template automatically.
+SFT accepts plain text, conversational rows, or `prompt` + `completion` rows. For chat data, the trainer applies the model's chat template automatically.
 
 ```python
 # Plain text (the `dataset_text_field`, default "text")
 {"text": "The sky is blue."}
 
-# Conversational — chat template applied automatically
+# Conversational: chat template applied automatically
 {"messages": [{"role": "user", "content": "What color is the sky?"},
               {"role": "assistant", "content": "It is blue."}]}
+
+# Prompt and completion: the loss covers the completion only
+{"prompt": [{"role": "user", "content": "What color is the sky?"}],
+ "completion": [{"role": "assistant", "content": "It is blue."}]}
 ```
 
 ## Submitting a job
@@ -55,7 +59,7 @@ job.wait(poll_interval=15)
 job.download(output_dir="./checkpoints")
 ```
 
-SFT takes no reward function — the labeled completions are the training signal.
+SFT takes no reward function: your rows are the training signal. Which tokens carry a loss depends on the row shape, see [What the loss trains on](#what-the-loss-trains-on).
 
 ## Hyperparameters
 
@@ -64,7 +68,7 @@ SFT takes no reward function — the labeled completions are the training signal
 | `learning_rate` | `2e-5` | AdamW step size. Higher than RL; `≈1e-4` is common when training LoRA adapters. |
 | `num_epochs` | `1` | Passes over the dataset. Overridden by `max_steps` if both set. |
 | `max_steps` | `null` | Total gradient steps. Set this to cap a long run or smoke-test. |
-| `max_seq_length` | model default | Tokens per example. Truncate longer sequences. Big OOM lever. |
+| `max_seq_length` | `1024` (`3072` with `use_unsloth`) | Tokens kept per row, counted after the chat template renders it. A longer row loses its end, which is often the reply, and the job still reports success. [Check row length](#check-row-length) before you set it. Longer rows use more GPU memory. |
 | `packing` | `false` | Pack multiple short examples into one sequence for throughput. |
 | `dataset_text_field` | `"text"` | Column holding the text, for plain-text datasets. Ignored for chat data. |
 | `lora_rank` | `null` | Train LoRA adapters of this rank instead of full finetuning. `null` means full finetune. |
@@ -80,6 +84,42 @@ SFT takes no reward function — the labeled completions are the training signal
 | `gradient_checkpointing` | `true` | Activation recomputation. Turn off to trade memory for about a third less compute per step. |
 | `cpu_offload` | `false` | Park sharded parameters and optimizer states in host RAM (FSDP2). Needs `zero_stage` `2` or `3`; `gpu_count` above 1 only. |
 
+## What the loss trains on
+
+| Row shape | Tokens with a loss |
+| --- | --- |
+| `messages` | Every token of the rendered conversation: system prompt, tool definitions, user turns and replies. |
+| `prompt` + `completion` | Only the completion. |
+| `text` | Every token. |
+
+`messages` rows have no assistant-only option today, so a row with a long system prompt spends most of its loss on text the model only reads. In one test on chat rows with a long system prompt and 12 tool definitions, the final reply was about 2% of the tokens, and the system prompt and tools were over 94%. Rows imported from [request traces](/training/dataset-streams#import-request-traces) are `messages` rows.
+
+## Check row length
+
+`max_seq_length` keeps the start of a row and cuts the end. In a `messages` row the end is usually the reply, so a row that is too long can train on no reply at all. Nothing warns you: the job ends as `completed` and the loss still falls. In one test, rows of over 3,000 tokens at the default 1,024 trained on zero reply tokens, and the job reported success.
+
+Count your rows before you submit. This needs only the tokenizer, not a GPU or the model weights:
+
+```python
+import json
+from transformers import AutoTokenizer
+
+tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-8B")  # your base_model
+
+for line in open("rows.jsonl"):
+    row = json.loads(line)
+    text = tokenizer.apply_chat_template(row["messages"], tools=row.get("tools"), tokenize=False)
+    print(len(tokenizer(text, add_special_tokens=False)["input_ids"]))
+```
+
+Set `max_seq_length` above your longest row.
+
+<Note>
+  Rows with `tools` come out longer in training than this count. Loading the dataset gives every tool definition the fields of all the others, filled with nulls: in the same test, 12 tools grew by 601 tokens, so leave that margin. `use_unsloth` drops `tools`, and if the dataset's first row has no `tools` key, the column is dropped for every row.
+</Note>
+
+Long rows also need GPU memory. We have not yet seen Qwen3-8B finish on a 24 GB GPU at `max_seq_length` 4096: on A10G-24GB, a 16-bit LoRA job ran out of GPU memory at step 3, and a QLoRA job failed in the [merge after training](#qlora-merge-and-host-ram). Try a short `max_steps` run before a long one.
+
 ## LoRA and QLoRA
 
 SFT uses the same adapter path as GRPO. Set `lora_rank` to train low-rank adapters instead of the full model, and add `load_in_4bit` for QLoRA (a 4-bit NF4 base with adapters on top), which fits larger models on a single GPU.
@@ -94,7 +134,13 @@ hyperparameters={
 }
 ```
 
-See [LoRA and QLoRA](/training/grpo#lora-and-qlora) for the full rules (4-bit requires `lora_rank`; QLoRA is single-GPU; 16-bit LoRA is multi-GPU capable). A LoRA job deploys like a full fine-tune: Veri keeps the merged weights next to the adapter and serves those (`veri deploy <job_id>`).
+See [LoRA and QLoRA](/training/grpo#lora-and-qlora) for the full rules (4-bit requires `lora_rank`; QLoRA is single-GPU; 16-bit LoRA is multi-GPU capable). A LoRA job deploys like any other job: Veri keeps the merged weights next to the adapter and serves those (`veri deploy <job_id>`).
+
+### QLoRA merge and host RAM
+
+Veri serves merged 16-bit weights, so after training a `load_in_4bit` job reloads the whole base model at 16-bit and applies the adapter. That reload uses host RAM, not GPU memory, at about 2 GB per billion parameters, so the host can be the limit even when training fit on the GPU. `veri gpu describe <sku>` shows a shape's host RAM.
+
+A Qwen3-8B QLoRA job on A10G-24GB (16 GB of host RAM) trained every step, then the worker went silent during this merge, and after 900 seconds the job failed with `worker_failed`. The likely cause is the host running out of memory. Its checkpoints were kept, but it has no merged weights to deploy. A 16-bit LoRA job on one GPU merges in place on the GPU and does not reload the base.
 
 ## Where to go next
 

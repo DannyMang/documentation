@@ -166,7 +166,7 @@ gpu_count = 1
 ```
 
 <Note>
-  `[dataset].id` must reference an already-registered dataset, by name or id: register it first with `veri datasets upload` or `veri datasets connect-hf`. The trained model is saved to Veri storage. `[reward].file` is a local path (relative paths resolve against the config file's directory); the file's source is attached to the job at submit. Multi-reward: `files = ["a.py", "b.py"]` plus optional `weights = [1.0, 0.5]`.
+  `[dataset].id` must reference an already-registered dataset, by name or id: register it first with `veri datasets upload` or `veri datasets connect-hf`. A [dataset stream](/training/dataset-streams#train-on-a-snapshot) works too: `<name>@latest` or the plain stream name pins the stream's newest rows at submit, and `<name>@snap-N` pins that snapshot. The trained model is saved to Veri storage. `[reward].file` is a local path (relative paths resolve against the config file's directory); the file's source is attached to the job at submit. Multi-reward: `files = ["a.py", "b.py"]` plus optional `weights = [1.0, 0.5]`.
 </Note>
 
 ### `configs/deploy.toml` {#configs-deploy-toml}
@@ -210,7 +210,7 @@ Assumes 36 min: 6 min startup + 100 steps x 18 s/step. The step time was measure
 (Qwen2.5-1.5B LoRA, L4-24GB x1), not on this job; pass --minutes N to price your own duration.
 ```
 
-The duration is an assumption, not a measurement of your job: about 6 minutes of startup (instance boot, environment setup, model and dataset download) plus `max_steps` at 18 seconds per step. Both numbers come from the measured GRPO run in [Training examples](/training/examples). Step time grows with model size, `rollouts_per_prompt`, response length and, for harness jobs, how long your agent takes per rollout, so treat the estimate as a floor for bigger runs. Without `max_steps` it assumes 100 steps (the GRPO default); an `sft_text` or `dpo` run without `max_steps` runs `num_epochs` over the dataset, which the estimate does not count.
+The duration is an assumption, not a measurement of your job: about 6 minutes of startup (instance boot, environment setup, model and dataset download) plus `max_steps` at 18 seconds per step. Both numbers come from the measured GRPO run in [Training examples](/training/examples), on a 1.5B model. Startup grows with model size: Qwen3-8B on A10G-24GB took about 20 minutes from submit to its first training step, so pass `--minutes` for a large model. Step time grows with model size, `rollouts_per_prompt`, response length and, for harness jobs, how long your agent takes per rollout, so treat the estimate as a floor for bigger runs. Without `max_steps` it assumes 100 steps (the GRPO default); an `sft_text` or `dpo` run without `max_steps` runs `num_epochs` over the dataset, which the estimate does not count.
 
 Once you know your job's real duration (from a short run, or the wall time of a previous one), price that instead with `--minutes`:
 

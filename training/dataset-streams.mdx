@@ -163,6 +163,10 @@ traces answered by that model version. `--snapshot` cuts a snapshot right after 
 a note recording the source deployment and window, so the imported set is immediately pinnable
 for training.
 
+<Warning>
+  A window import takes every captured trace on the deployment in that window, whoever made the call. There is no per-user filter, so on a deployment that several people or apps share, it takes everyone's chats. To take one conversation, [import it by thread](#import-one-conversation).
+</Warning>
+
 Two guardrails to know about:
 
 - **Overlap protection.** Re-importing a window that overlaps a previous import for the same
@@ -175,11 +179,24 @@ Two guardrails to know about:
   training on imported transcripts. Unmappable traces are skipped and counted in the response,
   never imported silently.
 
-To import a single model call, `POST /v1/datasets/{id}/import-traces` takes `deployment` and `request_id` instead of a window: one row from that call's stored body. Importing the same call again is a `409` unless you pass `force`, and a failed call is a `400`.
-
 One call imports up to 10,000 rows (`--limit` to lower that); cover longer ranges with
 consecutive windows. Base-retention traces are deleted after 14 days — import windows you care
 about before they age out.
+
+### Import one conversation
+
+To import one conversation instead of a window, `POST /v1/datasets/{id}/import-traces` takes `deployment` and `thread_id`, the [`X-Veri-Thread-Id`](/deployments/observability#agent-conversations) its chat calls were sent with. This form is REST only, and it is what the dashboard's **Add to dataset** uses: `veri datasets import-traces` and `client.datasets.import_traces` always take a window.
+
+```bash
+curl -X POST "https://api.veri.studio/v1/datasets/acme-feedback/import-traces" \
+  -H "Authorization: Bearer $VERI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"deployment": "7c41e2a9b0d3", "thread_id": "conv-42", "snapshot": true}'
+```
+
+One row comes from the thread's newest stored trace, whose messages hold the whole conversation. `from`, `to`, `limit` and `model_version_id` do not apply, and `scores` is a `400`. A thread with no stored body is a `404`. Importing the same thread again while that trace is still its newest is a `409` unless you pass `"force": true`.
+
+To import a single model call, the same route takes `deployment` and `request_id` instead: one row from that call's stored body. Importing the same call again is a `409` unless you pass `force`, and a failed call is a `400`.
 
 ### Import only scored traces
 
