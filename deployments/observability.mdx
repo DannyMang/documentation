@@ -535,7 +535,7 @@ Agent responses are only as complete as the telemetry window. Include the deploy
 | Metric | Meaning |
 | --- | --- |
 | TTFB | Request start until upstream response headers arrive |
-| TTFT | Request start until the first non-empty content or reasoning token |
+| TTFT | Request start until the first non-empty content token or tool call. On a model that thinks first, this includes its reasoning |
 | E2E latency | Request start until the response body or stream terminates |
 | Generation time | TTFT until stream completion |
 | TPOT | Generation time divided across reported output-token intervals |
