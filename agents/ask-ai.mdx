@@ -1,0 +1,75 @@
+---
+title: "Ask AI"
+description: "The assistant in the Veri dashboard: it explains what is on screen and takes actions only with your permission."
+keywords: ["ask ai", "assistant", "helper", "dashboard", "permissions", "feedback", "consent"]
+---
+
+Ask AI is the assistant in the Veri dashboard, for every signed-in user. Open it with the **Ask AI** button at the bottom right, with `⌘J` (`Ctrl+J`), or from the command palette. Ask about the page you are on and it answers from what is there: the training job, the deployment list, the dataset. When an answer calls for an action, it proposes one and waits for you to allow it.
+
+Veri runs the model behind it, on a Veri deployment, and you are not billed for your questions.
+
+Ask AI is only available inside the dashboard. There is no package or API key flow for adding it to your own site.
+
+## What it sees
+
+Each time you ask, the panel reads the current page's route and title, up to 8,000 characters of its visible text, and what is running and billing across your account.
+
+Page content goes to the model as untrusted input. The assistant cannot change its own permission mode or approve an action because of something it read on a page: both come only from what you click.
+
+## What it can do
+
+Its tools run in your browser as you, so it can't see or change more than you can.
+
+| Kind | Tools |
+| --- | --- |
+| Reads | List training jobs, get one job, read a job's metrics, list deployments, get one deployment, read a deployment's metrics, read your balance, estimate a cost, list datasets |
+| Writes | Cancel a training job, stop a deployment, register a model |
+
+Reads run as soon as the model asks, and show as a row in the thread. A write shows as a card with **Allow once**, **Deny** and **Edit**.
+
+It can't start a training job: that's done from the [CLI, the API or an agent](/training#starting-a-job).
+
+## Permission modes
+
+The chip under the message box picks the mode, and `Shift+Tab` cycles through them. You start in Manual mode, and your browser remembers the choice.
+
+| Mode | What runs without asking |
+| --- | --- |
+| **Manual mode** | Reads only. Every write waits for you. |
+| **Ask mode** | Reads, and writes marked as safe. None of the three writes above is marked as safe today, so they still wait for you. |
+| **Auto mode** | Everything, including writes. Each call still shows in the thread. |
+
+<Warning>
+  In Auto mode, a write runs with no card to stop it, and none of the three has an undo. [Stopping a deployment](/deployments/api#post-v1deploymentsidstop) is final.
+</Warning>
+
+## Feedback and versions
+
+Thumbs up or down under an answer, with an optional comment, records a score on that answer. A second rating of the same answer replaces the first. The chip in the panel's header names the version that answered.
+
+**Settings, Ask AI** shows the versions, their thumbs-up rates and your recent ratings. The commands under **Train the next version** on that page are Veri's own operations tooling: they aren't part of the published CLI.
+
+## Your chats
+
+An Ask AI chat is stored as [request traces](/deployments/observability#request-traces) on Veri's deployment, and expires on the same retention schedule. A stored chat holds your questions, the replies, and the page text and tool results sent with them, which can include job configs, metrics and dataset names.
+
+Veri copies a chat into a dataset to improve Ask AI only if the person who asked has said yes:
+
+- No answer counts as no.
+- A yes covers chats that start after it, not earlier ones.
+- A no takes effect at once, and also stops earlier chats that have not been used yet.
+- Members of the Veri team count as yes until they say no.
+
+The panel doesn't ask yet. To read or set your answer, call the API with your key:
+
+```bash
+curl "https://api.veri.studio/v1/helper/consent" \
+  -H "Authorization: Bearer $VERI_API_KEY"
+
+curl -X PUT "https://api.veri.studio/v1/helper/consent" \
+  -H "Authorization: Bearer $VERI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"choice": "no", "wording_version": "docs"}'
+```
+
+`choice` is `yes` or `no`, and it is always your own answer. `wording_version` records the text you answered from, 1 to 64 characters of `A-Z a-z 0-9 . _ : -`. `GET` returns `choice`, `wording_version` and `decided_at`, each `null` until you answer. Every answer is kept in a history.

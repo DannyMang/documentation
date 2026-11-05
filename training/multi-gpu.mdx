@@ -54,7 +54,7 @@ Worked examples, all with the default `"bf16"`:
 | Qwen3-8B SFT on L4-24GB x4 | 66 GB | `zero_stage: 3`, 16 GB per GPU: over budget, runs with a warning |
 | Qwen3-32B SFT on H100-80GB x8 | 262 GB | `zero_stage: 3`, 33 GB per GPU |
 
-When even `zero_stage: 3` does not fit, the job still launches and the log carries a warning naming the options (`lora_rank`, `cpu_offload`, more GPUs, `precision`). Activations are not part of the estimate: `micro_batch_size` and the sequence length knobs (`max_seq_length`, `max_length`) are what you lower when a job runs out of memory with the states inside the budget.
+When even `zero_stage: 3` does not fit, the job still launches and the log carries a warning naming the options (`lora_rank`, `cpu_offload`, more GPUs, `precision`). Activations are not part of the estimate. When a job runs out of memory with the states inside the budget, lower `micro_batch_size` first. A shorter `max_seq_length` (`max_length` on DPO) also saves memory, but a row longer than the limit loses its end, often the reply, and the job still reports success, so [check row length](/training/sft#check-row-length) before you lower it.
 
 ## Throughput
 
@@ -65,7 +65,7 @@ Data parallelism exchanges every gradient between GPUs once per optimizer step, 
 | 1 | 556 tokens/s | 569 tokens/s | none: the all-reduce dominates tiny steps |
 | 8 | 1,976 tokens/s | 4,758 tokens/s | 2.4x |
 
-Raise `micro_batch_size` (or `max_seq_length`) until a GPU is busy for most of the step, and use `gradient_accumulation_steps` or `global_batch_size` to keep the optimizer batch where you want it. GPUs connected with NVLink or NVSwitch (A100-80GB and H100-80GB nodes) scale closer to linearly.
+Raise `micro_batch_size` until a GPU is busy for most of the step, and use `gradient_accumulation_steps` or `global_batch_size` to keep the optimizer batch where you want it. GPUs connected with NVLink or NVSwitch (A100-80GB and H100-80GB nodes) scale closer to linearly. Set `max_seq_length` from your [row length](/training/sft#check-row-length), not for throughput: it only limits rows longer than it.
 
 Batch semantics change with `gpu_count`: the default optimizer batch is `micro_batch_size x gpu_count`, so four GPUs at the default `micro_batch_size` of 1 train on 4 samples per step, not 1. Set `global_batch_size` to pin the optimizer batch independent of the GPU count.
 
@@ -107,7 +107,7 @@ hyperparameters={
     "zero_stage": 3,
     "cpu_offload": True,
     "micro_batch_size": 1,
-    "max_seq_length": 2048,   # sft_text; on dpo the sequence knob is max_length
+    "max_seq_length": 2048,   # sft_text; on dpo it is max_length. A longer row loses its end
 }
 ```
 
@@ -149,9 +149,9 @@ Everything else, including a `micro_batch_size` that does not fit, is the job's 
 
 | `error.code` | Meaning | What to do |
 | --- | --- | --- |
-| `oom` | A GPU ran out of memory | Lower `micro_batch_size` or the sequence length; set `zero_stage: 3`, `precision: "bf16"`, `cpu_offload`, or use `lora_rank` |
+| `oom` | A GPU ran out of memory | Lower `micro_batch_size`; set `zero_stage: 3`, `precision: "bf16"`, `cpu_offload`, or use `lora_rank`. Lower the sequence length only after you [check row length](/training/sft#check-row-length): a longer row loses its end and the job still reports success |
 | `distributed_error` | The GPUs stopped talking to each other (NCCL error, collective timeout, rendezvous failure) | Re-submit once; if it repeats on the same configuration, report the job id |
-| `training_stalled` | No progress line for the longer of 10 minutes and three times the median step time (a save in progress is given the time it needs) | Check the log tail and the rank stacks it carries; lower `micro_batch_size` or the sequence length |
+| `training_stalled` | No progress line for the longer of 10 minutes and three times the median step time (a save in progress is given the time it needs) | Check the log tail and the rank stacks it carries; lower `micro_batch_size` or, after you [check row length](/training/sft#check-row-length), the sequence length |
 | `hardware_error` | The box failed a hardware check | Re-submit; the job is not your fault |
 
 ## Where to go next

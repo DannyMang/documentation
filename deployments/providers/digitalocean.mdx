@@ -39,7 +39,7 @@ veri deploy Qwen/Qwen3-8B --name qwen3-8b-do \
 The region is chosen for you from the regions that sell the shape, so there is no `region` field to set.
 
 <Note>
-  Qwen3 models think before they answer. With a small `max_tokens` the visible `content` can come back empty because the reply is still inside `reasoning_content`; allow a few hundred tokens, or pass `"chat_template_kwargs": {"enable_thinking": false}` to skip the thinking step.
+  Qwen3 models think before they answer. With a small `max_tokens` the visible `content` can come back empty because the reply is still inside `reasoning`; allow a few hundred tokens, or pass `"chat_template_kwargs": {"enable_thinking": false}` to skip the thinking step.
 </Note>
 
 ## Capacity and quota

@@ -217,12 +217,12 @@ Read `error.code` first, then the log (`veri jobs logs <id>` or `GET /v1/trainin
 
 | `error.code` | Do this |
 | --- | --- |
-| `oom` | Lower `micro_batch_size` / `max_seq_length` (or `max_length`, `max_response_length`); on multi-GPU set `zero_stage = 3`, `precision = "bf16"`, `cpu_offload = true`; or use `lora_rank`. The message names the GPU (`rank 2/4 ...`) and prints the plan. |
+| `oom` | Check row length before lowering `max_seq_length` (or `max_length`, `max_response_length`): a longer row loses its end, usually the reply, and the job still reports success. Count tokens first (https://docs.veri.studio/training/sft#check-row-length); if lowering it would cut replies, leave it and use the other levers. Lower `micro_batch_size`; on multi-GPU set `zero_stage = 3`, `precision = "bf16"`, `cpu_offload = true`; or use `lora_rank`. The message names the GPU (`rank 2/4 ...`) and prints the plan. |
 | `config_error` | Fix the config; never retry the same payload. |
 | `dependency_error` | Fix the harness requirements / optimizer opt-in; never retry unchanged. |
 | `distributed_error`, `hardware_error` | Re-submit once; if it repeats, report the job id to Veri (hardware is the platform's fault, never the user's). |
 | `upload_failed` | Training finished but the final model did not fully reach Veri storage (the message names the files). Re-submit once; if it repeats, report the job id to Veri. |
-| `training_stalled` | The log tail carries every GPU's Python stack; lower `micro_batch_size` or the sequence length, then re-submit. |
+| `training_stalled` | The log tail carries every GPU's Python stack; lower `micro_batch_size` or, after checking row length, the sequence length, then re-submit. |
 | `CAPACITY_UNAVAILABLE`, `QUOTA_EXCEEDED` | Never booted, unbilled. Resubmit with a shape the message names (`Alternatives:` / `or use:`), or retry the same shape at most 3 times (see Capacity above). |
 | `provisioning_*`, `configuring_timeout`, `heartbeat_timeout` | Re-submit; try another `gpu_type` or region if it repeats. |
 | `worker_failed` | The worker went silent for more than 900 s (OOM-killed worker, lost host) or the box ended before it reported; the message names the silence and the last status and step. Resume from the newest checkpoint (`veri jobs resume <id>`) or re-submit; report the job id if it repeats. |

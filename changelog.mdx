@@ -5,11 +5,48 @@ description: "Recent product and platform changes in Veri"
 keywords: ["changelog", "releases", "platform updates"]
 ---
 
+## 2026-11-04: the Traces page, and long conversations you can read
+
+- **Traces** in the dashboard lists every model call, conversation and managed session in one place, and rows on Analytics, deployment pages and the Agents pages open there. It replaces the Conversations tab under Agents. You can turn capture on or off for a live deployment from that page. See [The Traces page](/deployments/observability#the-traces-page).
+- A conversation of up to 8 turns lists its turns as rows. At 9 or more, each turn is a bar on a latency map you can zoom, search and filter to failed turns, with jumps to the next failed and the slowest. A turn with more than 8 steps gets the same map for its steps.
+- A conversation over 1,000 model calls now says so instead of silently leaving out the oldest: `GET /v1/deployments/{id}/threads/{thread_id}` returns `truncated`, and the dashboard shows a line. Managed sessions say so when they pass 5,000 events or 2,000 model calls.
+
+## 2026-11-04: Ask AI: your answer on using your chats
+
+[Ask AI](/agents/ask-ai), the assistant in the dashboard, has been open to every signed-in user since 2026-10-29, and now has its own page. Veri copies an Ask AI chat into a dataset only if the person who asked said yes, and no answer counts as no. `GET` and `PUT /v1/helper/consent` read and set your answer. Your own deployments are not affected.
+
+## 2026-11-04: dashboard fixes
+
+- The Deployments, Training and Datasets lists no longer stop at 50 or 100 rows. They read your newest 500 and say so when older ones exist.
+- On Training, changing a filter or the search clears the rows you ticked. Before, a delete also removed ticked rows the filter had hidden.
+- A stream dataset's rows read like an uploaded dataset's, and page 2 no longer repeats page 1. Streams don't have the jump-to-row box.
+- Latency charts draw P50 and P99, matching their legend. The page size picker stays on Analytics and Traces when a page covers the whole window.
+- **Set up your coding agent** on the empty Training page copies the setup line.
+- App pages render at 80% on windows 1024 px and wider. The landing, sign-in and sign-up pages stay at 100%.
+
+## 2026-11-04: corrections to the training docs
+
+Nothing changed in the trainer. These pages described it wrongly, and a real training test on chat rows showed it:
+
+- SFT's `max_seq_length` defaults to 1,024 (3,072 with `use_unsloth`), not the model default. A longer row loses its end, often the reply, and the job still reports `completed`. [Check row length](/training/sft#check-row-length) before you set or lower it.
+- `messages` rows put a loss on every token, system prompt and tool definitions included. `prompt` + `completion` rows put it on the completion only. See [What the loss trains on](/training/sft#what-the-loss-trains-on).
+- DPO's `max_length` also defaults to 1,024, and `max_prompt_length` has no effect.
+- A `load_in_4bit` job reloads the base model in host RAM to merge, which can fail after training has finished. See [QLoRA merge and host RAM](/training/sft#qlora-merge-and-host-ram).
+- A window import takes every captured trace on the deployment, whoever made the call. One conversation or one call imports over REST only: see [Import one conversation](/training/dataset-streams#import-one-conversation).
+
+## 2026-11-03: low-balance alert, and an email when work stops at $0
+
+Veri warns workspace owners by email when the balance runs low, once at $25 by default or every time it drops below a threshold you set on the billing page. When a balance runs out, Veri emails within minutes and lists the deployments, training jobs and agent sessions it stopped. See [Low-balance alert](/billing#low-balance-alert).
+
 ## 2026-11-02: turn trace capture on a live deployment, and one list for all traffic
 
 - `PATCH /v1/deployments/{id}` takes `trace_bodies` and `trace_retention`, effective from the next call. Capture no longer has to be chosen at create. See [Turn trace capture on or off](/deployments/api#turn-trace-capture-on-or-off).
 - `GET /v1/traces` lists every model call, thread and managed session of the workspace in one keyset-paged list, and `GET /v1/requests/{id}` returns one call with its body and a `body_state` that says why a body is missing. `GET /v1/traces/usage` shows the month's traces against your limits. See [Request traces](/deployments/observability#list-every-call-conversation-and-session).
 - With capture on, a failed `/chat/completions` call now stores its request and whatever output exists: the error body, or the stream as far as it got. Failed calls are stored free for 14 days, up to 10,000 a month on Free and 25,000 on Pro: they don't count toward your allowance or your bill, and monitors and dataset imports skip them. See [Request traces](/deployments/observability#request-traces).
+
+## 2026-10-30: the request log counts its matches
+
+`GET /v1/deployments/{id}/requests` returns `total`, the number of requests matching your filters across every page, and `limit` now goes up to 500. See [the request log](/deployments/api#get-v1deploymentsidrequests). On the dashboard, Analytics charts start at the deployment's creation when it falls inside the picked window, and the recent requests table follows the chart window and shows how many of the window's requests it lists.
 
 ## 2026-10-27: the final model a completed job keeps is billed like its checkpoints
 
@@ -42,6 +79,10 @@ A training job no longer carries a flat checkpoint-storage charge (8 GiB for a m
 
 - A training job whose final model did not fully reach Veri storage now fails with `upload_failed` instead of completing with files missing. `error.message` names each file and the reason. Files above 5 GiB upload in parts, so a large single weights file no longer fails.
 - `GET /v1/training_jobs/{id}/model` and saving a job to your model library (`POST /v1/models`, `POST /v1/models/register`) return `409` when a completed job's checkpoint is missing a shard its `model.safetensors.index.json` names, or an adapter's `adapter_model.safetensors`. The message names the missing files.
+
+## 2026-10-24: Explore and public run pages are retired
+
+The dashboard no longer has an Explore tab, a Share dialog or public run pages. `POST /v1/training_jobs/{id}/publish` still sets a run's `visibility` and `GET /v1/public/runs` still lists published runs, but the `public_url` it returns does not open.
 
 ## 2026-10-22: LoRA-trained jobs deploy directly
 

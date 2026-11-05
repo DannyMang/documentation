@@ -4152,6 +4152,72 @@
         ]
       }
     },
+    "/v1/helper/consent": {
+      "get": {
+        "tags": [
+          "Ask AI"
+        ],
+        "summary": "Read your Ask AI consent",
+        "operationId": "get_consent",
+        "responses": {
+          "200": {
+            "description": "Your current answer; choice is null until you answer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HelperConsent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Ask AI is not enabled"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Ask AI"
+        ],
+        "summary": "Set your Ask AI consent",
+        "operationId": "set_consent",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetConsentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The answer you just gave",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HelperConsent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Ask AI is not enabled, or wording_version is invalid"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/helper/feedback": {
       "post": {
         "tags": [
@@ -11295,6 +11361,13 @@
           }
         }
       },
+      "ConsentChoice": {
+        "type": "string",
+        "enum": [
+          "yes",
+          "no"
+        ]
+      },
       "Conversation": {
         "type": "object",
         "required": [
@@ -15230,6 +15303,44 @@
           "step": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "HelperConsent": {
+        "type": "object",
+        "required": [
+          "object"
+        ],
+        "properties": {
+          "object": {
+            "type": "string",
+            "description": "Always \"helper_consent\"."
+          },
+          "choice": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ConsentChoice",
+                "description": "Your current answer. Null until you answer, which counts as no."
+              }
+            ]
+          },
+          "wording_version": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The version of the text that answer was given on. Null until you answer."
+          },
+          "decided_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When you gave that answer. Null until you answer."
           }
         }
       },
@@ -22567,6 +22678,24 @@
           }
         }
       },
+      "SetConsentRequest": {
+        "type": "object",
+        "description": "There is deliberately no user field: the answer is always the caller's, and\na body naming anyone is refused rather than ignored.",
+        "required": [
+          "choice",
+          "wording_version"
+        ],
+        "properties": {
+          "choice": {
+            "$ref": "#/components/schemas/ConsentChoice"
+          },
+          "wording_version": {
+            "type": "string",
+            "description": "The version of the text the person saw, 1-64 chars of [A-Za-z0-9._:-]."
+          }
+        },
+        "additionalProperties": false
+      },
       "SftTextHyperparameters": {
         "allOf": [
           {
@@ -23241,6 +23370,7 @@
           "models",
           "totals",
           "turns",
+          "truncated",
           "scores"
         ],
         "properties": {
@@ -23305,6 +23435,10 @@
               "$ref": "#/components/schemas/Turn"
             },
             "description": "The latest 1000 model calls, oldest first, grouped into turns."
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "True when the thread has older calls than `turns` holds. `started_at`\nand `totals` then cover the latest 1000 calls too, not the whole thread."
           },
           "scores": {
             "type": "array",

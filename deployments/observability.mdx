@@ -195,8 +195,9 @@ Engine charts (queue depth, KV cache, throughput, GPU readings) come from the GP
 | Per-request telemetry (`requests` rows, which feed `metrics` and `metrics/timeseries`) | 90 days; 400 days on deployments with `trace_retention: extended` |
 | Engine samples (`metrics/engine-timeseries`) | 30 days, the longest range the charts accept |
 | Lifetime counters (`total_requests` and token totals) | The life of the deployment |
+| Stored [trace bodies](#request-traces) | 14 days, or 400 on `trace_retention: extended`. Failed calls: 14 days either way |
 
-Older rows are deleted automatically. Deleting a deployment removes all of it at once.
+Older rows are deleted automatically. Deleting a deployment removes its telemetry, engine samples and counters at once. Stored trace bodies are not removed with it: they expire on their retention schedule, and until then Veri no longer lists or returns them.
 
 See the interactive [API reference](/api-reference/introduction) for complete response schemas.
 
@@ -224,7 +225,7 @@ curl -X PATCH "https://api.veri.studio/v1/deployments/$DEPLOYMENT_ID" \
   -d '{"trace_bodies": true}'
 ```
 
-Browse traces from the deployment page in the dashboard, the CLI, or the API:
+Browse traces on the [Traces page](#the-traces-page) in the dashboard, or from the CLI or the API:
 
 ```bash
 veri deployments traces $DEPLOYMENT_ID --page 1 --limit 20
@@ -250,7 +251,7 @@ Details worth knowing:
   moves on every promote.
 - **Retention.** `base` traces are deleted after 14 days, `extended` after 400.
 - **Pricing.** The first 5,000 base-retention traces per workspace each month are
-  free; beyond that, $2.50 per 1k traces at base retention and $5.00 per 1k at
+  free (25,000 on [Pro](/billing#plans)); beyond that, $2.50 per 1k traces at base retention and $5.00 per 1k at
   extended, metered from credits at month end. Failed calls are stored free: see
   below.
 - **Failed calls.** With capture on, a failed `/chat/completions` call stores its
@@ -267,8 +268,8 @@ Details worth knowing:
   trace store is unavailable, requests are unaffected and the affected traces are
   dropped.
 - **Streaming.** Streamed (`stream: true`) responses are captured once the stream
-  completes: content, reasoning, tool calls, and finish reason are assembled into
-  one response. A stream that is cut off or errors is captured as a failed call. A
+  completes: content, tool calls, and finish reason are assembled into one response.
+  A streamed reply's reasoning is not stored yet; a buffered reply's is. A stream that is cut off or errors is captured as a failed call. A
   stream over 1 MiB is not captured; the request still appears in request telemetry.
 - **Threads.** Send the same `X-Veri-Thread-Id` header (1-128 characters of
   `A-Z a-z 0-9 . _ : -`) on every request of a conversation to group its traces
@@ -282,6 +283,20 @@ Details worth knowing:
   [dataset stream](/training/dataset-streams#import-request-traces) as `chat`
   or `prompt` rows (`veri datasets import-traces`), snapshotted, and trained
   on — production traffic feeding the next fine-tune.
+
+### The Traces page
+
+**Traces** in the dashboard sidebar shows every model call, conversation and managed session in one list, for the past 24 hours by default and up to 30 days. Filter by deployment, kind, status, agent, model or tool, or search by id, thread or text. Rows on Analytics, the deployment page and the Agents pages open here.
+
+**Capture**, at the top of the page, turns capture on or off for each deployment and sets its retention, as does the deployment page. The change applies from the next call, and it asks you to confirm first because capture stores what your end users send.
+
+Open a row to read the call, or a conversation turn by turn. **Score** and **Add to dataset** are on the row's detail.
+
+- **Up to 8 turns** list as rows you open in place.
+- **9 turns or more** draw as a latency map, one bar per turn. The map starts on the first 10 turns, with stops at 10, 25, 50 and All, and a window you can drag. Search and **Only failed** narrow the bars; **Previous failed**, **Next failed** and **Slowest** jump to one.
+- **A turn with more than 8 steps** gets the same map for its steps, searched by tool name.
+- **A very long conversation** shows its latest 1,000 model calls and says so when it has older ones. A managed session shows its first 5,000 events and up to 2,000 model calls, and says so when there are more.
+- **With no stored body**, a row names its first tool, or reads LLM if it has none.
 
 ### List every call, conversation and session
 
@@ -358,14 +373,14 @@ response = oai.chat.completions.create(
 )
 ```
 
-Open **Agents** in the dashboard (Overview, Conversations, and Agents tabs) to browse them, or read the same data from the API. Each agent has a `key`: `agent:<X-Veri-Agent value>`, `deployment:<deployment id>` for threads sent without an agent name, or `env:<environment id>` for a [managed agent](/agents/environments). Eval calls are left out.
+Open **Agents** in the dashboard (Overview and Agents tabs, plus Monitors with evaluations on) for the rollups and **Traces** for the conversations themselves, or read the same data from the API. Each agent has a `key`: `agent:<X-Veri-Agent value>`, `deployment:<deployment id>` for threads sent without an agent name, or `env:<environment id>` for a [managed agent](/agents/environments). Eval calls are left out.
 
 | Endpoint | Returns |
 | --- | --- |
 | `GET /v1/observability/overview` | Totals, a zero-filled time series (each bucket also carries `tool_errors`, the failed tool calls of managed agent sessions), live counts, and the top tools, agents, and models. Filter with `agent` (a key) or `deployment_id`. |
 | `GET /v1/observability/agents` | One entry per agent: conversations, turns, model and tool calls, tokens, error rate, and a 14-day daily conversation count. |
 | `GET /v1/observability/conversations` | Threads (and managed agent sessions) with activity in the window, newest first. Filters: `agent`, `deployment_id`, `kind` (`thread` or `session`), `active`, `errors_only`, `q` (text search), `tool` and `model` (exact names, as the overview's top tools and top models list them; at most 200 characters). Page with `limit` (1-100, default 50) and `after` (the previous page's `next_cursor`). |
-| `GET /v1/deployments/{deployment_id}/threads/{thread_id}` | One thread, turn by turn: every model call and the tool calls between calls. Message text comes from stored [traces](#request-traces); `bodies` is `none` when the deployment does not capture them, and `unavailable` when the trace store did not answer (the turns still come from the request records; retry for the text). |
+| `GET /v1/deployments/{deployment_id}/threads/{thread_id}` | One thread, turn by turn: its latest 1,000 model calls and the tool calls between them. `truncated` is `true` when it has older calls, and `started_at` and `totals` then cover those 1,000 too. Message text comes from stored [traces](#request-traces); `bodies` is `none` when the deployment does not capture them, and `unavailable` when the trace store did not answer (the turns still come from the request records; retry for the text). |
 
 The window is `from` and `to` (RFC 3339), by default the past 24 hours, at most 30 days, starting no earlier than 2000-01-01. A `next_cursor` keeps the first page's window end, so page on without `to` (or repeat the same `to`): a different `to` with a cursor is a `400`.
 
@@ -520,7 +535,7 @@ Agent responses are only as complete as the telemetry window. Include the deploy
 | Metric | Meaning |
 | --- | --- |
 | TTFB | Request start until upstream response headers arrive |
-| TTFT | Request start until the first non-empty content or reasoning token |
+| TTFT | Request start until the first non-empty content token or tool call. On a model that thinks first, this includes its reasoning |
 | E2E latency | Request start until the response body or stream terminates |
 | Generation time | TTFT until stream completion |
 | TPOT | Generation time divided across reported output-token intervals |
