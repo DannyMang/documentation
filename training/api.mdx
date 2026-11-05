@@ -20,6 +20,7 @@ Reference for `/v1/training_jobs/*`. All endpoints require Bearer token auth (`A
 | `GET` | `/v1/training_jobs/{id}/metrics` | Sampled training metrics |
 | `POST` | `/v1/training_jobs/{id}/cancel` | Cancel a non-terminal job |
 | `DELETE` | `/v1/training_jobs/{id}` | Hard-delete a finished job (S3 + DB) |
+| `POST` | `/v1/training_jobs/bulk_delete` | Delete up to 1000 finished jobs ([bulk delete](/deployments/api#post-v1deploymentsbulkdelete)) |
 | `GET` | `/v1/training_jobs/{id}/model` | Presigned download URLs for the checkpoint files |
 | `GET` | `/v1/training_jobs/{id}/rewards/{index}/source` | The reward source a job was submitted with ([Reward functions](/training/reward-functions#viewing-a-jobs-reward)) |
 | `GET` | `/v1/training_jobs/{id}/files` | Every file a job was submitted with: reward sources, code archive, dependency file, entrypoint |
@@ -393,7 +394,7 @@ Cancel a non-terminal job. Cancellation is synchronous: Veri stops provisioning,
 
 ## DELETE /v1/training_jobs/\{id\}
 
-Hard-delete the job row + cascading metrics + events + S3 artifacts (logs, status files, checkpoints). Returns `{"id": "...", "object": "training_job", "deleted": true}`.
+Hard-delete the job row + cascading metrics + events + S3 artifacts (logs, status files, checkpoints). Returns `{"id": "...", "object": "training_job", "deleted": true}`. To delete many at once, use [bulk delete](/deployments/api#post-v1deploymentsbulkdelete): it runs these same constraints per job and never cancels a running one.
 
 **Constraints:**
 - Job must be in a terminal state (`completed`, `failed`, `cancelled`)

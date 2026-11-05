@@ -19,6 +19,9 @@ Reference for `/v1/deployments/*`. All endpoints require Bearer token auth (`Aut
 | `POST` | `/v1/deployments/{id}/replicas/{replica_id}/drain` | Retire one replica (scale in, or swap it with `replace=true`: launch first, drain second) |
 | `POST` | `/v1/deployments/{id}/wake` | Pre-warm a `scaled_to_zero` deployment (202, idempotent) |
 | `POST` | `/v1/deployments/{id}/stop` | Transition to `stopped` (permanent, idempotent) |
+| `POST` | `/v1/deployments/bulk_delete` | Delete up to 1000 deployments, stopping live ones first (dry run available) |
+| `GET` | `/v1/bulk_deletes/{id}` | A bulk delete's progress and the result of each id |
+| `POST` | `/v1/bulk_deletes/{id}/stop` | Halt what hasn't gone yet |
 | `POST` | `/v1/deployments/{id}/chat/completions` | OpenAI-compatible chat |
 | `POST` | `/v1/deployments/{id}/responses` | OpenAI Responses API (also at `/v1/deployments/{id}/v1/responses`) |
 | `GET` | `/v1/deployments/{id}/requests` | Request log |
@@ -271,6 +274,85 @@ Transition to `stopped`. This is permanent, not a pause: a stopped deployment ca
 final = client.deployments.stop(deployment_id)
 print(final.status)
 ```
+
+## POST /v1/deployments/bulk_delete {#post-v1deploymentsbulkdelete}
+
+Delete up to 1000 deployments in one call. The same route exists for [training jobs](/training/api#delete-v1training_jobsid), [datasets](/training/datasets#lifecycle) and [custom models](/deployments/custom-models): `POST /v1/training_jobs/bulk_delete`, `POST /v1/datasets/bulk_delete` and `POST /v1/models/bulk_delete`, with the same body and the same answer.
+
+```json
+{ "ids": ["5b0e7c2d9a14", "8f31c0d2b7e6"], "dry_run": false }
+```
+
+`ids` takes 1 to 1000 ids of at most 128 characters each. Duplicates collapse, keeping the first position. Set `dry_run` to `true` to see what would happen first.
+
+The work runs on the server: the call writes one durable item per id and answers `202`, so closing the client changes nothing. Partial failure never changes the HTTP status, it lives on each result. Read the batch with `GET /v1/bulk_deletes/{id}`.
+
+```json
+{
+  "id": "bd_9f2c41a0e7b3",
+  "object": "bulk_delete",
+  "resource": "dataset",
+  "dry_run": false,
+  "status": "running",
+  "counts": { "total": 4, "queued": 1, "deleting": 0, "deleted": 1, "failed": 1, "halted": 0, "not_found": 1, "already_queued": 0 },
+  "results": [
+    { "id": "ds_a", "status": "deleted" },
+    { "id": "ds_b", "status": "queued" },
+    {
+      "id": "ds_c",
+      "status": "failed",
+      "code": "job_uses_dataset",
+      "message": "Cannot delete dataset: 1 active training job(s) still use it.",
+      "blockers": [{ "type": "training_job", "id": "job_1", "name": "qwen-math-grpo-live" }],
+      "blocker_total": 1
+    },
+    { "id": "nope", "status": "not_found" }
+  ]
+}
+```
+
+`status` is `running` while any item is active, then `completed`. An id you don't own and an id that doesn't exist answer the same `not_found`. An id another running batch already holds is `already_queued`, with that batch's id in `message`, and is deleted once. Retrying a call is safe.
+
+### Dry run
+
+`"dry_run": true` answers `200`, writes nothing and calls no backend. `id` is null and `status` is `completed`. Each result is one of:
+
+| Status | Meaning |
+| --- | --- |
+| `would_delete` | A real call would delete it |
+| `would_stop_then_delete` | A live deployment: a real call stops it first |
+| `blocked` | Refused today, with `code`, `message` and `blockers` |
+| `not_found` | Missing or not yours |
+
+### Stop, then delete
+
+A live deployment, parked ones included, stops first. It stops answering right away and its hourly charge ends, then the server waits for the final bill to settle (usually about a minute) and deletes it. If a cloud cancel fails, the delete waits 200 seconds so the box cleanup still sees the replica. If the bill hasn't settled after 10 minutes the item fails with `billing_unsettled` and the deployment stays stopped; the bill still settles, and a retry deletes it.
+
+Training jobs are never stopped this way: a job that hasn't finished is `job_active`. Cancel it, or wait for it.
+
+### Reasons
+
+| Code | Resource | Why |
+| --- | --- | --- |
+| `billing_unsettled` | Deployment | The final bill didn't settle within 10 minutes |
+| `job_active` | Training job | The job hasn't finished |
+| `hf_export_running` | Training job, model | A Hugging Face export is still copying the weights |
+| `model_uses_weights` | Training job | A library model or version uses its final weights |
+| `deployment_uses_weights` | Training job | A deployment references the job |
+| `job_uses_dataset` | Dataset | An active training job reads it |
+| `experiment_pinned` | Dataset | An experiment is pinned to one of its snapshots |
+| `deployment_uses_model` | Model | A live deployment serves it |
+| `adapter_attached` | Model | It is attached to a deployment as an adapter |
+| `version_protected` | Model | An alias or pin protects its version |
+| `internal_error` | Any | Nothing was removed for this one. Retrying is safe |
+
+### Read and stop a batch
+
+`GET /v1/bulk_deletes/{id}` returns the same object with results in the order you sent them. `running` and `settling` items both read `deleting`. `POST /v1/bulk_deletes/{id}/stop` halts every item that hasn't gone yet and returns the batch; it is safe to repeat. An item being worked on right now finishes, and a deployment already stopped stays stopped. A batch that isn't yours is a `404`. Finished batches are kept for 7 days.
+
+### Errors and limits
+
+`400` with code `ids_required`, `too_many_ids`, `invalid_id` or `bulk_delete_disabled`. The `POST .../bulk_delete` routes have their own budget of 30 calls per window, answered with `429` and code `RATE_LIMITED`. Reading and stopping a batch count toward the regular budget. Session keys and deployment keys are refused.
 
 ## POST /v1/deployments/\{id\}/chat/completions {#post-v1deploymentsidchatcompletions}
 

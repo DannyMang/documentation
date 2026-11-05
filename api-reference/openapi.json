@@ -813,6 +813,94 @@
         ]
       }
     },
+    "/v1/bulk_deletes/{id}": {
+      "get": {
+        "tags": [
+          "Deployments"
+        ],
+        "summary": "Get a bulk delete",
+        "description": "The batch's progress and the result of each id, in the order they were given.",
+        "operationId": "get_batch",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Bulk delete id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The batch",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkDeleteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "bulk_delete_disabled"
+          },
+          "404": {
+            "description": "Not found or not owned by the caller"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/bulk_deletes/{id}/stop": {
+      "post": {
+        "tags": [
+          "Deployments"
+        ],
+        "summary": "Stop a bulk delete",
+        "description": "Halt every id that hasn't gone yet. One being worked on right now still finishes, and a deployment already stopped stays stopped. Safe to repeat.",
+        "operationId": "stop_batch",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Bulk delete id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The batch after the stop",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkDeleteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "bulk_delete_disabled"
+          },
+          "404": {
+            "description": "Not found or not owned by the caller"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/code_artifacts": {
       "post": {
         "tags": [
@@ -1024,6 +1112,59 @@
           },
           "409": {
             "description": "JSON create: a dataset with that name already exists"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/datasets/bulk_delete": {
+      "post": {
+        "tags": [
+          "Datasets"
+        ],
+        "summary": "Bulk delete datasets",
+        "description": "Delete up to 1000 datasets, with their rows, snapshots and uploaded files. A dataset an active job reads, or an experiment is pinned to, is refused.",
+        "operationId": "datasets",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkDeleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Dry run: what would happen to each id; nothing was written",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkDeleteResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Queued. Partial failure is per item, read the batch for progress",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkDeleteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "ids_required, too_many_ids, invalid_id or bulk_delete_disabled"
+          },
+          "429": {
+            "description": "Over the budget of 30 calls per window"
           }
         },
         "security": [
@@ -1736,6 +1877,59 @@
           },
           "503": {
             "description": "billing_unavailable: the workspace's billing account could not be checked; retry after Retry-After"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/deployments/bulk_delete": {
+      "post": {
+        "tags": [
+          "Deployments"
+        ],
+        "summary": "Bulk delete deployments",
+        "description": "Delete up to 1000 deployments. A live deployment stops first, then the server waits for its final bill to settle and deletes it. The work is durable: closing the client changes nothing.",
+        "operationId": "deployments",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkDeleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Dry run: what would happen to each id; nothing was written",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkDeleteResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Queued. Partial failure is per item, read the batch for progress",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkDeleteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "ids_required, too_many_ids, invalid_id or bulk_delete_disabled"
+          },
+          "429": {
+            "description": "Over the budget of 30 calls per window"
           }
         },
         "security": [
@@ -4515,6 +4709,59 @@
           },
           "501": {
             "description": "Source type not yet supported (huggingface, upload)"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/models/bulk_delete": {
+      "post": {
+        "tags": [
+          "Models"
+        ],
+        "summary": "Bulk remove models from the library",
+        "description": "Remove up to 1000 models from the library. A model a live deployment, a running Hugging Face export, an adapter attachment, an alias or a pin still needs is refused.",
+        "operationId": "models",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkDeleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Dry run: what would happen to each id; nothing was written",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkDeleteResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Queued. Partial failure is per item, read the batch for progress",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkDeleteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "ids_required, too_many_ids, invalid_id or bulk_delete_disabled"
+          },
+          "429": {
+            "description": "Over the budget of 30 calls per window"
           }
         },
         "security": [
@@ -8220,6 +8467,59 @@
         ]
       }
     },
+    "/v1/training_jobs/bulk_delete": {
+      "post": {
+        "tags": [
+          "Training jobs"
+        ],
+        "summary": "Bulk delete training jobs",
+        "description": "Delete up to 1000 finished training jobs, with their checkpoints and final weights. A job that is still running is refused with job_active, never cancelled.",
+        "operationId": "training_jobs",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkDeleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Dry run: what would happen to each id; nothing was written",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkDeleteResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Queued. Partial failure is per item, read the batch for progress",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkDeleteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "ids_required, too_many_ids, invalid_id or bulk_delete_disabled"
+          },
+          "429": {
+            "description": "Over the budget of 30 calls per window"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/v1/training_jobs/{job_id}": {
       "get": {
         "tags": [
@@ -11092,6 +11392,183 @@
               "string",
               "null"
             ]
+          }
+        }
+      },
+      "BulkDeleteBlocker": {
+        "type": "object",
+        "description": "What stands in the way of a delete. `kind` is the blocker's resource type,\nwhich is `type` on the wire.",
+        "required": [
+          "type",
+          "id"
+        ],
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "BulkDeleteCounts": {
+        "type": "object",
+        "required": [
+          "total",
+          "queued",
+          "deleting",
+          "deleted",
+          "failed",
+          "halted",
+          "not_found",
+          "already_queued"
+        ],
+        "properties": {
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "queued": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "deleting": {
+            "type": "integer",
+            "format": "int64",
+            "description": "A live deployment being stopped or waiting out its final bill reads as\ndeleting too."
+          },
+          "deleted": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "failed": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "halted": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "not_found": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "already_queued": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Ids another running batch already owns."
+          }
+        }
+      },
+      "BulkDeleteRequest": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The ids to delete, 1 to 1000, each at most 128 characters. Duplicates\ncollapse, keeping the first position."
+          },
+          "dry_run": {
+            "type": "boolean",
+            "description": "Classify each id and write nothing."
+          }
+        }
+      },
+      "BulkDeleteResponse": {
+        "type": "object",
+        "required": [
+          "object",
+          "resource",
+          "dry_run",
+          "status",
+          "counts",
+          "results"
+        ],
+        "properties": {
+          "id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The batch, to read or stop. Null on a dry run."
+          },
+          "object": {
+            "type": "string"
+          },
+          "resource": {
+            "type": "string",
+            "description": "deployment, training_job, dataset or model."
+          },
+          "dry_run": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string",
+            "description": "running while any item is active, then completed."
+          },
+          "counts": {
+            "$ref": "#/components/schemas/BulkDeleteCounts"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BulkDeleteResult"
+            }
+          }
+        }
+      },
+      "BulkDeleteResult": {
+        "type": "object",
+        "required": [
+          "id",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "description": "Dry run: would_delete, would_stop_then_delete, blocked or not_found. Real\nrun: queued, deleting, deleted, failed, halted, not_found or\nalready_queued."
+          },
+          "code": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The stable reason of a failed or blocked id."
+          },
+          "message": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Failed or blocked: what the single DELETE route says. already_queued: the\nbatch that owns the id."
+          },
+          "blockers": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/BulkDeleteBlocker"
+            },
+            "description": "What stands in the way, up to five."
+          },
+          "blocker_total": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
           }
         }
       },

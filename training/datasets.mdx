@@ -128,6 +128,8 @@ The same paging is available programmatically via `GET /v1/datasets/{dataset_id}
 Datasets persist until you delete them, either from the dashboard or via `DELETE /v1/datasets/{dataset_id}`. Deletion is blocked while an active training job still references the dataset.
 Deletion is also refused (`409`, naming the experiments) while an [experiment](/evals/experiments) is pinned to one of the dataset's snapshots.
 
+To delete many at once, use the Delete button on the dashboard's Datasets page or `POST /v1/datasets/bulk_delete` ([bulk delete](/deployments/api#post-v1deploymentsbulkdelete)). The same two rules apply per dataset, and the result says which one stopped it.
+
 ## Name conflicts
 
 Connecting a dataset under a `name` that already exists returns the existing dataset (`200`, same `id`) when the source matches: the same `source_type` and `huggingface_dataset`. A different source under that name is a `409` with `{"error": {"message": "Dataset '...' already exists with a different configuration. ..."}}`.

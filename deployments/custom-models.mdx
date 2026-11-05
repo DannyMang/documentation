@@ -74,6 +74,8 @@ veri models delete <model-id>
 Renaming changes only the library label. Removing a model from the library deletes only the registry entry: it never deletes the training checkpoint, and it does not interrupt a deployment that is already serving that checkpoint. A model with an active deployment cannot be removed until you stop the deployment.
 A model with a running [Hugging Face export](/training/huggingface) cannot be removed either (`409`, naming the export) until the export finishes or is cancelled.
 
+To remove many at once, use the Delete button on the dashboard's Models page or `POST /v1/models/bulk_delete` ([bulk delete](/deployments/api#post-v1deploymentsbulkdelete)). The same rules apply per model.
+
 ## Model states
 
 | State | Meaning |
