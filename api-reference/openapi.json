@@ -819,7 +819,7 @@
           "Deployments"
         ],
         "summary": "Get a bulk delete",
-        "description": "The batch's progress and the result of each id, in the order they were given.",
+        "description": "The batch's progress and the result of each id, in the order they were given. Works with bulk delete turned off, so a caller can see what was left. An item left unattended for an hour reads as halted with the code expired.",
         "operationId": "get_batch",
         "parameters": [
           {
@@ -843,9 +843,6 @@
               }
             }
           },
-          "400": {
-            "description": "bulk_delete_disabled"
-          },
           "404": {
             "description": "Not found or not owned by the caller"
           }
@@ -863,7 +860,7 @@
           "Deployments"
         ],
         "summary": "Stop a bulk delete",
-        "description": "Halt every id that hasn't gone yet. One being worked on right now still finishes, and a deployment already stopped stays stopped. Safe to repeat.",
+        "description": "Halt every id that hasn't gone yet. One being worked on right now halts before its next destructive step, or finishes if it is past that. A deployment already stopped stays stopped. Safe to repeat, and works with bulk delete turned off.",
         "operationId": "stop_batch",
         "parameters": [
           {
@@ -886,9 +883,6 @@
                 }
               }
             }
-          },
-          "400": {
-            "description": "bulk_delete_disabled"
           },
           "404": {
             "description": "Not found or not owned by the caller"
@@ -1162,6 +1156,9 @@
           },
           "400": {
             "description": "ids_required, too_many_ids, invalid_id or bulk_delete_disabled"
+          },
+          "422": {
+            "description": "An unknown field in the body"
           },
           "429": {
             "description": "Over the budget of 30 calls per window"
@@ -1927,6 +1924,9 @@
           },
           "400": {
             "description": "ids_required, too_many_ids, invalid_id or bulk_delete_disabled"
+          },
+          "422": {
+            "description": "An unknown field in the body"
           },
           "429": {
             "description": "Over the budget of 30 calls per window"
@@ -4759,6 +4759,9 @@
           },
           "400": {
             "description": "ids_required, too_many_ids, invalid_id or bulk_delete_disabled"
+          },
+          "422": {
+            "description": "An unknown field in the body"
           },
           "429": {
             "description": "Over the budget of 30 calls per window"
@@ -8473,7 +8476,7 @@
           "Training jobs"
         ],
         "summary": "Bulk delete training jobs",
-        "description": "Delete up to 1000 finished training jobs, with their checkpoints and final weights. A job that is still running is refused with job_active, never cancelled.",
+        "description": "Delete up to 1000 finished training jobs, with their checkpoints and final weights. A job that is still running is refused with job_active, never cancelled. A finished job waits for its final bill. A job with a refund waiting for review is refused with refund_pending.",
         "operationId": "training_jobs",
         "requestBody": {
           "content": {
@@ -8508,6 +8511,9 @@
           },
           "400": {
             "description": "ids_required, too_many_ids, invalid_id or bulk_delete_disabled"
+          },
+          "422": {
+            "description": "An unknown field in the body"
           },
           "429": {
             "description": "Over the budget of 30 calls per window"
@@ -8588,13 +8594,13 @@
             }
           },
           "400": {
-            "description": "Job is not in a terminal state"
+            "description": "Job is not in a terminal state, or its final billing settlement is still pending"
           },
           "404": {
             "description": "Not found"
           },
           "409": {
-            "description": "A library model, deployment or running Hugging Face export still uses the job's weights"
+            "description": "A library model, deployment or running Hugging Face export still uses the job's weights, or a refund on the job is waiting for review"
           }
         },
         "security": [
@@ -11468,6 +11474,7 @@
       },
       "BulkDeleteRequest": {
         "type": "object",
+        "description": "An unknown field is refused, not ignored: a misspelled `dry_run` must not turn a\ndry run into a real delete.",
         "properties": {
           "ids": {
             "type": "array",
@@ -11480,7 +11487,8 @@
             "type": "boolean",
             "description": "Classify each id and write nothing."
           }
-        }
+        },
+        "additionalProperties": false
       },
       "BulkDeleteResponse": {
         "type": "object",
@@ -11551,7 +11559,7 @@
               "string",
               "null"
             ],
-            "description": "Failed or blocked: what the single DELETE route says. already_queued: the\nbatch that owns the id."
+            "description": "Failed or blocked: what the single DELETE route says. already_queued: the\nbatch that owns the id. halted with the code `expired`: why it wasn't done."
           },
           "blockers": {
             "type": [
