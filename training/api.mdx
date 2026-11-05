@@ -102,7 +102,7 @@ Create a job. Returns immediately with status `queued`.
 - `402 Payment Required`: no billing account is linked to the workspace yet (see [Billing](/billing)).
 - `404 Not Found`: `dataset_id` doesn't exist in your workspace.
 - `422 Unprocessable Entity`: the body is not valid JSON for this schema (for example a missing `output_name`). This body is plain text, not JSON.
-- `429 Too Many Requests`: code `CONCURRENT_JOB_LIMIT` when the workspace already has its maximum of in-flight jobs (4 by default; failed, completed and cancelled jobs don't count). Wait for one to finish or cancel one, then resubmit. Code `RATE_LIMITED` (with a `Retry-After` header and `retry_after_seconds`) when the API key exceeds its request rate.
+- `429 Too Many Requests`: code `CONCURRENT_JOB_LIMIT` when the workspace already has its maximum of in-flight jobs (4 on the Free plan, 8 on [Pro](/billing#plans); failed, completed and cancelled jobs don't count). Wait for one to finish or cancel one, then resubmit. Code `RATE_LIMITED` (with a `Retry-After` header and `retry_after_seconds`) when the API key exceeds its request rate.
 - `503 Service Unavailable`: code `billing_unavailable` when the billing account could not be checked; retry after the `Retry-After` header (`retry_after_seconds` in the body).
 
 **Response** (`TrainingJobResponse`, `201`). `hyperparameters` echoes every field of the method's schema (see the note under [GRPOHyperparameters](#hyperparameter-schemas) about echoed defaults):

@@ -154,7 +154,7 @@ Every finished execution fires `trigger.execution.succeeded` or `trigger.executi
 - **Balance.** A firing in a workspace whose credit balance is exhausted fails at once with `insufficient_balance` instead of starting a sandbox.
 - **Timeout.** A run still going after 1 hour fails with `timeout` and its `fresh` session is ended.
 - **Auto-pause.** Five failed executions in a row pause the trigger (`paused_reason` says so); a success resets the count, and `resume` resets it too.
-- **Limits.** 10 active triggers per workspace. Executions are kept for 30 days (also the window in which a provider redelivery is recognized as a duplicate).
+- **Limits.** 10 active triggers per workspace on the Free plan, and 25 on [Pro](/billing#plans). Executions are kept for 30 days (also the window in which a provider redelivery is recognized as a duplicate).
 - **Deleting.** Deleting an environment pauses its triggers. Deleting a trigger deletes its executions and ends a `fresh` session still running for it.
 
 ## Failures
