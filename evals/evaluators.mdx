@@ -228,7 +228,7 @@ client.scores.list(evaluator="resolved", min_value=0, max_value=1)  # a numeric 
 client.scores.list(max_confidence=0.5)                              # judges that were unsure
 ```
 
-The same filters narrow the dashboard's conversations, and a monitor with `review_below_confidence` and `review_queue_id` sends every target whose verdict falls below that confidence to an [annotation queue](/evals/human-review) for a person to check.
+The same filters narrow `GET /v1/observability/conversations` (`evaluator`, `label`, `min_score`, `max_score`, `min_confidence`, `max_confidence`). The dashboard's Traces page shows scores but can't filter by them yet. A monitor with `review_below_confidence` and `review_queue_id` sends every target whose verdict falls below that confidence to an [annotation queue](/evals/human-review) for a person to check.
 
 ## Threads
 

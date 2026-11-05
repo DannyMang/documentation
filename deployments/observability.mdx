@@ -286,7 +286,7 @@ Details worth knowing:
 
 ### The Traces page
 
-**Traces** in the dashboard sidebar shows every model call, conversation and managed session in one list, for the past 24 hours by default and up to 30 days. Filter by deployment, kind, status, agent, model or tool, or search by id, thread or text. Rows on Analytics, the deployment page, Conversations, Sessions and Monitors open here.
+**Traces** in the dashboard sidebar shows every model call, conversation and managed session in one list, for the past 24 hours by default and up to 30 days. Filter by deployment, kind, status, agent, model or tool, or search by id, thread or text. Rows on Analytics, the deployment page and the Agents pages open here.
 
 **Capture**, at the top of the page, turns capture on or off for each deployment and sets its retention, as does the deployment page. The change applies from the next call, and it asks you to confirm first because capture stores what your end users send.
 
@@ -373,7 +373,7 @@ response = oai.chat.completions.create(
 )
 ```
 
-Open **Agents** in the dashboard (Overview, Conversations, and Agents tabs) to browse them, or read the same data from the API. Each agent has a `key`: `agent:<X-Veri-Agent value>`, `deployment:<deployment id>` for threads sent without an agent name, or `env:<environment id>` for a [managed agent](/agents/environments). Eval calls are left out.
+Open **Agents** in the dashboard (Overview and Agents tabs, plus Monitors with evaluations on) for the rollups and **Traces** for the conversations themselves, or read the same data from the API. Each agent has a `key`: `agent:<X-Veri-Agent value>`, `deployment:<deployment id>` for threads sent without an agent name, or `env:<environment id>` for a [managed agent](/agents/environments). Eval calls are left out.
 
 | Endpoint | Returns |
 | --- | --- |

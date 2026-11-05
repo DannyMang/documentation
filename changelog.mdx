@@ -7,7 +7,7 @@ keywords: ["changelog", "releases", "platform updates"]
 
 ## 2026-11-04: the Traces page, and long conversations you can read
 
-- **Traces** in the dashboard lists every model call, conversation and managed session in one place, and rows on Analytics, deployment pages, Conversations, Sessions and Monitors open there. You can turn capture on or off for a live deployment from that page. See [The Traces page](/deployments/observability#the-traces-page).
+- **Traces** in the dashboard lists every model call, conversation and managed session in one place, and rows on Analytics, deployment pages and the Agents pages open there. It replaces the Conversations tab under Agents. You can turn capture on or off for a live deployment from that page. See [The Traces page](/deployments/observability#the-traces-page).
 - A conversation of up to 8 turns lists its turns as rows. At 9 or more, each turn is a bar on a latency map you can zoom, search and filter to failed turns, with jumps to the next failed and the slowest. A turn with more than 8 steps gets the same map for its steps.
 - A conversation over 1,000 model calls now says so instead of silently leaving out the oldest: `GET /v1/deployments/{id}/threads/{thread_id}` returns `truncated`, and the dashboard shows a line. Managed sessions say so when they pass 5,000 events or 2,000 model calls.
 
