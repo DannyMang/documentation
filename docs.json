@@ -70,7 +70,6 @@
               "training/multi-gpu",
               "training/wandb",
               "training/huggingface",
-              "training/sharing",
               "training/examples",
               "training/api"
             ]
@@ -223,6 +222,9 @@
               "GET /v1/training_jobs/{job_id}/model",
               "GET /v1/training_jobs/{job_id}/rewards/{index}/source",
               "GET /v1/training_jobs/{job_id}/files",
+              "GET /v1/training_jobs/{job_id}/checkpoints",
+              "GET /v1/training_jobs/{job_id}/checkpoints/{ckpt_id}",
+              "GET /v1/training_jobs/{job_id}/checkpoints/{ckpt_id}/download",
               "GET /v1/training_jobs/{job_id}/trajectories",
               "GET /v1/training_jobs/{job_id}/trajectories/{trajectory_id}/download",
               "POST /v1/training_jobs/{job_id}/publish",
@@ -436,6 +438,7 @@
               "GET /v1/billing/transactions",
               "GET /v1/billing/burn_rate",
               "GET /v1/cost/by_day",
+              "GET /v1/plans",
               "POST /v1/credits/redeem"
             ]
           },
@@ -579,6 +582,10 @@
     ]
   },
   "redirects": [
+    {
+      "source": "/training/sharing",
+      "destination": "/training"
+    },
     {
       "source": "/training/providers/hotaisle",
       "destination": "/training/providers"

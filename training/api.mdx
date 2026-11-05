@@ -24,7 +24,7 @@ Reference for `/v1/training_jobs/*`. All endpoints require Bearer token auth (`A
 | `GET` | `/v1/training_jobs/{id}/rewards/{index}/source` | The reward source a job was submitted with ([Reward functions](/training/reward-functions#viewing-a-jobs-reward)) |
 | `GET` | `/v1/training_jobs/{id}/files` | Every file a job was submitted with: reward sources, code archive, dependency file, entrypoint |
 | `GET` | `/v1/training_jobs/{id}/trajectories` | Trajectory archive of a `grpo_harness` job ([Harness training](/training/harness)) |
-| `POST`, `DELETE` | `/v1/training_jobs/{id}/publish` | Publish or unpublish a run ([Sharing runs](/training/sharing)) |
+| `POST`, `DELETE` | `/v1/training_jobs/{id}/publish` | Set a run's `visibility`. Veri no longer has a public run page or an Explore tab, so the `public_url` this returns does not open. A published run is still readable from `GET /v1/public/runs` |
 
 Worker-only endpoints (used by the runner agent, authenticated via per-job `callback_token`): `POST /status`, `POST /presigned-upload`, `POST /logs/presigned-upload`. Documented in the worker-callbacks appendix at the bottom.
 

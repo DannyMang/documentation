@@ -5,7 +5,7 @@ description: "Use Veri-managed GRPO, SFT, and DPO loops. Veri owns the trainer, 
 keywords: ["managed training", "GRPO", "SFT", "DPO", "post-training", "reward functions", "checkpoints"]
 ---
 
-Managed training on Veri is **dataset + base model → trained checkpoint**. You submit a training job; Veri provisions the GPU, runs the loop, streams metrics, and uploads the result. You either download the checkpoint or [deploy it](/deployments) directly.
+Managed training on Veri is **dataset + base model → trained checkpoint**. You submit a training job from the CLI, the API, the SDK or an agent (the dashboard has no form for it); Veri provisions the GPU, runs the loop, streams metrics, and uploads the result. You either download the checkpoint or [deploy it](/deployments) directly.
 
 The training method you pick decides how outputs are scored. GRPO takes a [reward function](/training/reward-functions); SFT and DPO learn directly from examples or preference pairs. For the smallest end-to-end run, see the [Managed GRPO quickstart](/demos/managed-grpo-quickstart) — one decorated reward and one command.
 
