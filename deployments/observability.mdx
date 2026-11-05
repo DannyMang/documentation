@@ -195,8 +195,9 @@ Engine charts (queue depth, KV cache, throughput, GPU readings) come from the GP
 | Per-request telemetry (`requests` rows, which feed `metrics` and `metrics/timeseries`) | 90 days; 400 days on deployments with `trace_retention: extended` |
 | Engine samples (`metrics/engine-timeseries`) | 30 days, the longest range the charts accept |
 | Lifetime counters (`total_requests` and token totals) | The life of the deployment |
+| Stored [trace bodies](#request-traces) | 14 days, or 400 on `trace_retention: extended`. Failed calls: 14 days either way |
 
-Older rows are deleted automatically. Deleting a deployment removes all of it at once.
+Older rows are deleted automatically. Deleting a deployment removes its telemetry, engine samples and counters at once. Stored trace bodies are not removed with it: they expire on their retention schedule, and until then Veri no longer lists or returns them.
 
 See the interactive [API reference](/api-reference/introduction) for complete response schemas.
 
@@ -224,7 +225,7 @@ curl -X PATCH "https://api.veri.studio/v1/deployments/$DEPLOYMENT_ID" \
   -d '{"trace_bodies": true}'
 ```
 
-Browse traces from the deployment page in the dashboard, the CLI, or the API:
+Browse traces on the [Traces page](#the-traces-page) in the dashboard, or from the CLI or the API:
 
 ```bash
 veri deployments traces $DEPLOYMENT_ID --page 1 --limit 20
@@ -267,8 +268,8 @@ Details worth knowing:
   trace store is unavailable, requests are unaffected and the affected traces are
   dropped.
 - **Streaming.** Streamed (`stream: true`) responses are captured once the stream
-  completes: content, reasoning, tool calls, and finish reason are assembled into
-  one response. A stream that is cut off or errors is captured as a failed call. A
+  completes: content, tool calls, and finish reason are assembled into one response.
+  A streamed reply's reasoning is not stored yet; a buffered reply's is. A stream that is cut off or errors is captured as a failed call. A
   stream over 1 MiB is not captured; the request still appears in request telemetry.
 - **Threads.** Send the same `X-Veri-Thread-Id` header (1-128 characters of
   `A-Z a-z 0-9 . _ : -`) on every request of a conversation to group its traces
@@ -282,6 +283,20 @@ Details worth knowing:
   [dataset stream](/training/dataset-streams#import-request-traces) as `chat`
   or `prompt` rows (`veri datasets import-traces`), snapshotted, and trained
   on — production traffic feeding the next fine-tune.
+
+### The Traces page
+
+**Traces** in the dashboard sidebar shows every model call, conversation and managed session in one list, for the past 24 hours by default and up to 30 days. Filter by deployment, kind, status, agent, model or tool, or search by id, thread or text. Rows on Analytics, the deployment page, Conversations, Sessions and Monitors open here.
+
+**Capture**, at the top of the page, turns capture on or off for each deployment and sets its retention, as does the deployment page. The change applies from the next call, and it asks you to confirm first because capture stores what your end users send.
+
+Open a row to read the call, or a conversation turn by turn. **Score** and **Add to dataset** are on the row's detail.
+
+- **Up to 8 turns** list as rows you open in place.
+- **9 turns or more** draw as a latency map, one bar per turn. The map starts on the first 10 turns, with stops at 10, 25, 50 and All, and a window you can drag. Search and **Only failed** narrow the bars; **Previous failed**, **Next failed** and **Slowest** jump to one.
+- **A turn with more than 8 steps** gets the same map for its steps, searched by tool name.
+- **A very long conversation** shows its latest 1,000 model calls and says so when it has older ones. A managed session shows its first 5,000 events and up to 2,000 model calls, and says so when there are more.
+- **With no stored body**, a row names its first tool, or reads LLM if it has none.
 
 ### List every call, conversation and session
 

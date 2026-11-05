@@ -57,7 +57,7 @@ Outside a terminal (scripts, CI) the prompt is skipped and caching stays off unl
 | `bench <id>` | Load-test the endpoint; report TTFB/TTFT/ITL/TPS/e2e at p50/p90/p99. |
 | `metrics <id>` | RPS, latency, GPU utilization. |
 | `requests <id>` | Recent inference requests. |
-| `traces <id>` | Captured request traces (deployments created with `--trace-bodies`). |
+| `traces <id>` | Captured request traces (deployments with [capture](/deployments/observability#request-traces) on). |
 | `trace <id> <trace-id>` | One trace with its full request/response bodies. |
 
 ## Create from a config
@@ -252,8 +252,8 @@ veri deployments requests 5b0e7c2d9a14 --limit 50
 veri deployments requests 5b0e7c2d9a14 --after 7c41e09ab2d3 --limit 100   # pagination
 ```
 
-Request traces (deployments created with `--trace-bodies` — see the
-[traces guide](/deployments/observability#request-traces)):
+Request traces, on a deployment with capture on (`--trace-bodies` at create, or [turned on later](/deployments/api#turn-trace-capture-on-or-off) from the dashboard or `PATCH /v1/deployments/{id}`; there is no CLI flag for that yet). See the
+[traces guide](/deployments/observability#request-traces):
 
 ```bash
 veri deployments traces 5b0e7c2d9a14 --page 1 --limit 20

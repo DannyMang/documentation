@@ -23,7 +23,7 @@ The `veri datasets` group covers every dataset operation: upload local JSONL, co
 | `tombstone <name> <row>` | Remove a row from snapshots cut from now on (`--reason` required). |
 | `snapshot <name> [--note]` | Cut an immutable snapshot at the current head. |
 | `diff <name> <a> [<b>]` | Rows added, superseded, and tombstoned between two snapshots (default `b` is the live head). |
-| `import-traces <name>` | Import a window of a deployment's request traces as rows (`--score-evaluator` with `--passed`/`--failed`/`--min-score`/`--max-score` keeps only scored traces). See [Import request traces](/training/dataset-streams#import-request-traces). |
+| `import-traces <name>` | Import a window of a deployment's request traces as rows. See [Import traces](#import-traces). |
 
 ## Upload a local JSONL
 
@@ -145,6 +145,34 @@ veri datasets diff acme-feedback snap-1     # snap-1 vs the live head
 ```
 
 Every stream command accepts the dataset's name or id. `snapshot --quiet` prints the pinned `<id>@snap-N` reference for scripting. Pass a second snapshot to `diff` (`snap-1 snap-2`) once you have cut one.
+
+## Import traces
+
+`import-traces` takes a time window of one deployment's stored traces and appends them as rows on a stream:
+
+```bash
+veri datasets import-traces acme-feedback \
+  --deployment 7c41e2a9b0d3 \
+  --from 2026-09-11T00:00:00Z --to 2026-09-18T00:00:00Z \
+  --snapshot
+```
+
+| Flag | Purpose |
+| --- | --- |
+| `--deployment`, `-d` | The deployment to read. Required. |
+| `--from`, `--to` | The window, ISO 8601. Both required, at most 31 days. |
+| `--format`, `-f` | `chat` (request and reply) or `prompt` (request only). Default: the stream's format. |
+| `--model-version` | Only traces answered by this model version. |
+| `--limit` | Most rows to import. Default and cap: 10,000. |
+| `--snapshot` | Cut a snapshot right after the append. |
+| `--force` | Import even if the window overlaps an earlier import. |
+| `--score-evaluator NAME[@N]` | Only traces with an `ok` score from this evaluator. Narrow it with `--passed`, `--failed`, `--min-score` or `--max-score`. |
+
+<Warning>
+  A window takes every captured trace on the deployment, whoever made the call. On a deployment that several people or apps share, it takes everyone's chats.
+</Warning>
+
+The CLI and `client.datasets.import_traces` only take a window. To import one conversation or one call, use the REST route with `thread_id` or `request_id`: see [Import one conversation](/training/dataset-streams#import-one-conversation). It is also what **Add to dataset** does on the dashboard's Traces page.
 
 ## Exit codes
 
