@@ -6765,11 +6765,17 @@
           "400": {
             "description": "Invalid request or managed agents disabled"
           },
+          "402": {
+            "description": "No billing account is linked to this workspace"
+          },
           "404": {
             "description": "Environment (or version) not in this workspace"
           },
           "501": {
             "description": "No sandbox backend configured"
+          },
+          "503": {
+            "description": "The workspace's billing account could not be verified; retry"
           }
         },
         "security": [
@@ -7422,6 +7428,9 @@
           "400": {
             "description": "count outside 1..=4, invalid budget, or managed agents disabled"
           },
+          "402": {
+            "description": "No billing account is linked to this workspace"
+          },
           "404": {
             "description": "Session or checkpoint not found in this workspace"
           },
@@ -7433,6 +7442,9 @@
           },
           "501": {
             "description": "No sandbox backend configured, or it does not support checkpoints"
+          },
+          "503": {
+            "description": "The workspace's billing account could not be verified; retry"
           }
         },
         "security": [

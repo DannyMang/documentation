@@ -155,7 +155,7 @@ Every finished execution fires `trigger.execution.succeeded` or `trigger.executi
 - **Timeout.** A run still going after 1 hour fails with `timeout` and its `fresh` session is ended.
 - **Auto-pause.** Five failed executions in a row pause the trigger (`paused_reason` says so); a success resets the count, and `resume` resets it too.
 - **Limits.** 10 active triggers per workspace on the Free plan, and 25 on [Pro](/billing#plans). Executions are kept for 30 days (also the window in which a provider redelivery is recognized as a duplicate).
-- **Deleting.** Deleting an environment pauses its triggers. Deleting a trigger deletes its executions and ends a `fresh` session still running for it.
+- **Deleting.** Deleting an environment pauses its triggers. Deleting a trigger deletes its executions and ends a `fresh` session still running for it. Deleting the workspace or account deletes its triggers; a signed delivery to one then answers `404`.
 
 ## Failures
 
@@ -163,6 +163,8 @@ Every finished execution fires `trigger.execution.succeeded` or `trigger.executi
 | --- | --- |
 | `concurrent_session_limit` | The workspace stayed at its session limit for 3 minutes. |
 | `insufficient_balance` | The workspace's credit balance is exhausted. |
+| `billing_unavailable` | The workspace's billing account could not be checked for 3 minutes. |
+| `session_create_failed: ...` | The session could not be started, for example because no billing account is linked to the workspace. |
 | `session_busy` | The `reuse` session was busy with another run for 3 minutes. |
 | `reuse_session_gone` | The `reuse` session ended or failed; the trigger is paused. |
 | `environment_not_found` | The environment was deleted; the trigger is paused. |
