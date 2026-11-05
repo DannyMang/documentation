@@ -999,6 +999,9 @@
           "400": {
             "description": "Missing or malformed code"
           },
+          "403": {
+            "description": "A team-scoped API key named a workspace other than its own (`team_key_scope`)"
+          },
           "404": {
             "description": "Code not found"
           },
@@ -3518,6 +3521,9 @@
           },
           "400": {
             "description": "Invalid definition, an environment that asks for approval, or triggers disabled"
+          },
+          "403": {
+            "description": "The trigger would reuse a session that holds another member's GitHub token (`github_token_scope`)"
           },
           "404": {
             "description": "Environment (or reuse session) not in this workspace"
@@ -6897,6 +6903,9 @@
           "400": {
             "description": "Session ops disabled"
           },
+          "403": {
+            "description": "The session holds another member's GitHub token (`github_token_scope`): only its creator or a workspace owner can drive it"
+          },
           "404": {
             "description": "Not found in this workspace"
           },
@@ -7113,6 +7122,9 @@
           "400": {
             "description": "Unknown event type, missing text, or managed agents disabled"
           },
+          "403": {
+            "description": "`user.message` or `user.approval` on a session that holds another member's GitHub token (`github_token_scope`): only its creator or a workspace owner can send them"
+          },
           "404": {
             "description": "Not found in this workspace"
           },
@@ -7169,6 +7181,9 @@
           },
           "400": {
             "description": "Invalid argv, cwd outside /workspace, bad env or timeout, or session ops disabled"
+          },
+          "403": {
+            "description": "The session holds another member's GitHub token (`github_token_scope`): only its creator or a workspace owner can drive it"
           },
           "404": {
             "description": "Not found in this workspace"
@@ -7235,6 +7250,9 @@
           "400": {
             "description": "Path outside /workspace, or session ops disabled"
           },
+          "403": {
+            "description": "The session holds another member's GitHub token (`github_token_scope`): only its creator or a workspace owner can drive it"
+          },
           "404": {
             "description": "Session not found in this workspace, or no such path"
           },
@@ -7295,6 +7313,9 @@
           },
           "400": {
             "description": "Path outside /workspace, not a regular file, or session ops disabled"
+          },
+          "403": {
+            "description": "The session holds another member's GitHub token (`github_token_scope`): only its creator or a workspace owner can drive it"
           },
           "404": {
             "description": "Session not found in this workspace, or no such file"
@@ -7368,6 +7389,9 @@
           "400": {
             "description": "Path outside /workspace, a directory, or session ops disabled"
           },
+          "403": {
+            "description": "The session holds another member's GitHub token (`github_token_scope`): only its creator or a workspace owner can drive it"
+          },
           "404": {
             "description": "Not found in this workspace"
           },
@@ -7430,6 +7454,9 @@
           },
           "402": {
             "description": "No billing account is linked to this workspace"
+          },
+          "403": {
+            "description": "The session holds another member's GitHub token (`github_token_scope`): only its creator or a workspace owner can fork it"
           },
           "404": {
             "description": "Session or checkpoint not found in this workspace"
@@ -7540,6 +7567,9 @@
           },
           "400": {
             "description": "Port outside 1024..=65535, ttl_s outside 60..=86400, or session ops disabled"
+          },
+          "403": {
+            "description": "The session holds another member's GitHub token (`github_token_scope`): only its creator or a workspace owner can drive it"
           },
           "404": {
             "description": "Not found in this workspace"
@@ -9490,7 +9520,7 @@
           "Triggers"
         ],
         "summary": "Update a trigger",
-        "description": "Changes the name, schedule, prompt, session mode, budget or output. `kind` and `provider` cannot change. A schedule change recomputes the next firing from now.",
+        "description": "Changes the name, schedule, prompt, session mode, budget or output. `kind` and `provider` cannot change. A schedule change recomputes the next firing from now. A trigger that runs with a member's GitHub token (a fresh trigger on a `github_auth` environment runs with its creator's; a reuse trigger with its session's) can be changed only by that member or a workspace owner.",
         "operationId": "update",
         "parameters": [
           {
@@ -9526,6 +9556,9 @@
           },
           "400": {
             "description": "Invalid definition"
+          },
+          "403": {
+            "description": "The trigger runs with another member's GitHub token (`github_token_scope`): only that member or a workspace owner can change it"
           },
           "404": {
             "description": "Not found in this workspace"

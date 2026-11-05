@@ -89,4 +89,6 @@ Coming soon. Putting a port inside the sandbox on a shareable URL (`veri session
 
 <Note>
 Coming soon. Giving every session started from an environment the GitHub access of the person who starts it (`github_auth = true` on the [environment](/agents/environments)) is not available yet; until it launches, an environment with `github_auth = true` is rejected with `400`.
+
+A session with GitHub access acts on GitHub as the person who started it, so only they or a workspace owner can run commands in it, use its files, attach to it, open its ports, fork it, or send it messages and approvals (anyone else gets `403` with code `github_token_scope`). Teammates can still watch it, interrupt a run, pause it and end it. Likewise, only that person or a workspace owner can create or edit a [trigger](/agents/triggers) that would run with their GitHub access.
 </Note>

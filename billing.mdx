@@ -140,7 +140,7 @@ curl -s https://api.veri.studio/v1/credits/redeem \
   -d '{"code": "VERI-XXXX-XXXX-XXXX-XXXX", "workspace_id": "<workspace id>"}'
 ```
 
-You must be a member of the target workspace. Omitting `workspace_id` credits the active workspace.
+You must be a member of the target workspace. Omitting `workspace_id` credits the active workspace. An API key created inside a team workspace credits only that workspace: naming any other returns `403` with code `team_key_scope`, so use a personal key or the dashboard for that.
 
 Each code can be redeemed once. Codes are issued in batches (one per event or promotion), and each batch allows one code per account and one per workspace. A second code from the same batch returns `409` with "You already redeemed a code from this batch.", or "This workspace already redeemed a code from this batch." when a teammate already redeemed one into that workspace. Codes from different batches stack.
 
