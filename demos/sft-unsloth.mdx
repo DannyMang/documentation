@@ -69,7 +69,7 @@ If your [W&B account is connected](/training/wandb) (`veri wandb set`, one time)
 print(client.training_jobs.get(job.id).wandb_run_url)  # https://wandb.ai/<you>/veri-training/runs/<run-id>
 ```
 
-The dashboard's job page shows the same link as a "View in W&B" button. Not connected? Metrics still stream to Veri's native charts on the job page.
+The dashboard's job page shows the same link as a **W&B run** button. Not connected? Metrics still stream to Veri's native charts on the job page.
 
 ## What the hyperparameters do
 
@@ -79,7 +79,7 @@ Each key in `hyperparameters` is one setting from the notebook. Veri's worker ru
 | --- | --- |
 | `learning_rate: 2e-4` | AdamW step size. Higher than a full finetune because you are only training small LoRA adapters. |
 | `max_steps: 60` | Caps the run at 60 gradient steps for a fast smoke test. Remove it and set `num_epochs: 1` for a full pass over the data (see [how many steps is one epoch](#how-many-steps-is-one-epoch) below). |
-| `max_seq_length: 2048` | Token ceiling per example, measured after the chat template renders. Longer sequences are truncated; shorter ones are padded up for the batch. The main memory lever (see [the example](#sequence-length-by-example) below). |
+| `max_seq_length: 2048` | Token ceiling per example, measured after the chat template renders. Longer rows lose their end, shorter ones are padded up for the batch. Longer rows use more GPU memory, but [check row length](/training/sft#check-row-length) before you lower this (see [the example](#sequence-length-by-example) below). |
 | `lora_rank: 32` | Train rank-32 LoRA adapters instead of the full model (the notebook's `get_peft_model(r=32)`). |
 | `lora_alpha: 32` | LoRA scaling factor. Defaults to `lora_rank` when unset. |
 | `load_in_4bit: true` | QLoRA: load the base in 4-bit NF4 and train adapters on top, so a 4B model fits on one GPU. |
@@ -103,7 +103,7 @@ For this demo, FineTome-100k has about 100,000 examples. The job sets no batch k
 `max_seq_length` caps the tokenized conversation after the chat template renders it to text, not characters or the number of turns. As a rough guide, one token is about three-quarters of an English word.
 
 - A short exchange ("What color is the sky?" / "It is blue.") renders to roughly 30 tokens, trains in full, and is padded up to the longest example in its batch.
-- A long multi-turn conversation that tokenizes to 3,000 tokens is truncated to the first 2,048; the tail (often the final assistant answer) is dropped. Raise `max_seq_length` when your data runs long, at the cost of more GPU memory.
+- A long multi-turn conversation that tokenizes to 3,000 tokens is truncated to the first 2,048; the tail (often the final assistant answer) is dropped, nothing warns you, and the job still reports success. [Count your rows](/training/sft#check-row-length) and raise `max_seq_length` when your data runs long, at the cost of more GPU memory.
 
 Veri handles the notebook's data prep for you, so `standardize_data_formats`, `get_chat_template`, and `formatting_prompts_func` have no equivalent here (see the note below). Batch size, warmup, and optimizer settings use Veri's defaults. The notebook's `train_on_responses_only` step is not exposed on the managed path, so loss is computed on the full conversation; use the [custom-script variant](#run-the-same-recipe-as-a-custom-script) if you need response-only loss.
 

@@ -15,7 +15,7 @@ The training method you pick decides how outputs are scored. GRPO takes a [rewar
 | --- | --- | --- |
 | `grpo` | Single-turn RL for LLMs: the model generates one completion and your reward function scores it. | [TRL GRPOTrainer](https://huggingface.co/docs/trl/grpo_trainer) (Unsloth-accelerated when enabled) |
 | `grpo_agentic` | Multi-turn agentic RL for LLMs: the model acts in an environment across turns and reward comes from the environment outcome. **Not currently available** while the agentic engine is rebuilt. | Rebuilding |
-| `sft_text` | Supervised finetuning for LLMs on text or chat data, learning directly from your labeled completions. | [TRL SFTTrainer](https://huggingface.co/docs/trl/sft_trainer) |
+| `sft_text` | Supervised training for LLMs on text or chat data, learning directly from your rows. See [what the loss trains on](/training/sft#what-the-loss-trains-on). | [TRL SFTTrainer](https://huggingface.co/docs/trl/sft_trainer) |
 | `dpo` | Preference tuning for LLMs on chosen/rejected pairs, with no reward function. | [TRL DPOTrainer](https://huggingface.co/docs/trl/dpo_trainer) |
 
 GRPO is the default. All methods support [LoRA and QLoRA](/training/grpo#lora-and-qlora).
@@ -74,7 +74,7 @@ When a job ends in `failed`, `error.code` carries one of:
 | `worker_failed` | The worker on the instance stopped reporting for more than 15 minutes (900 s), or the instance ended before the worker reported a result (the machine ran out of memory, the worker was killed, or the host went away). For a silent worker the message names how long it was silent and the last status and step it reported | Re-submit, or resume from the newest checkpoint with `resume_from` (`veri jobs resume <id>`); if it repeats, report the job id |
 | `training_error` | Worker crash, reward function error, or dataset loading error (generic catch-all) | Read `error.message` + the full log via `GET /v1/training_jobs/{id}/logs/full` |
 | `distributed_error` | Multi-GPU job: the GPUs stopped talking to each other (NCCL error, collective timeout, rendezvous failure) | Re-submit once; if it repeats on the same configuration, report the job id. See [Multi-GPU training](/training/multi-gpu) |
-| `training_stalled` | Multi-GPU job: no progress line for the longer of 10 minutes and three times the median step time | Check the log tail (it carries each GPU's stack); lower `micro_batch_size` or the sequence length |
+| `training_stalled` | Multi-GPU job: no progress line for the longer of 10 minutes and three times the median step time | Check the log tail (it carries each GPU's stack); lower `micro_batch_size` or, after you [check row length](/training/sft#check-row-length), the sequence length |
 | `hardware_error` | The box failed a hardware check (missing GPU, memory errors) | Re-submit; this one is on the platform |
 | `upload_failed` | Training finished, but files of the final model could not be uploaded to Veri storage. The job fails rather than completing with missing weights; `error.message` names each file and why | Re-submit; this one is on the platform, and the run is reviewed for a credit |
 | `provider_reclaimed` | GCP deleted or stopped the VM (host error, host maintenance, preemption) before the job finished. Credited back automatically | Resume from the newest checkpoint with `resume_from` (`veri jobs resume <id>`) |

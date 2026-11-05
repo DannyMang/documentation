@@ -77,8 +77,8 @@ job.download(output_dir="./checkpoints")
 | `max_steps` | `null` | Total gradient steps. Set this to cap a long run or smoke-test. |
 | `beta` | `0.1` | Strength of the preference signal (KL penalty against the reference policy). Lower stays closer to the base model. |
 | `loss_type` | `"sigmoid"` | DPO loss variant. `"sigmoid"` is the original; `"hinge"`, `"ipo"`, and others are supported. |
-| `max_length` | model default | Total tokens per example (prompt + completion). Big OOM lever. |
-| `max_prompt_length` | model default | Tokens reserved for the prompt before the completion. |
+| `max_length` | `1024` | Total tokens per example (prompt + completion). A longer example loses its end, which is its completion, and the job still reports success. Count your rows before you lower it: see [check row length](/training/sft#check-row-length). Longer examples use more GPU memory. |
+| `max_prompt_length` | none | Accepted, but it has no effect: the current trainer has no separate prompt limit. |
 | `lora_rank` | `null` | Train LoRA adapters of this rank instead of full finetuning. `null` means full finetune. |
 | `lora_alpha` | `null` | LoRA scaling factor. Defaults to `lora_rank` when unset. |
 | `load_in_4bit` | `false` | QLoRA: load the base in 4-bit (NF4) and train LoRA adapters on top. Requires `lora_rank` (a 400 at submit otherwise). Single-GPU. |
