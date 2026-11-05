@@ -673,6 +673,9 @@
               }
             }
           },
+          "403": {
+            "description": "A workspace-scoped key asked to mint outside its workspace (code team_key_scope)"
+          },
           "422": {
             "description": "Request body failed validation"
           }
@@ -7563,6 +7566,9 @@
           },
           "400": {
             "description": "Empty or HF-rejected token"
+          },
+          "403": {
+            "description": "A workspace-scoped key cannot change the account's integrations (code team_key_scope)"
           }
         },
         "security": [
@@ -7580,6 +7586,9 @@
         "responses": {
           "200": {
             "description": "Integration removed; new jobs can no longer request hf_push"
+          },
+          "403": {
+            "description": "A workspace-scoped key cannot change the account's integrations (code team_key_scope)"
           },
           "404": {
             "description": "No Hugging Face integration configured"
@@ -7646,6 +7655,9 @@
           },
           "400": {
             "description": "Empty API key"
+          },
+          "403": {
+            "description": "A workspace-scoped key cannot change the account's integrations (code team_key_scope)"
           }
         },
         "security": [
@@ -7663,6 +7675,9 @@
         "responses": {
           "200": {
             "description": "Integration removed; future jobs stop logging to W&B"
+          },
+          "403": {
+            "description": "A workspace-scoped key cannot change the account's integrations (code team_key_scope)"
           },
           "404": {
             "description": "No W&B integration configured"
@@ -11552,7 +11567,7 @@
               "string",
               "null"
             ],
-            "description": "Workspace the key is scoped to (workspaces design). Stamped by the web\nproxy from the active Clerk org, or passed explicitly by SDK callers.\nAbsent / equal to the caller's own id => a personal key. Validated\nserver-side at mint: a workspace the caller is not a member of is\nrejected, so the stamp is a convenience, never an authority."
+            "description": "Workspace the key is scoped to (workspaces design). Stamped by the web\nproxy from the active Clerk org, or passed explicitly by SDK callers.\nAbsent / equal to the caller's own id => a personal key. Validated\nserver-side at mint: a workspace the caller is not a member of is\nrejected, so the stamp is a convenience, never an authority. A\nworkspace-scoped key mints only in its own workspace, which is also what\nabsent means for it; anything else is a 403 `team_key_scope`."
           },
           "deployment_id": {
             "type": [
