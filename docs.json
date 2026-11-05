@@ -119,7 +119,8 @@
               "agents/tools",
               "agents/sessions",
               "agents/session-ops",
-              "agents/triggers"
+              "agents/triggers",
+              "agents/ask-ai"
             ]
           },
           {
@@ -469,6 +470,14 @@
               "GET /v1/settings/integrations/huggingface",
               "PUT /v1/settings/integrations/huggingface",
               "DELETE /v1/settings/integrations/huggingface"
+            ]
+          },
+          {
+            "group": "Ask AI",
+            "openapi": "api-reference/openapi.json",
+            "pages": [
+              "GET /v1/helper/consent",
+              "PUT /v1/helper/consent"
             ]
           },
           {
