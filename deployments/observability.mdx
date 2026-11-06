@@ -380,7 +380,8 @@ Open **Agents** in the dashboard (Overview and Agents tabs, plus Monitors with e
 | `GET /v1/observability/overview` | Totals, a zero-filled time series (each bucket also carries `tool_errors`, the failed tool calls of managed agent sessions), live counts, and the top tools, agents, and models. Filter with `agent` (a key) or `deployment_id`. |
 | `GET /v1/observability/agents` | One entry per agent: conversations, turns, model and tool calls, tokens, error rate, and a 14-day daily conversation count. |
 | `GET /v1/observability/conversations` | Threads (and managed agent sessions) with activity in the window, newest first. Filters: `agent`, `deployment_id`, `kind` (`thread` or `session`), `active`, `errors_only`, `q` (text search), `tool` and `model` (exact names, as the overview's top tools and top models list them; at most 200 characters). Page with `limit` (1-100, default 50) and `after` (the previous page's `next_cursor`). |
-| `GET /v1/deployments/{deployment_id}/threads/{thread_id}` | One thread, turn by turn: its latest 1,000 model calls and the tool calls between them. `truncated` is `true` when it has older calls, and `started_at` and `totals` then cover those 1,000 too. Message text comes from stored [traces](#request-traces); `bodies` is `none` when the deployment does not capture them, and `unavailable` when the trace store did not answer (the turns still come from the request records; retry for the text). |
+| `GET /v1/deployments/{deployment_id}/threads/{thread_id}` | One thread, turn by turn: its latest 1,000 model calls and the tool calls between them. `truncated` is `true` when it has older calls, and `started_at` and `totals` then cover those 1,000 too. Message text comes from stored [traces](#request-traces); `bodies` is `none` when the deployment does not capture them, and `unavailable` when the trace store did not answer (the turns still come from the request records; retry for the text). `from_turn` and `to_turn` load only those turns: see [long threads](#long-threads-the-turn-index-and-windows). |
+| `GET /v1/deployments/{deployment_id}/threads/{thread_id}/turns` | The thread's turn index: every turn's number, timing, tools and failures, from the request records alone. See [long threads](#long-threads-the-turn-index-and-windows). |
 
 The window is `from` and `to` (RFC 3339), by default the past 24 hours, at most 30 days, starting no earlier than 2000-01-01. A `next_cursor` keeps the first page's window end, so page on without `to` (or repeat the same `to`): a different `to` with a cursor is a `400`.
 
@@ -394,6 +395,40 @@ curl --get "https://api.veri.studio/v1/observability/conversations" \
 
 curl "https://api.veri.studio/v1/deployments/$DEPLOYMENT_ID/threads/conv-42" \
   -H "Authorization: Bearer $VERI_API_KEY"
+```
+
+### Long threads: the turn index and windows
+
+A thread page holds at most 1,000 calls. To see a longer thread, or to jump around in one, read its turn index, then load only the turns you want.
+
+`GET /v1/deployments/{deployment_id}/threads/{thread_id}/turns` lists every turn of the thread from its request records alone, without reading a stored body. `turns` holds the newest 5,000, oldest first (`truncated` is `true` when older ones exist), and `totals` always cover the whole thread. Each turn has:
+
+| Field | Meaning |
+| --- | --- |
+| `number` | The turn's number, which windows the thread page. Turn 1 is the thread's first turn, also when its first call carried no user message. With `numbering: "turn_index"` numbers follow the agent's own count of user turns, so they skip when more than one user message arrives between two calls. When that count does not rise every turn (a client that trims or compacts its history, or calls from before Veri recorded it), `numbering` is `"row_order"` and turns are counted 1, 2, 3 with no gaps. One rule holds for the whole thread, so a number never repeats. |
+| `latency_ms` | From the first call's start to the last call's end. |
+| `model_ms` | The calls' own time, summed. |
+| `tool_ms` | Time the tools ran between the turn's calls: from a call's end to the next call's start, when that call carries tool results. Approximate. |
+| `first_token_ms`, `thinking_ms` | TTFT, and thinking time (`first_answer_ms - ttft_ms`, see [request timing](#request-timing)), summed over the turn's calls. Null when no call has one. |
+| `llm_calls`, `tool_calls`, `tool_names` | Model calls, tool calls, and every tool call's name in order. |
+| `failed` | One of the turn's calls failed. |
+| `prompt_tokens`, `cached_prompt_tokens`, `completion_tokens` | Summed over the turn's calls. |
+| `first_request_id`, `last_request_id` | The turn's first and last call. |
+| `text`, `reply` | The first 200 characters of the user message that opened the turn, and of the turn's reply. Kept only while the call's body is stored, and deleted with it. |
+| `body`, `expires_at` | Whether a stored body holds the turn (`stored`, `expired`, `none`, or `unknown` for calls from before Veri recorded it), and when the newest one is or was deleted. |
+
+`totals` adds `turns` (how many turns there are: the highest `number` is the same unless numbers skip), `failed_turns`, `errors` (failed calls) and `by_tool`: each tool's call count and its share of the tool time, with parallel calls splitting their gap evenly. `last_request_id` is the thread's newest call: poll the index, and reload turns only when it changes.
+
+To load turns, pass `from_turn` and `to_turn` to `GET /v1/deployments/{deployment_id}/threads/{thread_id}`: numbers from the index, `1` or more, `from_turn` at most `to_turn`, and at most 50 turns. You get the thread page for those turns. `turns[].index` is each turn's number and `numbering` says how the thread is numbered; `started_at`, `last_activity_at` and `status` stay the thread's, and `totals` cover the window's calls. Message text comes from the window's own newest stored calls, so a window shows the same turns a full load of the thread would. A range with no turns is a `404`. Without the two parameters the response is unchanged.
+
+```bash
+curl "https://api.veri.studio/v1/deployments/$DEPLOYMENT_ID/threads/conv-42/turns" \
+  -H "Authorization: Bearer $VERI_API_KEY"
+
+curl --get "https://api.veri.studio/v1/deployments/$DEPLOYMENT_ID/threads/conv-42" \
+  -H "Authorization: Bearer $VERI_API_KEY" \
+  --data-urlencode "from_turn=300" \
+  --data-urlencode "to_turn=320"
 ```
 
 ## Export metrics to Prometheus
@@ -536,13 +571,14 @@ Agent responses are only as complete as the telemetry window. Include the deploy
 | --- | --- |
 | TTFB | Request start until upstream response headers arrive |
 | TTFT | Request start until the first non-empty content or reasoning token or tool call |
+| First answer | Request start until the first non-empty content token or tool call, never a reasoning token |
 | E2E latency | Request start until the response body or stream terminates |
 | Generation time | TTFT until stream completion |
 | TPOT | Generation time divided across reported output-token intervals |
 
 TTFT and TPOT are most meaningful for streaming responses. TPOT is only calculated when the upstream engine reports usage. Latency percentiles use successful requests so application and transport failures do not distort the serving-latency distribution.
 
-On a model that thinks first, TTFT stops at its first reasoning token, so generation time and TPOT include the reasoning tokens, which the reported completion tokens already count. Until 2026-11-05, TTFT on such a model ran through the reasoning to the first content token or tool call. Requests recorded before that change keep their old values, so on a thinking model's charts TTFT drops, and generation time and TPOT rise, at that point.
+On a model that thinks first, TTFT stops at its first reasoning token, so generation time and TPOT include the reasoning tokens, which the reported completion tokens already count. The first answer time (`first_answer_ms`) marks where it stopped thinking: `first_answer_ms - ttft_ms` is the time it spent reasoning, and `latency_ms - first_answer_ms` the time it spent writing. When a call answers straight away, the two are equal. It is recorded on streamed `/chat/completions`, `/messages` and `/responses` calls; a buffered call has none, and neither does a call from before Veri recorded it. A deployment served without a reasoning parser streams its thinking as content, so its thinking time reads 0. `first_answer_ms` is on each `llm` step of a [thread](#agent-conversations) and on [one model call](#read-one-model-call). Until 2026-11-05, TTFT on such a model ran through the reasoning to the first content token or tool call. Requests recorded before that change keep their old values, so on a thinking model's charts TTFT drops, and generation time and TPOT rise, at that point.
 
 ### Traffic and errors
 

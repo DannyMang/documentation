@@ -135,6 +135,21 @@ You can pause a session that is waiting for an approval. The pause denies the pe
 
 `GET /v1/sessions/{id}/events?after_seq=N` returns a page of events, oldest first. `GET /v1/sessions/{id}/stream` is a server-sent-events stream of the same rows: `id` is the event's `seq`, `event` is its type. Reconnect with `Last-Event-ID` (or `?after_seq=`) to continue without gaps; the stream closes after the session's terminal status event.
 
+To read a long transcript from its end, pass `before_seq`: you get the newest `limit` events (default 200, at most 1,000) with a lower `seq`, still oldest first, and `has_more` says older events exist. Start with `before_seq` one past the newest `seq` you know, then pass the oldest `seq` of each page. With `after_seq` as well, the page stays above it.
+
+`GET /v1/sessions/{id}/turns` returns the session's turn index in one call, without paging through events: one turn per `user.message`, oldest first. Events before the first message belong to no turn.
+
+| Field | Meaning |
+| --- | --- |
+| `number` | 1 for the first `user.message`, and so on. |
+| `first_seq`, `last_seq` | The turn's `user.message` and its last event, before the next turn's message. Read a turn's events with `after_seq = first_seq - 1` and `before_seq = last_seq + 1`. |
+| `started_at`, `latency_ms` | When the message arrived, and the time to the turn's last agent step (message, thinking, tool call or result, error or run end). |
+| `tool_calls`, `tool_names` | The turn's `agent.tool_use` events and their names, in order. |
+| `tool_ms` | Each tool call's time, from its `agent.tool_use` to its `tool.result`, summed. A call with no result is counted but not timed. |
+| `thoughts` | The turn's `agent.thinking` events. |
+| `failed` | A `tool.result` had `is_error`, or the turn logged an `error` (an `api_retry` is not one). |
+| `text` | The first 200 characters of the message. |
+
 | Type | Payload |
 | --- | --- |
 | `user.message` | `{text}`, what you sent |

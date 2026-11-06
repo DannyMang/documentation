@@ -1002,6 +1002,9 @@
           "400": {
             "description": "Missing or malformed code"
           },
+          "403": {
+            "description": "A team-scoped API key named a workspace other than its own (`team_key_scope`)"
+          },
           "404": {
             "description": "Code not found"
           },
@@ -3024,8 +3027,81 @@
           "Observability"
         ],
         "summary": "Get a thread",
-        "description": "One external agent thread turn by turn: every model call as an `llm` step and the tool calls between calls as `tool` steps. Message bodies come from the newest stored request trace (`bodies` says how much was found).",
+        "description": "One external agent thread turn by turn: every model call as an `llm` step and the tool calls between calls as `tool` steps. Message bodies come from the newest stored request trace (`bodies` says how much was found). `from_turn` and `to_turn` (at most 50 turns, numbered as the turn index numbers them) return only those turns, under their absolute numbers, with the body read from the window's own newest calls.",
         "operationId": "thread",
+        "parameters": [
+          {
+            "name": "deployment_id",
+            "in": "path",
+            "description": "Deployment ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "The X-Veri-Thread-Id the requests carried",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from_turn",
+            "in": "query",
+            "description": "The window's first turn, by its number in the turn index. With\n`to_turn`; without both, the newest 1000 calls.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "to_turn",
+            "in": "query",
+            "description": "The window's last turn: at most 49 after `from_turn`.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed thread id or window, or observability disabled"
+          },
+          "404": {
+            "description": "No such deployment in this workspace, no thread requests, or no turns in the window"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/deployments/{deployment_id}/threads/{thread_id}/turns": {
+      "get": {
+        "tags": [
+          "Observability"
+        ],
+        "summary": "List a thread's turns",
+        "description": "Every turn of an external agent thread from its request rows alone, no body read: numbers, timing (model, tools, first token, thinking), tool names, failures, tokens, and the first 200 characters of the user message and the reply while the body is stored. Totals cover the whole thread; `turns` holds the newest 5000. Window the thread page by these numbers.",
+        "operationId": "thread_turns",
         "parameters": [
           {
             "name": "deployment_id",
@@ -3052,7 +3128,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ThreadDetail"
+                  "$ref": "#/components/schemas/ThreadTurns"
                 }
               }
             }
@@ -3521,6 +3597,9 @@
           },
           "400": {
             "description": "Invalid definition, an environment that asks for approval, or triggers disabled"
+          },
+          "403": {
+            "description": "The trigger would reuse a session that holds another member's GitHub token (`github_token_scope`)"
           },
           "404": {
             "description": "Environment (or reuse session) not in this workspace"
@@ -6900,6 +6979,9 @@
           "400": {
             "description": "Session ops disabled"
           },
+          "403": {
+            "description": "The session holds another member's GitHub token (`github_token_scope`): only its creator or a workspace owner can drive it"
+          },
           "404": {
             "description": "Not found in this workspace"
           },
@@ -7043,6 +7125,16 @@
             }
           },
           {
+            "name": "before_seq",
+            "in": "query",
+            "description": "Return the newest `limit` events with seq less than this, still oldest\nfirst: pages a transcript back from its end. `has_more` then says older\nevents exist (after `after_seq`).",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "description": "Page size, 1..1000 (default 200).",
@@ -7055,7 +7147,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Events with seq > after_seq, oldest first",
+            "description": "Events with seq > after_seq (and < before_seq: the newest of them), oldest first",
             "content": {
               "application/json": {
                 "schema": {
@@ -7116,6 +7208,9 @@
           "400": {
             "description": "Unknown event type, missing text, or managed agents disabled"
           },
+          "403": {
+            "description": "`user.message` or `user.approval` on a session that holds another member's GitHub token (`github_token_scope`): only its creator or a workspace owner can send them"
+          },
           "404": {
             "description": "Not found in this workspace"
           },
@@ -7172,6 +7267,9 @@
           },
           "400": {
             "description": "Invalid argv, cwd outside /workspace, bad env or timeout, or session ops disabled"
+          },
+          "403": {
+            "description": "The session holds another member's GitHub token (`github_token_scope`): only its creator or a workspace owner can drive it"
           },
           "404": {
             "description": "Not found in this workspace"
@@ -7238,6 +7336,9 @@
           "400": {
             "description": "Path outside /workspace, or session ops disabled"
           },
+          "403": {
+            "description": "The session holds another member's GitHub token (`github_token_scope`): only its creator or a workspace owner can drive it"
+          },
           "404": {
             "description": "Session not found in this workspace, or no such path"
           },
@@ -7298,6 +7399,9 @@
           },
           "400": {
             "description": "Path outside /workspace, not a regular file, or session ops disabled"
+          },
+          "403": {
+            "description": "The session holds another member's GitHub token (`github_token_scope`): only its creator or a workspace owner can drive it"
           },
           "404": {
             "description": "Session not found in this workspace, or no such file"
@@ -7371,6 +7475,9 @@
           "400": {
             "description": "Path outside /workspace, a directory, or session ops disabled"
           },
+          "403": {
+            "description": "The session holds another member's GitHub token (`github_token_scope`): only its creator or a workspace owner can drive it"
+          },
           "404": {
             "description": "Not found in this workspace"
           },
@@ -7433,6 +7540,9 @@
           },
           "402": {
             "description": "No billing account is linked to this workspace"
+          },
+          "403": {
+            "description": "The session holds another member's GitHub token (`github_token_scope`): only its creator or a workspace owner can fork it"
           },
           "404": {
             "description": "Session or checkpoint not found in this workspace"
@@ -7543,6 +7653,9 @@
           },
           "400": {
             "description": "Port outside 1024..=65535, ttl_s outside 60..=86400, or session ops disabled"
+          },
+          "403": {
+            "description": "The session holds another member's GitHub token (`github_token_scope`): only its creator or a workspace owner can drive it"
           },
           "404": {
             "description": "Not found in this workspace"
@@ -7741,17 +7854,7 @@
           {
             "name": "after_seq",
             "in": "query",
-            "description": "Return events with seq greater than this (default 0 = from the start).",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "description": "Page size, 1..1000 (default 200).",
+            "description": "Resume after this seq (default 0 = from the start); `Last-Event-ID` wins.",
             "required": false,
             "schema": {
               "type": "integer",
@@ -7762,6 +7865,47 @@
         "responses": {
           "200": {
             "description": "text/event-stream"
+          },
+          "404": {
+            "description": "Not found in this workspace"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/v1/sessions/{session_id}/turns": {
+      "get": {
+        "tags": [
+          "Sessions"
+        ],
+        "summary": "Session turns",
+        "description": "The session's turn index from its events: one turn per `user.message`, with its seq range (page its events with `after_seq` / `before_seq`), latency, tool calls and their exact time (agent.tool_use to its tool.result), thoughts, whether it failed, and the first 200 characters of the message.",
+        "operationId": "turns",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "Session ID",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The turns, oldest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionTurns"
+                }
+              }
+            }
           },
           "404": {
             "description": "Not found in this workspace"
@@ -9505,7 +9649,7 @@
           "Triggers"
         ],
         "summary": "Update a trigger",
-        "description": "Changes the name, schedule, prompt, session mode, budget or output. `kind` and `provider` cannot change. A schedule change recomputes the next firing from now.",
+        "description": "Changes the name, schedule, prompt, session mode, budget or output. `kind` and `provider` cannot change. A schedule change recomputes the next firing from now. A trigger that runs with a member's GitHub token (a fresh trigger on a `github_auth` environment runs with its creator's; a reuse trigger with its session's) can be changed only by that member or a workspace owner.",
         "operationId": "update",
         "parameters": [
           {
@@ -9541,6 +9685,9 @@
           },
           "400": {
             "description": "Invalid definition"
+          },
+          "403": {
+            "description": "The trigger runs with another member's GitHub token (`github_token_scope`): only that member or a workspace owner can change it"
           },
           "404": {
             "description": "Not found in this workspace"
@@ -16475,6 +16622,14 @@
             ],
             "format": "int64"
           },
+          "first_answer_ms": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "ms to the first answer token (content or a tool call, never reasoning)\nof a streamed call; `first_answer_ms - ttft_ms` is the time spent\nthinking. Null on a buffered call and on calls from before it was\nrecorded."
+          },
           "prompt_tokens": {
             "type": "integer",
             "format": "int64"
@@ -21777,6 +21932,14 @@
             ],
             "format": "int64"
           },
+          "first_answer_ms": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "ms to the first answer token (content or a tool call, never reasoning)\nof a streamed call; `first_answer_ms - ttft_ms` is the time spent\nthinking. Null on a buffered call and on calls from before it was\nrecorded."
+          },
           "prompt_tokens": {
             "type": "integer",
             "format": "int64"
@@ -23094,6 +23257,99 @@
           }
         }
       },
+      "SessionTurn": {
+        "type": "object",
+        "description": "One turn of a session: the events from a `user.message` up to the next.",
+        "required": [
+          "number",
+          "first_seq",
+          "last_seq",
+          "started_at",
+          "latency_ms",
+          "tool_calls",
+          "tool_names",
+          "tool_ms",
+          "thoughts",
+          "failed"
+        ],
+        "properties": {
+          "number": {
+            "type": "integer",
+            "format": "int64",
+            "description": "1.. in transcript order: the turn's user.message is the number-th."
+          },
+          "first_seq": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The turn's user.message."
+          },
+          "last_seq": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The turn's last event (the next turn starts at last_seq + 1)."
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "latency_ms": {
+            "type": "integer",
+            "format": "int64",
+            "description": "From the user.message to the turn's last agent step (message,\nthinking, tool use or result, error, run end)."
+          },
+          "tool_calls": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tool_names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Every agent.tool_use name, in order."
+          },
+          "tool_ms": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Each agent.tool_use until its tool.result, summed: exact."
+          },
+          "thoughts": {
+            "type": "integer",
+            "format": "int64",
+            "description": "agent.thinking events."
+          },
+          "failed": {
+            "type": "boolean",
+            "description": "A tool.result said is_error, or the turn logged an `error` (an\napi_retry is not one)."
+          },
+          "text": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The user.message text, first 200 characters."
+          }
+        }
+      },
+      "SessionTurns": {
+        "type": "object",
+        "description": "A session's turn index: one entry per `user.message`, oldest first.",
+        "required": [
+          "session_id",
+          "turns"
+        ],
+        "properties": {
+          "session_id": {
+            "type": "string"
+          },
+          "turns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SessionTurn"
+            }
+          }
+        }
+      },
       "SessionUsageSummary": {
         "type": "object",
         "description": "What `GET /v1/sessions/{id}` reports as `usage`: lifecycle timings,\nrun counts, model tokens and cost, all derived from `session_events`\nin one pass. Never stored; the transcript is the source of truth.",
@@ -23946,11 +24202,11 @@
             "items": {
               "$ref": "#/components/schemas/Turn"
             },
-            "description": "The latest 1000 model calls, oldest first, grouped into turns."
+            "description": "The latest 1000 model calls, oldest first, grouped into turns. With a\nwindow: the window's turns (its newest 1000 calls)."
           },
           "truncated": {
             "type": "boolean",
-            "description": "True when the thread has older calls than `turns` holds. `started_at`\nand `totals` then cover the latest 1000 calls too, not the whole thread."
+            "description": "True when the thread has older calls than `turns` holds. `started_at`\nand `totals` then cover the latest 1000 calls too, not the whole thread.\nWith a window: the window held more than 1000 calls and its oldest were\ncut; `started_at` and `last_activity_at` are then still the thread's,\nand `totals` cover the window's calls shown."
           },
           "scores": {
             "type": "array",
@@ -23958,6 +24214,13 @@
               "$ref": "#/components/schemas/ScoreResponse"
             },
             "description": "Thread and trace scores on this thread, newest first."
+          },
+          "numbering": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "With a window only: turn_index | row_order, how `turns[].index` numbers\nthe thread (see the turn index)."
           }
         }
       },
@@ -24062,6 +24325,147 @@
           "duration_ms": {
             "type": "integer",
             "format": "int64"
+          }
+        }
+      },
+      "ThreadTurnTotals": {
+        "type": "object",
+        "description": "Totals over every turn of the thread, also when `turns` is cut.",
+        "required": [
+          "turns",
+          "failed_turns",
+          "llm_calls",
+          "errors",
+          "tool_calls",
+          "prompt_tokens",
+          "cached_prompt_tokens",
+          "completion_tokens",
+          "model_ms",
+          "tool_ms",
+          "duration_ms",
+          "by_tool"
+        ],
+        "properties": {
+          "turns": {
+            "type": "integer",
+            "format": "int64",
+            "description": "How many turns the thread has. The highest `number` is the same unless\nturn_index numbering skipped (see `numbering`)."
+          },
+          "failed_turns": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Turns with a failed call."
+          },
+          "llm_calls": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "errors": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Failed calls."
+          },
+          "tool_calls": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "prompt_tokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "cached_prompt_tokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "completion_tokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "model_ms": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tool_ms": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "first_token_ms": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "thinking_ms": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The first call's start to the last call's completion."
+          },
+          "by_tool": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ToolTime"
+            },
+            "description": "Most tool time first."
+          }
+        }
+      },
+      "ThreadTurns": {
+        "type": "object",
+        "required": [
+          "object",
+          "deployment_id",
+          "thread_id",
+          "numbering",
+          "last_request_id",
+          "last_activity_at",
+          "totals",
+          "turns",
+          "truncated"
+        ],
+        "properties": {
+          "object": {
+            "type": "string",
+            "description": "Always \"thread_turns\"."
+          },
+          "deployment_id": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": "string"
+          },
+          "numbering": {
+            "type": "string",
+            "description": "How `number` counts, one rule per thread so numbers never repeat; both\nstart at 1 with the thread's first turn. turn_index: every turn's\nturn_index rises over the last, and a turn's number is its turn_index\nless the first turn's, plus 1, so a jump of more than one user message\nbetween two calls leaves a gap. row_order: a client that trims or\ncompacts its history, or calls from before turn_index was recorded;\nturns are counted 1, 2, 3 with no gaps."
+          },
+          "last_request_id": {
+            "type": "string",
+            "description": "The thread's newest call: poll the index, and reload a window only when\nthis changed."
+          },
+          "last_activity_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/ThreadTurnTotals"
+          },
+          "turns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TurnSummary"
+            },
+            "description": "Oldest first, the newest 5000 turns."
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "True when the thread has older turns than `turns` holds. `totals` still\ncover every turn."
           }
         }
       },
@@ -24171,6 +24575,29 @@
             ],
             "format": "int64",
             "description": "Next model call start minus this call's completion."
+          }
+        }
+      },
+      "ToolTime": {
+        "type": "object",
+        "description": "One tool's calls across the thread.",
+        "required": [
+          "name",
+          "count",
+          "ms"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "ms": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Its share of the tool time: parallel calls split their gap evenly."
           }
         }
       },
@@ -25662,7 +26089,7 @@
           "index": {
             "type": "integer",
             "format": "int32",
-            "description": "1-based."
+            "description": "1-based from the first call shown. With a window (`from_turn`), the\nturn's absolute number, as the turn index lists it (`numbering`)."
           },
           "started_at": {
             "type": "string",
@@ -25705,6 +26132,133 @@
             "items": {
               "$ref": "#/components/schemas/ThreadStep"
             }
+          }
+        }
+      },
+      "TurnSummary": {
+        "type": "object",
+        "description": "One turn of a thread, from its request rows alone: no body is read.",
+        "required": [
+          "number",
+          "started_at",
+          "latency_ms",
+          "model_ms",
+          "tool_ms",
+          "llm_calls",
+          "tool_calls",
+          "tool_names",
+          "failed",
+          "prompt_tokens",
+          "cached_prompt_tokens",
+          "completion_tokens",
+          "first_request_id",
+          "last_request_id",
+          "body"
+        ],
+        "properties": {
+          "number": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The turn's number, from 1 for the thread's first turn (`numbering` says\nhow it counts and when it can skip). The same number windows the thread\npage (`from_turn`, `to_turn`) and comes back as its `turns[].index`."
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the turn's first call started."
+          },
+          "latency_ms": {
+            "type": "integer",
+            "format": "int64",
+            "description": "From the first call's start to the last call's completion."
+          },
+          "model_ms": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The calls' latencies, summed."
+          },
+          "tool_ms": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Time the turn's tools ran: each gap from a call's completion to the\nnext call's start, when that call carries tool results. Approximate."
+          },
+          "first_token_ms": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "TTFT summed over the turn's calls that have one; null when none does\n(buffered calls)."
+          },
+          "thinking_ms": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "`first_answer_ms - ttft_ms` summed over the turn's stamped calls (streamed\ncalls since 2026-11-06); null when none is stamped."
+          },
+          "llm_calls": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tool_calls": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tool_names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Every tool call's name, in the order they ran."
+          },
+          "failed": {
+            "type": "boolean",
+            "description": "One of the turn's calls failed (an error status, a stream error or a\nclient disconnect)."
+          },
+          "prompt_tokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "cached_prompt_tokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "completion_tokens": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "first_request_id": {
+            "type": "string"
+          },
+          "last_request_id": {
+            "type": "string"
+          },
+          "text": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The user message that opened the turn, first 200 characters. Kept only\nwhile the call's body is stored; null otherwise."
+          },
+          "reply": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The turn's reply (its last successful call's), first 200 characters.\nNull without a stored body, and when that call only called tools."
+          },
+          "body": {
+            "type": "string",
+            "description": "stored | expired | none | unknown: whether a body holding this turn can\nbe read. `unknown` is a turn whose calls predate the body bookkeeping."
+          },
+          "expires_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When the turn's newest stored body is purged, or was. Null if none was\never stored."
           }
         }
       },
