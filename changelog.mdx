@@ -5,6 +5,10 @@ description: "Recent product and platform changes in Veri"
 keywords: ["changelog", "releases", "platform updates"]
 ---
 
+## 2026-11-05: TTFT on a thinking model stops at its first reasoning token
+
+TTFT now ends at the first non-empty content or reasoning token or tool call. On a model that thinks first it used to run through the reasoning, so that model's TTFT drops, and its generation time and TPOT rise because they now include the reasoning tokens. Requests recorded before the change keep their old values. See [Request timing](/deployments/observability#request-timing).
+
 ## 2026-11-05: deleting a workspace or account also ends its agents
 
 - Deleting a team workspace or an account is refused while an agent session is active, and a paused session counts. End it with `veri sessions delete <id>`.

@@ -535,12 +535,14 @@ Agent responses are only as complete as the telemetry window. Include the deploy
 | Metric | Meaning |
 | --- | --- |
 | TTFB | Request start until upstream response headers arrive |
-| TTFT | Request start until the first non-empty content token or tool call. On a model that thinks first, this includes its reasoning |
+| TTFT | Request start until the first non-empty content or reasoning token or tool call |
 | E2E latency | Request start until the response body or stream terminates |
 | Generation time | TTFT until stream completion |
 | TPOT | Generation time divided across reported output-token intervals |
 
 TTFT and TPOT are most meaningful for streaming responses. TPOT is only calculated when the upstream engine reports usage. Latency percentiles use successful requests so application and transport failures do not distort the serving-latency distribution.
+
+On a model that thinks first, TTFT stops at its first reasoning token, so generation time and TPOT include the reasoning tokens, which the reported completion tokens already count. Until 2026-11-05, TTFT on such a model ran through the reasoning to the first content token or tool call. Requests recorded before that change keep their old values, so on a thinking model's charts TTFT drops, and generation time and TPOT rise, at that point.
 
 ### Traffic and errors
 
