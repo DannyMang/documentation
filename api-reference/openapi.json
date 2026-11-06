@@ -3085,6 +3085,9 @@
           },
           "404": {
             "description": "No such deployment in this workspace, no thread requests, or no turns in the window"
+          },
+          "503": {
+            "description": "Reading the conversation took over 2 seconds (`conversation_read_timeout`); retry later"
           }
         },
         "security": [
@@ -3161,6 +3164,9 @@
           },
           "404": {
             "description": "No such deployment in this workspace, or no thread requests"
+          },
+          "503": {
+            "description": "Reading the conversation took over 2 seconds (`conversation_read_timeout`); retry later"
           }
         },
         "security": [
@@ -7932,6 +7938,9 @@
           },
           "404": {
             "description": "Not found in this workspace"
+          },
+          "503": {
+            "description": "Reading the conversation took over 2 seconds (`conversation_read_timeout`); retry later"
           }
         },
         "security": [
@@ -8501,6 +8510,9 @@
           },
           "400": {
             "description": "Bad window, filter or cursor, or observability disabled"
+          },
+          "503": {
+            "description": "Reading the conversation took over 2 seconds (`conversation_read_timeout`); retry later"
           }
         },
         "security": [
@@ -24694,6 +24706,7 @@
           "kind",
           "status",
           "turns",
+          "turns_capped",
           "failed_turns",
           "failed_calls",
           "llm_calls",
@@ -24840,7 +24853,11 @@
           "turns": {
             "type": "integer",
             "format": "int64",
-            "description": "Threads and sessions: every turn of the conversation, numbered as its\nturn index numbers them (the same count `totals.turns` gives there),\nnot only the window's. A call: 1."
+            "description": "Threads and sessions: every turn of the conversation, numbered as its\nturn index numbers them (the same count `totals.turns` gives there),\nnot only the window's. A call: 1. Counted over the conversation's newest\n5,000 calls (a thread) or events (a session): see `turns_capped`."
+          },
+          "turns_capped": {
+            "type": "boolean",
+            "description": "The conversation has more than 5,000 calls or events, so `turns` (and\n`failed_turns`) count only the turns that start in the newest 5,000 and\nthe real count is higher: show \"{turns}+\". The turn index has the full\ncount."
           },
           "failed_turns": {
             "type": "integer",
