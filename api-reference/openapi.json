@@ -3100,7 +3100,7 @@
           "Observability"
         ],
         "summary": "List a thread's turns",
-        "description": "Every turn of an external agent thread from its request rows alone, no body read: numbers, timing (model, tools, first token, thinking), tool names, failures, tokens, and the first 200 characters of the user message and the reply while the body is stored. Totals cover the whole thread; `turns` holds the newest 5000. Window the thread page by these numbers.",
+        "description": "Every turn of an external agent thread from its request rows alone, no body read: numbers, timing (model, tools, first token, thinking), tool names, failures, tokens, and the first 200 characters of the user message and the reply while the body is stored. Totals cover the whole thread; `turns` holds the newest 5000. Window the thread page by these numbers. The response carries an `ETag`: send it back as `If-None-Match` and an unchanged thread answers `304` with no body.",
         "operationId": "thread_turns",
         "parameters": [
           {
@@ -3120,11 +3120,31 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "description": "The `ETag` of an earlier response",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
           }
         ],
         "responses": {
           "200": {
             "description": "",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Changes whenever the response would"
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -3132,6 +3152,9 @@
                 }
               }
             }
+          },
+          "304": {
+            "description": "Unchanged since the `If-None-Match` ETag"
           },
           "400": {
             "description": "Malformed thread id, or observability disabled"
@@ -24671,6 +24694,8 @@
           "kind",
           "status",
           "turns",
+          "failed_turns",
+          "failed_calls",
           "llm_calls",
           "tool_calls",
           "tool_errors",
@@ -24814,7 +24839,18 @@
           },
           "turns": {
             "type": "integer",
-            "format": "int64"
+            "format": "int64",
+            "description": "Threads and sessions: every turn of the conversation, numbered as its\nturn index numbers them (the same count `totals.turns` gives there),\nnot only the window's. A call: 1."
+          },
+          "failed_turns": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Threads and sessions: the conversation's turns with a failure (a failed\nmodel call; in a session, a tool.result with is_error or an error), over\nthe whole conversation like `turns`. A call: 1 if it failed."
+          },
+          "failed_calls": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Failed model calls in the window (the same number as `errors`; in a\nsession, its error events in the window)."
           },
           "llm_calls": {
             "type": "integer",
@@ -26132,6 +26168,13 @@
             "items": {
               "$ref": "#/components/schemas/ThreadStep"
             }
+          },
+          "body": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "With a window only: stored | expired | none | unknown, the state of the\nturn's own bodies, as the turn index gives it. A turn whose own bodies\nare gone shows no message text, even when a later call's history still\nholds it."
           }
         }
       },
