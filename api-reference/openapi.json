@@ -24220,7 +24220,7 @@
               "string",
               "null"
             ],
-            "description": "With a window only: turn_index | row_order, how `turns[].index` numbers\nthe thread (see the turn index)."
+            "description": "With a window only: how `turns[].index` numbers the thread, always\nrow_order (see the turn index)."
           }
         }
       },
@@ -24304,7 +24304,7 @@
           "messages": {
             "type": "integer",
             "format": "int64",
-            "description": "Transcript messages (counted from the steps without a stored body)."
+            "description": "Transcript messages; counted from the steps (one per user turn, model\ncall and tool result) without a stored body and in a window."
           },
           "prompt_tokens": {
             "type": "integer",
@@ -24349,7 +24349,7 @@
           "turns": {
             "type": "integer",
             "format": "int64",
-            "description": "How many turns the thread has. The highest `number` is the same unless\nturn_index numbering skipped (see `numbering`)."
+            "description": "How many turns the thread has: also its highest `number`."
           },
           "failed_turns": {
             "type": "integer",
@@ -24443,7 +24443,7 @@
           },
           "numbering": {
             "type": "string",
-            "description": "How `number` counts, one rule per thread so numbers never repeat; both\nstart at 1 with the thread's first turn. turn_index: every turn's\nturn_index rises over the last, and a turn's number is its turn_index\nless the first turn's, plus 1, so a jump of more than one user message\nbetween two calls leaves a gap. row_order: a client that trims or\ncompacts its history, or calls from before turn_index was recorded;\nturns are counted 1, 2, 3 with no gaps."
+            "description": "How `number` counts: always row_order. Turn N is the Nth turn the\nthread opened: numbers run 1, 2, 3 without gaps, and a turn keeps its\nnumber as the thread grows, whatever turn_index later calls carry."
           },
           "last_request_id": {
             "type": "string",
@@ -26159,7 +26159,7 @@
           "number": {
             "type": "integer",
             "format": "int64",
-            "description": "The turn's number, from 1 for the thread's first turn (`numbering` says\nhow it counts and when it can skip). The same number windows the thread\npage (`from_turn`, `to_turn`) and comes back as its `turns[].index`."
+            "description": "The turn's number: turn N is the Nth turn the thread opened (1, 2, 3, no\ngaps), and it never changes as the thread grows. The same number windows\nthe thread page (`from_turn`, `to_turn`) and comes back as its\n`turns[].index`."
           },
           "started_at": {
             "type": "string",

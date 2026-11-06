@@ -175,7 +175,7 @@ To read a long transcript from its end, pass `before_seq`: you get the newest `l
 | `session.rolled_back` | `{checkpoint_id}`, the session is being restored to that checkpoint |
 | `error` | `{message, fatal}` |
 
-Payloads above 64 KiB (a large file read, for example) are stored in object storage; the event carries a 1 KiB preview and `payload_ref`.
+Payloads above 64 KiB (a large file read, for example) are stored in object storage; the event carries `truncated: true`, a 1 KiB preview and `payload_ref`, and keeps `id`, `name`, `tool_use_id`, `is_error`, `kind` and `subtype` when the original had them (short values only), plus the first 200 characters of `text`.
 
 Lifecycle transitions also fire [webhooks](/webhooks): `session.started`, `session.approval_requested`, `session.paused`, `session.ended`, `session.failed`.
 
