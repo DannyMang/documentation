@@ -52,6 +52,10 @@ Grab an API key from [wandb.ai/authorize](https://wandb.ai/authorize), then conn
   </Tab>
 </Tabs>
 
+<Note>
+  Integrations belong to your account, so changing one takes a personal API key or the dashboard. A key scoped to a team workspace, such as one from `veri login` while a team is active, can check the status, but `set` and `remove` return `403 team_key_scope`.
+</Note>
+
 ## What gets logged
 
 Once connected, managed LLM training jobs (`grpo`, `sft_text`, `dpo`) report to W&B automatically:

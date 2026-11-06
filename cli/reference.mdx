@@ -201,7 +201,7 @@ Per-lineage overrides live under `veri models retention <name>`; protected versi
 
 ## `veri wandb` {#wandb}
 
-Account-level [Weights & Biases integration](/training/wandb): store your key once and every training job logs to your W&B account.
+Account-level [Weights & Biases integration](/training/wandb): store your key once and every training job logs to your W&B account. `set` and `remove` need a personal API key: a key scoped to a team workspace gets `403 team_key_scope`.
 
 | Command | Purpose |
 | --- | --- |
@@ -233,6 +233,8 @@ veri secrets list
 ## `veri api-keys` {#api-keys}
 
 Mint, list and revoke API keys. `--deployment` mints a [model access key](/secrets#model-access-keys) that can only call that deployment's inference routes.
+
+A key scoped to a team workspace, such as one from `veri login` while a team is active, works only inside that workspace: `create` mints there, and `list` and `revoke` see only that workspace's keys. Minting anywhere else returns `403 team_key_scope`.
 
 | Command | Purpose |
 | --- | --- |

@@ -54,6 +54,10 @@ Create a token with **write** scope at [huggingface.co/settings/tokens](https://
   </Tab>
 </Tabs>
 
+<Note>
+  Integrations belong to your account, so changing one takes a personal API key or the dashboard. A key scoped to a team workspace, such as one from `veri login` while a team is active, can check the status, but `set` and `remove` return `403 team_key_scope`.
+</Note>
+
 ## Push a finished model
 
 Models already in your [model library](/deployments/custom-models) (finished training jobs you saved, or cached Hugging Face imports) can be pushed at any time, with no training run required. The upload happens server-side; nothing downloads to your machine.
