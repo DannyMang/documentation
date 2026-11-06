@@ -5,6 +5,24 @@ description: "Recent product and platform changes in Veri"
 keywords: ["changelog", "releases", "platform updates"]
 ---
 
+## 2026-11-05: TTFT on a thinking model stops at its first reasoning token
+
+TTFT now ends at the first non-empty content or reasoning token or tool call. On a model that thinks first it used to run through the reasoning, so that model's TTFT drops, and its generation time and TPOT rise because they now include the reasoning tokens. Requests recorded before the change keep their old values. See [Request timing](/deployments/observability#request-timing).
+
+## 2026-11-05: deleting a workspace or account also ends its agents
+
+- Deleting a team workspace or an account is refused while an agent session is active, and a paused session counts. End it with `veri sessions delete <id>`.
+- Deleting removes the workspace's triggers, environments, secrets, skills and webhook endpoints as well, and a delivery to one of its webhook triggers answers `404`.
+- Those deletes wait for a finished job's and session's final bill, and are refused while a refund on a job is waiting for review, as deleting a single job already was.
+- Starting or forking an agent session in a workspace with no billing account returns `402 Payment Required`, as creating a job or deployment does.
+
+## 2026-11-05: bulk delete, and reasoning in stored traces
+
+- Deployments, Training, Datasets and Models have a **Delete** button that opens a picker. Tick rows, or shift-click a range, and confirm; at 10 rows or more you type yes. The work runs on the server, so closing the tab changes nothing, and **Stop** halts what hasn't gone yet. A live deployment stops first, and a running training job is refused, never cancelled. The same work is available over the API: see [bulk delete](/deployments/api#post-v1deploymentsbulkdelete).
+- Those lists now read your newest 1,000 rows and show 50 at a time, with a button for the next 50.
+- A training job can't be deleted until its final bill has settled, or while a refund on it is waiting for review, on the single delete route too.
+- A streamed reply now stores its reasoning, as a buffered one already did. When a reply carries reasoning, a `chat` dataset row holds it in `reasoning_content` on the final assistant message, where chat templates read it. See [Import request traces](/training/dataset-streams#import-request-traces).
+
 ## 2026-11-04: the Traces page, and long conversations you can read
 
 - **Traces** in the dashboard lists every model call, conversation and managed session in one place, and rows on Analytics, deployment pages and the Agents pages open there. It replaces the Conversations tab under Agents. You can turn capture on or off for a live deployment from that page. See [The Traces page](/deployments/observability#the-traces-page).

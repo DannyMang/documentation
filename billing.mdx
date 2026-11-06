@@ -127,7 +127,7 @@ The burn-rate response includes `hours_remaining` at the current spend rate.
 
 ## Submitting work without a billing account
 
-Every workspace gets a billing account when it is created. If a workspace has none (for example, a team created seconds ago that Stripe has not indexed yet), creating a job or deployment returns `402 Payment Required` with the message `No billing account is linked to this workspace yet`. Open the billing page for that workspace once, or wait a minute and retry. Running work is never stopped for this reason.
+Every workspace gets a billing account when it is created. If a workspace has none (for example, a team created seconds ago that Stripe has not indexed yet), creating a job or deployment, or starting or forking an agent session, returns `402 Payment Required` with the message `No billing account is linked to this workspace yet`. Open the billing page for that workspace once, or wait a minute and retry. Running work is never stopped for this reason.
 
 ## Credit codes
 
@@ -154,7 +154,7 @@ Storage is averaged over the month across every volume in the workspace. The fir
 
 ## Deleting a team workspace
 
-An owner can delete a team from **Settings > Workspace**. Deletion is refused while any job or deployment is running, while a final settlement is still pending, or while the balance is negative. Stop the work and clear the balance first. Leftover positive credit on a deleted team is not refunded automatically; contact support before deleting if you want it moved.
+An owner can delete a team from **Settings > Workspace**. Deletion is refused while any job, deployment or agent session is active (a paused session counts), while a final settlement is still pending, while a refund on a job is waiting for review, or while the balance is negative. Stop the work and clear the balance first. Deleting also removes the team's triggers, environments, secrets, skills and webhook endpoints. Leftover positive credit on a deleted team is not refunded automatically; contact support before deleting if you want it moved.
 
 ## Reference
 

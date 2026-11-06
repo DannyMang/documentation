@@ -158,7 +158,9 @@ veri datasets import-traces acme-feedback \
 
 Each trace becomes one row. On a `chat` stream the row is the full transcript (the request
 messages plus the assistant's reply); on a `prompt` stream the reply is discarded and only the
-request messages are kept (GRPO samples its own completions). `--model-version mv_...` keeps only
+request messages are kept (GRPO samples its own completions). When a reply carries reasoning, a
+`chat` row holds it in `reasoning_content` on the final assistant message, which is where chat
+templates read it. `--model-version mv_...` keeps only
 traces answered by that model version. `--snapshot` cuts a snapshot right after the append, with
 a note recording the source deployment and window, so the imported set is immediately pinnable
 for training.
