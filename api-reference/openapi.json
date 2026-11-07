@@ -24365,7 +24365,7 @@
       },
       "ThreadTurnTotals": {
         "type": "object",
-        "description": "Totals over every turn of the thread, also when `turns` is cut.",
+        "description": "Totals over the turns in `turns`: every turn of the thread unless\n`truncated`. `turns` always counts every turn.",
         "required": [
           "turns",
           "failed_turns",
@@ -24384,7 +24384,7 @@
           "turns": {
             "type": "integer",
             "format": "int64",
-            "description": "How many turns the thread has: also its highest `number`."
+            "description": "How many turns the thread has: also its highest `number`, also when\n`truncated`."
           },
           "failed_turns": {
             "type": "integer",
@@ -24500,7 +24500,7 @@
           },
           "truncated": {
             "type": "boolean",
-            "description": "True when the thread has older turns than `turns` holds. `totals` still\ncover every turn."
+            "description": "True when the thread has older turns than `turns` holds. `totals.turns`\nstill counts every turn; the other totals then cover the returned\nturns (the newest 5000), so the index costs the same whatever the\nthread's size."
           }
         }
       },
